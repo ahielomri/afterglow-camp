@@ -22,10 +22,10 @@ const COLORS = {
 };
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;500;600;700;800&family=Frank+Ruhl+Libre:wght@500;700;900&family=Assistant:wght@400;500;600;700&display=swap');
-.text-xs { font-weight: 600 !important; }
-.text-sm { font-weight: 600 !important; }
-.text-base { font-weight: 600 !important; }
-input, select, textarea, button { font-weight: 600 !important; }
+* { font-weight: 600; }
+.text-xs, .text-sm, .text-base, .text-lg { font-weight: 700 !important; }
+input, select, textarea, button, label { font-weight: 700 !important; }
+p, span, div { font-weight: 600; }
 `;
 const FONT_HEADING = `"Caprasimo", "Frank Ruhl Libre", serif`;
 const FONT_BODY = `"Figtree", "Assistant", sans-serif`;
@@ -939,6 +939,7 @@ export default function App() {
   const [memberEmails, setMemberEmails] = useState({});
   const [reminderPrefs, setReminderPrefs] = useState({});
   const [checklistState, setChecklistState] = useState({});
+  const [manualTeamMembers, setManualTeamMembers] = useState({});
   const [activityLog, setActivityLog] = useState([]);
   const [loginHistory, setLoginHistory] = useState([]);
   const [showActivityLog, setShowActivityLog] = useState(false);
@@ -1052,6 +1053,12 @@ export default function App() {
         setChecklistState(savedChecklists && savedChecklists.value ? JSON.parse(savedChecklists.value) : {});
       } catch {
         setChecklistState({});
+      }
+      try {
+        const savedManualTeam = await window.storage.get("manual-team-members", true);
+        setManualTeamMembers(savedManualTeam && savedManualTeam.value ? JSON.parse(savedManualTeam.value) : {});
+      } catch {
+        setManualTeamMembers({});
       }
       try {
         const savedLog = await window.storage.get("activity-log", true);
@@ -1509,7 +1516,35 @@ export default function App() {
     teamShiftIds.forEach((id) => {
       (id === TEARDOWN_ID ? allMembers.map((m) => m.name) : (assignments[id] || [])).forEach((n) => names.add(n));
     });
+    (manualTeamMembers[teamName] || []).forEach((n) => names.add(n));
     return [...names];
+  }
+  function isManualTeamMember(teamName, name) {
+    return (manualTeamMembers[teamName] || []).includes(name);
+  }
+  async function addManualTeamMember(teamName, name) {
+    if (!name) return;
+    const current = manualTeamMembers[teamName] || [];
+    if (current.includes(name)) return;
+    const next = { ...manualTeamMembers, [teamName]: [...current, name] };
+    setManualTeamMembers(next);
+    try {
+      await window.storage.set("manual-team-members", JSON.stringify(next), true);
+      logActivity("שיוך ידני לצוות", `${name} → ${teamName}`);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+  async function removeManualTeamMember(teamName, name) {
+    const current = manualTeamMembers[teamName] || [];
+    const next = { ...manualTeamMembers, [teamName]: current.filter((n) => n !== name) };
+    setManualTeamMembers(next);
+    try {
+      await window.storage.set("manual-team-members", JSON.stringify(next), true);
+      logActivity("הסרת שיוך ידני לצוות", `${name} ← ${teamName}`);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
   }
   function teamLead(teamName) {
     const name = teamLeads[teamName];
@@ -1610,7 +1645,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 500, fontWeight: 600 }} className="flex items-center justify-center p-10">
+      <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 500, fontWeight: 700 }} className="flex items-center justify-center p-10">
         <style>{FONT_IMPORT}</style>
         טוען...
       </div>
@@ -1619,7 +1654,7 @@ export default function App() {
 
   if (!identity) {
     return (
-      <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 700, fontWeight: 600 }}>
+      <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 700, fontWeight: 700 }}>
         <style>{FONT_IMPORT}</style>
         <LoginScreen members={allMembers} passwords={memberPasswords} onVerified={handleVerified} onSetPassword={setMemberPassword} />
       </div>
@@ -1627,7 +1662,7 @@ export default function App() {
   }
 
   return (
-    <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 700, fontWeight: 600 }}>
+    <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 700, fontWeight: 700 }}>
       <style>{FONT_IMPORT}</style>
 
       {/* Header */}
@@ -2592,9 +2627,24 @@ export default function App() {
                         <div className="text-xs" style={{ color: COLORS.textMuted }}>עדיין אף אחד לא שיבץ משמרת בצוות הזה</div>
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
-                          {members.map((n) => (
-                            <span key={n} className="text-xs px-2 py-0.5 rounded-full" style={{ background: COLORS.input }}>{n}</span>
-                          ))}
+                          {members.map((n) => {
+                            const manual = isManualTeamMember(t.name, n);
+                            return (
+                              <span key={n} className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1.5" style={{ background: manual ? COLORS.accent2Light : COLORS.input }}>
+                                {n}
+                                {isAdmin && manual && (
+                                  <button onClick={() => removeManualTeamMember(t.name, n)} style={{ color: COLORS.textMuted }}><X size={10} /></button>
+                                )}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {isAdmin && (
+                        <div className="mt-2">
+                          <div className="text-xs mb-1" style={{ color: COLORS.textMuted }}>שיוך לצוות ללא משמרת (מנהל)</div>
+                          <AdminAssignPicker members={allMembers} onAssign={(name) => addManualTeamMember(t.name, name)} />
                         </div>
                       )}
 
