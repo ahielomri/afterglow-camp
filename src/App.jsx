@@ -1,24 +1,24 @@
 import { useState, useEffect, useMemo } from "react";
-import { Users, CalendarDays, Clock, Flame, Tent, Sparkles, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse } from "lucide-react";
+import { Users, CalendarDays, Clock, Flame, Tent, Sparkles, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Design tokens - "Organic" palette (matches the shared design-system folder)
 // ---------------------------------------------------------------------------
 const COLORS = {
-  bg: "#f5ead8",
-  surface: "#ebddc5",
-  surface2: "#dcd3c4",
-  input: "#f9f4ed",
-  text: "#201e1d",
-  textMuted: "rgba(32,30,29,0.6)",
-  divider: "rgba(32,30,29,0.16)",
-  accent: "#c67139",
-  accentDark: "#8c491a",
-  accentLight: "#ffe1d0",
-  accent2: "#7a8a5e",
-  accent2Dark: "#56633f",
-  accent2Light: "#e1eecc",
-  danger: "#a8442e",
+  bg: "#fdf1f0",
+  surface: "#f7dce0",
+  surface2: "#f0c9d2",
+  input: "#fff7f5",
+  text: "#3a222a",
+  textMuted: "rgba(58,34,42,0.65)",
+  divider: "rgba(58,34,42,0.16)",
+  accent: "#e0607a",
+  accentDark: "#b8415c",
+  accentLight: "#fbd8e0",
+  accent2: "#f2935a",
+  accent2Dark: "#c96b34",
+  accent2Light: "#fce1c7",
+  danger: "#c43d3d",
 };
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;500;600;700;800&family=Frank+Ruhl+Libre:wght@500;700;900&family=Assistant:wght@400;500;600;700&display=swap');`;
@@ -895,6 +895,30 @@ function PollForm({ onCreate, onCancel }) {
   );
 }
 
+function AdminAssignPicker({ members, onAssign }) {
+  const [val, setVal] = useState("");
+  return (
+    <div className="flex items-center gap-2">
+      <select
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        className="flex-1 text-xs px-2 py-1.5 rounded-lg outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      >
+        <option value="">בחר/י חבר קמפ...</option>
+        {members.map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
+      </select>
+      <button
+        onClick={() => { if (val) { onAssign(val); setVal(""); } }}
+        className="text-xs px-3 py-1.5 rounded-full font-semibold shrink-0"
+        style={{ background: COLORS.accent, color: COLORS.bg }}
+      >
+        שיבוץ
+      </button>
+    </div>
+  );
+}
+
 export default function App() {
   const [identity, setIdentity] = useState(null);
   const [assignments, setAssignments] = useState({});
@@ -910,6 +934,10 @@ export default function App() {
   const [memberEmails, setMemberEmails] = useState({});
   const [reminderPrefs, setReminderPrefs] = useState({});
   const [checklistState, setChecklistState] = useState({});
+  const [activityLog, setActivityLog] = useState([]);
+  const [loginHistory, setLoginHistory] = useState([]);
+  const [showActivityLog, setShowActivityLog] = useState(false);
+  const [showLoginHistory, setShowLoginHistory] = useState(false);
   const [extraMembers, setExtraMembers] = useState([]);
   const [removedMembers, setRemovedMembers] = useState([]);
   const [memberPasswords, setMemberPasswords] = useState({});
@@ -1021,6 +1049,18 @@ export default function App() {
         setChecklistState({});
       }
       try {
+        const savedLog = await window.storage.get("activity-log", true);
+        setActivityLog(savedLog && savedLog.value ? JSON.parse(savedLog.value) : []);
+      } catch {
+        setActivityLog([]);
+      }
+      try {
+        const savedLogins = await window.storage.get("login-history", true);
+        setLoginHistory(savedLogins && savedLogins.value ? JSON.parse(savedLogins.value) : []);
+      } catch {
+        setLoginHistory([]);
+      }
+      try {
         const savedExtra = await window.storage.get("extra-members", true);
         setExtraMembers(savedExtra && savedExtra.value ? JSON.parse(savedExtra.value) : []);
       } catch {
@@ -1064,6 +1104,17 @@ export default function App() {
     })();
   }, []);
 
+  useEffect(() => {
+    if (!loading && identity) {
+      const unanswered = polls.filter((pl) => pl.responses[identity] === undefined);
+      if (unanswered.length > 0) {
+        const plural = unanswered.length > 1;
+        showToast(`📊 יש ${unanswered.length} סקר${plural ? "ים" : ""} חדש${plural ? "ים" : ""} שמחכה לך - עדכוני קמפ`, "ok");
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [identity, loading]);
+
   async function persistAssignments(next) {
     setAssignments(next);
     try {
@@ -1088,10 +1139,13 @@ export default function App() {
     persistBudget(next);
     setShowBudgetForm(false);
     showToast("הסעיף נוסף לתקציב", "ok");
+    logActivity("הוספת הוצאה", `${item.name} (${item.category})`);
   }
 
   function removeBudgetItem(id) {
+    const item = budgetItems.find((b) => b.id === id);
     persistBudget(budgetItems.filter((b) => b.id !== id));
+    if (item) logActivity("מחיקת הוצאה", `${item.name} (${item.category})`);
   }
 
   async function persistCategoryBudgets(next) {
@@ -1106,12 +1160,19 @@ export default function App() {
   function setCategoryBudget(cat, amount) {
     persistCategoryBudgets({ ...categoryBudgets, [cat]: Number(amount) || 0 });
     showToast(`תקציב ${cat} עודכן`, "ok");
+    logActivity("עדכון תקציב מחלקה", `${cat}: ₪${Number(amount) || 0}`);
   }
 
   async function handleVerified(name) {
     setIdentity(name);
     try {
       await window.storage.set("my-identity", name, false);
+    } catch {}
+    const entry = { name, ts: Date.now() };
+    const next = [entry, ...loginHistory].slice(0, 300);
+    setLoginHistory(next);
+    try {
+      await window.storage.set("login-history", JSON.stringify(next), true);
     } catch {}
   }
 
@@ -1127,6 +1188,15 @@ export default function App() {
     setTimeout(() => setToast(null), 3200);
   }
 
+  async function logActivity(action, details) {
+    const entry = { ts: Date.now(), actor: identity || "לא ידוע", action, details: details || "" };
+    const next = [entry, ...activityLog].slice(0, 200);
+    setActivityLog(next);
+    try {
+      await window.storage.set("activity-log", JSON.stringify(next), true);
+    } catch {}
+  }
+
   function overlaps(a, b) {
     return a.start < b.end && b.start < a.end;
   }
@@ -1136,23 +1206,27 @@ export default function App() {
     return (assignments[shiftId] || []).includes(identity);
   }
 
-  function join(shift) {
+  function join(shift, targetMember) {
+    const who = targetMember || identity;
     const names = assignments[shift.id] || [];
-    if (names.includes(identity)) return;
+    if (names.includes(who)) return;
     if (names.length >= shift.spots) return showToast("אין מקומות פנויים במשמרת הזו", "error");
 
     const conflict = SHIFTS.find(
-      (s) => s.id !== shift.id && s.date === shift.date && (assignments[s.id] || []).includes(identity) && overlaps(s, shift)
+      (s) => s.id !== shift.id && s.date === shift.date && (assignments[s.id] || []).includes(who) && overlaps(s, shift)
     );
     if (conflict) return showToast(`יש חפיפה עם "${conflict.title}" באותו יום`, "error");
 
-    persistAssignments({ ...assignments, [shift.id]: [...names, identity] });
-    showToast(`שובצת ל-${shift.title}`, "ok");
+    persistAssignments({ ...assignments, [shift.id]: [...names, who] });
+    showToast(targetMember ? `${who} שובץ/ה ל-${shift.title}` : `שובצת ל-${shift.title}`, "ok");
+    if (targetMember) logActivity("שיבוץ ידני", `${who} → ${shift.title} (${formatDate(shift.date)})`);
   }
 
-  function leave(shift) {
+  function leave(shift, targetMember) {
+    const who = targetMember || identity;
     const names = assignments[shift.id] || [];
-    persistAssignments({ ...assignments, [shift.id]: names.filter((n) => n !== identity) });
+    persistAssignments({ ...assignments, [shift.id]: names.filter((n) => n !== who) });
+    if (targetMember) logActivity("ביטול שיבוץ ידני", `${who} ← ${shift.title} (${formatDate(shift.date)})`);
   }
 
   async function toggleTeardownTask(task) {
@@ -1173,6 +1247,7 @@ export default function App() {
     try {
       await window.storage.set("camp-fee", JSON.stringify(val), true);
       showToast("דמי הקמפ עודכנו לכולם", "ok");
+      logActivity("עדכון דמי קמפ אחידים", `₪${val}`);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -1185,6 +1260,7 @@ export default function App() {
     setMemberPayments(next);
     try {
       await window.storage.set("member-payments", JSON.stringify(next), true);
+      logActivity("רישום תשלום", `${name}: ₪${amount}`);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -1196,6 +1272,7 @@ export default function App() {
     setMemberPayments(next);
     try {
       await window.storage.set("member-payments", JSON.stringify(next), true);
+      logActivity("מחיקת תשלום", name);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -1208,6 +1285,7 @@ export default function App() {
     try {
       await window.storage.set("team-leads", JSON.stringify(next), true);
       showToast(`מוביל/ה ${team} עודכן`, "ok");
+      logActivity("שינוי מוביל צוות", `${team}: ${name || "ללא מוביל"}`);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -1241,6 +1319,7 @@ export default function App() {
     try {
       await window.storage.set("fee-overrides", JSON.stringify(next), true);
       showToast(`דמי הקמפ של ${name} עודכנו`, "ok");
+      logActivity("דמי קמפ אישיים", `${name}: ${amount === "" || amount === null ? "בוטל, חוזר לברירת מחדל" : `₪${amount}`}`);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -1284,6 +1363,7 @@ export default function App() {
     try {
       await window.storage.set("extra-members", JSON.stringify(next), true);
       showToast(`${name} נוסף/ה לקמפ`, "ok");
+      logActivity("הוספת חבר קמפ", name);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -1295,6 +1375,7 @@ export default function App() {
     try {
       await window.storage.set("removed-members", JSON.stringify(next), true);
       showToast(`${name} הוסר/ה מהקמפ`, "ok");
+      logActivity("הסרת חבר קמפ", name);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -1306,6 +1387,7 @@ export default function App() {
     try {
       await window.storage.set("removed-members", JSON.stringify(next), true);
       showToast(`${name} שוחזר/ה`, "ok");
+      logActivity("שחזור חבר קמפ", name);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -1328,6 +1410,7 @@ export default function App() {
     try {
       await window.storage.set("member-passwords", JSON.stringify(next), true);
       showToast(`הסיסמה של ${name} אופסה`, "ok");
+      logActivity("איפוס סיסמה", name);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -1443,6 +1526,7 @@ export default function App() {
 
   const currentMember = allMembers.find((m) => m.name === identity);
   const isAdmin = currentMember?.role === "admin";
+  const isOmri = identity === "עומרי אחיאל";
   const myLeadTeam = !isAdmin ? Object.keys(teamLeads).find((t) => teamLeads[t] === identity) : null;
   const canEditBudget = isAdmin || !!myLeadTeam;
 
@@ -1521,7 +1605,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 500 }} className="flex items-center justify-center p-10">
+      <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 500, fontWeight: 500 }} className="flex items-center justify-center p-10">
         <style>{FONT_IMPORT}</style>
         טוען...
       </div>
@@ -1530,7 +1614,7 @@ export default function App() {
 
   if (!identity) {
     return (
-      <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 700 }}>
+      <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 700, fontWeight: 500 }}>
         <style>{FONT_IMPORT}</style>
         <LoginScreen members={allMembers} passwords={memberPasswords} onVerified={handleVerified} onSetPassword={setMemberPassword} />
       </div>
@@ -1538,7 +1622,7 @@ export default function App() {
   }
 
   return (
-    <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 700 }}>
+    <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 700, fontWeight: 500 }}>
       <style>{FONT_IMPORT}</style>
 
       {/* Header */}
@@ -1700,6 +1784,57 @@ export default function App() {
                   </div>
                 )}
               </div>
+            )}
+
+            {isOmri && (
+              <>
+                <button
+                  onClick={() => setShowActivityLog(!showActivityLog)}
+                  className="w-full flex items-center justify-between mt-6 mb-2 text-sm font-bold"
+                  style={{ color: COLORS.textMuted }}
+                >
+                  <span className="flex items-center gap-1.5"><History size={14} /> היסטוריית שינויים (רק אתה רואה)</span>
+                  <ChevronDown size={15} style={{ transform: showActivityLog ? "rotate(180deg)" : "none" }} />
+                </button>
+                {showActivityLog && (
+                  <div className="space-y-1 max-h-72 overflow-y-auto pr-1 mb-2">
+                    {activityLog.length === 0 ? (
+                      <p className="text-xs" style={{ color: COLORS.textMuted }}>אין עדיין פעולות רשומות.</p>
+                    ) : (
+                      activityLog.map((a, i) => (
+                        <div key={i} className="text-xs rounded-lg px-3 py-1.5" style={{ background: COLORS.surface }}>
+                          <b style={{ color: COLORS.accentDark }}>{a.actor}</b> · {a.action}
+                          {a.details ? ` · ${a.details}` : ""}
+                          <span style={{ color: COLORS.textMuted }}> · {new Date(a.ts).toLocaleString("he-IL")}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setShowLoginHistory(!showLoginHistory)}
+                  className="w-full flex items-center justify-between mt-4 mb-2 text-sm font-bold"
+                  style={{ color: COLORS.textMuted }}
+                >
+                  <span className="flex items-center gap-1.5"><History size={14} /> היסטוריית כניסות (רק אתה רואה)</span>
+                  <ChevronDown size={15} style={{ transform: showLoginHistory ? "rotate(180deg)" : "none" }} />
+                </button>
+                {showLoginHistory && (
+                  <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
+                    {loginHistory.length === 0 ? (
+                      <p className="text-xs" style={{ color: COLORS.textMuted }}>אין עדיין כניסות רשומות.</p>
+                    ) : (
+                      loginHistory.map((l, i) => (
+                        <div key={i} className="text-xs rounded-lg px-3 py-1.5 flex items-center justify-between" style={{ background: COLORS.surface }}>
+                          <b style={{ color: COLORS.accentDark }}>{l.name}</b>
+                          <span style={{ color: COLORS.textMuted }}>{new Date(l.ts).toLocaleString("he-IL")}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </>
             )}
 
             <button
@@ -2052,7 +2187,8 @@ export default function App() {
                 const joined = isJoined(s.id);
                 const full = names.length >= spots && !joined;
                 return (
-                  <div key={s.id} className="rounded-2xl p-4 flex items-center gap-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                  <div key={s.id} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                  <div className="flex items-center gap-4">
                     <FillRing filled={names.length} total={spots} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -2084,6 +2220,24 @@ export default function App() {
                         {joined ? "לבטל שיבוץ" : full ? "מלא" : "אני משתבץ/ת"}
                       </button>
                     )}
+                  </div>
+
+                  {isAdmin && !isTeardown && (
+                    <div className="mt-3 pt-3 border-t" style={{ borderColor: COLORS.divider }}>
+                      <div className="text-xs mb-1.5" style={{ color: COLORS.textMuted }}>שיבוץ ידני (מנהל)</div>
+                      {names.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {names.map((n) => (
+                            <span key={n} className="text-xs pl-1 pr-2 py-0.5 rounded-full flex items-center gap-1" style={{ background: COLORS.input }}>
+                              {n}
+                              <button onClick={() => leave(s, n)} style={{ color: COLORS.textMuted }}><X size={11} /></button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <AdminAssignPicker members={allMembers} onAssign={(name) => join(s, name)} />
+                    </div>
+                  )}
                   </div>
                 );
               })}
