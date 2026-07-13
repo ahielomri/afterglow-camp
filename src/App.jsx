@@ -265,6 +265,8 @@ function FillRing({ filled, total, size = 34 }) {
 // ---------------------------------------------------------------------------
 function LoginScreen({ members, passwords, onVerified, onSetPassword }) {
   const [name, setName] = useState("");
+  const [query, setQuery] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [idVal, setIdVal] = useState("");
   const [password, setPasswordVal] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -275,6 +277,21 @@ function LoginScreen({ members, passwords, onVerified, onSetPassword }) {
   const needsId = selected && selected.id !== null;
   const hasPassword = selected && !!passwords[selected.name];
   const resetting = hasPassword && forgotMode;
+
+  const filtered = query.trim()
+    ? members.filter((m) => m.name.includes(query.trim()))
+    : members;
+
+  function pickName(n) {
+    setName(n);
+    setQuery(n);
+    setShowSuggestions(false);
+    setError("");
+    setPasswordVal("");
+    setConfirmPassword("");
+    setIdVal("");
+    setForgotMode(false);
+  }
 
   function submit() {
     if (!selected) return setError("בחר/י שם מהרשימה");
@@ -313,19 +330,36 @@ function LoginScreen({ members, passwords, onVerified, onSetPassword }) {
         <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>שם</label>
         <div className="relative mb-3">
           <input
-            list="members-datalist"
-            value={name}
-            onChange={(e) => { setName(e.target.value); setError(""); setPasswordVal(""); setConfirmPassword(""); setIdVal(""); setForgotMode(false); }}
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setShowSuggestions(true);
+              if (name) { setName(""); setError(""); setPasswordVal(""); setConfirmPassword(""); setIdVal(""); setForgotMode(false); }
+            }}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
             placeholder="הקלד/י או בחר/י שם..."
             autoComplete="off"
             className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
             style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
           />
-          <datalist id="members-datalist">
-            {members.map((m) => (
-              <option key={m.name} value={m.name} />
-            ))}
-          </datalist>
+          {showSuggestions && filtered.length > 0 && (
+            <div
+              className="absolute z-10 w-full mt-1 rounded-xl overflow-hidden max-h-48 overflow-y-auto"
+              style={{ background: COLORS.input, border: `1px solid ${COLORS.divider}`, boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}
+            >
+              {filtered.map((m) => (
+                <button
+                  key={m.name}
+                  onMouseDown={() => pickName(m.name)}
+                  className="w-full text-right px-3 py-2 text-sm"
+                  style={{ color: COLORS.text, background: name === m.name ? COLORS.accentLight : "transparent" }}
+                >
+                  {m.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {selected && (!hasPassword || forgotMode) && needsId && (
