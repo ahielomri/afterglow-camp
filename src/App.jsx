@@ -187,7 +187,7 @@ const BUDGET_CATEGORIES = [
 ];
 
 const TEAM_FILTERS = [...new Set(SHIFTS.map((s) => s.team))];
-const TRAVEL_DAYS = ["2026-10-30", "2026-10-31", "2026-11-01"];
+const TRAVEL_DAYS = ["2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02", "2026-11-03"];
 
 const WEEKDAYS_HE = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
 function formatDate(iso) {
@@ -666,10 +666,15 @@ function RideWizard({ data, onChange }) {
   const d = data || {};
   const [local, setLocal] = useState({
     city: d.city || "",
+    arrivalDay: d.arrivalDay || "",
     hasCar: d.hasCar,
+    vehicleType: d.vehicleType || "",
+    hasTowHitch: d.hasTowHitch,
+    hasTrailer: d.hasTrailer,
     offerRide: d.offerRide,
-    offerDay: d.offerDay || "",
     seats: d.seats || "",
+    hasCargoSpace: d.hasCargoSpace,
+    cargoNote: d.cargoNote || "",
     hasWay: d.hasWay,
   });
   const [saved, setSaved] = useState(false);
@@ -690,33 +695,59 @@ function RideWizard({ data, onChange }) {
       </div>
 
       <div>
+        <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>באיזה יום את/ה מגיע/ה לפלאיה?</label>
+        <select
+          value={local.arrivalDay}
+          onChange={(e) => set({ arrivalDay: e.target.value })}
+          className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        >
+          <option value="">בחר/י יום</option>
+          {TRAVEL_DAYS.map((day) => <option key={day} value={day}>{formatDate(day)}</option>)}
+        </select>
+      </div>
+
+      <div>
         <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>מגיע/ה עם רכב?</label>
-        <YesNoButtons value={local.hasCar} onChange={(v) => set({ hasCar: v, offerRide: undefined, hasWay: undefined })} />
+        <YesNoButtons value={local.hasCar} onChange={(v) => set({ hasCar: v, offerRide: undefined, hasWay: undefined, hasCargoSpace: undefined })} />
       </div>
 
       {local.hasCar === "yes" && (
-        <div>
-          <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>מעוניין/ת לאסוף מישהו איתך בדרך?</label>
-          <YesNoButtons value={local.offerRide} onChange={(v) => set({ offerRide: v })} />
-          {local.offerRide === "no" && (
-            <p className="text-xs mt-1.5" style={{ color: COLORS.textMuted }}>בסדר גמור - הפרטים שלך לא יפורסמו בטאב הגעה לברן.</p>
-          )}
-          {local.offerRide === "yes" && (
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>באיזה יום יוצא/ת?</label>
-                <select
-                  value={local.offerDay}
-                  onChange={(e) => set({ offerDay: e.target.value })}
-                  className="w-full px-2 py-1.5 rounded-lg text-sm outline-none"
-                  style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-                >
-                  <option value="">בחר/י יום</option>
-                  {TRAVEL_DAYS.map((day) => <option key={day} value={day}>{formatDate(day)}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>כמה מקומות פנויים?</label>
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>סוג רכב</label>
+              <select
+                value={local.vehicleType}
+                onChange={(e) => set({ vehicleType: e.target.value })}
+                className="w-full px-2 py-1.5 rounded-lg text-sm outline-none"
+                style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+              >
+                <option value="">בחר/י סוג</option>
+                <option value="רכב פרטי">רכב פרטי</option>
+                <option value="ג'יפ / רכב שטח">ג'יפ / רכב שטח</option>
+                <option value="טנדר">טנדר</option>
+                <option value="ואן / מסחרי">ואן / מסחרי</option>
+                <option value="אחר">אחר</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>יש וו גרירה?</label>
+              <YesNoButtons value={local.hasTowHitch} onChange={(v) => set({ hasTowHitch: v })} />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>יש לך עגלה נגררת שתוכל/י להביא?</label>
+            <YesNoButtons value={local.hasTrailer} onChange={(v) => set({ hasTrailer: v })} />
+          </div>
+
+          <div>
+            <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>מעוניין/ת לאסוף מישהו איתך בדרך?</label>
+            <YesNoButtons value={local.offerRide} onChange={(v) => set({ offerRide: v })} />
+            {local.offerRide === "yes" && (
+              <div className="mt-3">
+                <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>כמה מקומות פנויים לנוסעים?</label>
                 <input
                   type="number"
                   value={local.seats}
@@ -726,9 +757,25 @@ function RideWizard({ data, onChange }) {
                   style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
                 />
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+
+          <div>
+            <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>
+              יש לך מקום ברכב לציוד קטן/קניות של הקמפ? (דברים שנצטרך שחברי קמפ יביאו איתם)
+            </label>
+            <YesNoButtons value={local.hasCargoSpace} onChange={(v) => set({ hasCargoSpace: v })} />
+            {local.hasCargoSpace === "yes" && (
+              <input
+                value={local.cargoNote}
+                onChange={(e) => set({ cargoNote: e.target.value })}
+                placeholder='כמה מקום בערך (למשל: "2 ארגזים", "תא מטען חלקי")'
+                className="w-full mt-2 px-3 py-2 rounded-xl text-sm outline-none"
+                style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+              />
+            )}
+          </div>
+        </>
       )}
 
       {local.hasCar === "no" && (
@@ -736,7 +783,7 @@ function RideWizard({ data, onChange }) {
           <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>כבר יש לך איך להגיע?</label>
           <YesNoButtons value={local.hasWay} onChange={(v) => set({ hasWay: v })} />
           {local.hasWay === "yes" && (
-            <p className="text-xs mt-1.5" style={{ color: COLORS.textMuted }}>מעולה - הפרטים שלך לא יפורסמו בטאב הגעה לברן.</p>
+            <p className="text-xs mt-1.5" style={{ color: COLORS.textMuted }}>מעולה - הפרטים שלך לא יפורסמו כמחפש/ת טרמפ.</p>
           )}
           {local.hasWay === "no" && (
             <p className="text-xs mt-1.5" style={{ color: COLORS.textMuted }}>תפורסם/י ברשימת "מחפשים טרמפ".</p>
@@ -1652,6 +1699,14 @@ export default function App() {
     const d = rideInfo[m.name];
     return d && d.hasCar === "yes" && d.offerRide === "yes";
   });
+  const offeringCargoSpace = allMembers.filter((m) => {
+    const d = rideInfo[m.name];
+    return d && d.hasCar === "yes" && d.hasCargoSpace === "yes";
+  });
+  const towingCapable = allMembers.filter((m) => {
+    const d = rideInfo[m.name];
+    return d && d.hasCar === "yes" && (d.hasTowHitch === "yes" || d.hasTrailer === "yes");
+  });
   const lookingForRide = allMembers.filter((m) => {
     const d = rideInfo[m.name];
     return d && d.hasCar === "no" && d.hasWay === "no";
@@ -1736,7 +1791,7 @@ export default function App() {
           { id: "budget", label: "תקציב", icon: Wallet },
           ...(isAdmin ? [{ id: "finances", label: "כספים", icon: CreditCard }] : []),
           { id: "teams", label: "צוותים", icon: Tent },
-          { id: "rides", label: "הגעה לברן", icon: Car },
+          { id: "rides", label: "התניידות", icon: Car },
           { id: "contacts", label: "חברי קמפ", icon: Phone },
         ].map((t) => (
           <button
@@ -1777,7 +1832,7 @@ export default function App() {
               ))}
             </div>
 
-            <h3 className="text-xs font-bold mt-5 mb-2" style={{ color: COLORS.textMuted }}>מוכנות הגעה לברן</h3>
+            <h3 className="text-xs font-bold mt-5 mb-2" style={{ color: COLORS.textMuted }}>מוכנות התניידות</h3>
             <div className="grid grid-cols-3 gap-3">
               {[
                 { label: "טרם מילאו פרטי הגעה", value: membersWithoutRideInfo },
@@ -2156,7 +2211,7 @@ export default function App() {
                 className="w-full flex items-center justify-between text-sm font-bold"
                 style={{ color: COLORS.accentDark }}
               >
-                <span className="flex items-center gap-2"><Car size={15} /> הגעה לברן - הפרטים שלי</span>
+                <span className="flex items-center gap-2"><Car size={15} /> התניידות - הפרטים שלי</span>
                 <ChevronDown size={15} style={{ transform: openPersonalSection === "ride" ? "rotate(180deg)" : "none" }} />
               </button>
               {openPersonalSection === "ride" && (
@@ -2720,7 +2775,7 @@ export default function App() {
         {tab === "rides" && (
           <div>
             <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>
-              את הפרטים שלך (עיר, רכב, טרמפים) ממלאים בטאב "לוח בקרה אישי". כאן רואים את התוצאה המשותפת של כולם.
+              את הפרטים שלך (עיר, יום הגעה, רכב, טרמפים, מקום לציוד) ממלאים בטאב "לוח בקרה אישי". כאן רואים את התוצאה המשותפת של כולם.
             </p>
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
@@ -2737,7 +2792,7 @@ export default function App() {
                         <div key={m.name} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.accent2Light }}>
                           <div className="font-semibold">{m.name}{d.city ? ` · ${d.city}` : ""}</div>
                           <div style={{ color: COLORS.accent2Dark }}>
-                            {d.offerDay ? formatDate(d.offerDay) : "יום לא צוין"}{d.seats ? ` · ${d.seats} מקומות פנויים` : ""}
+                            {d.arrivalDay ? formatDate(d.arrivalDay) : "יום לא צוין"}{d.seats ? ` · ${d.seats} מקומות פנויים` : ""}
                           </div>
                         </div>
                       );
@@ -2759,6 +2814,55 @@ export default function App() {
                       return (
                         <div key={m.name} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.accentLight }}>
                           <div className="font-semibold">{m.name}{d.city ? ` · ${d.city}` : ""}</div>
+                          {d.arrivalDay && <div style={{ color: COLORS.accentDark }}>מתכנן/ת להגיע {formatDate(d.arrivalDay)}</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="sm:col-span-2">
+                <h3 className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: COLORS.accent2Dark }}>
+                  <UserPlus size={15} /> יש להם מקום לציוד/קניות של הקמפ ({offeringCargoSpace.length})
+                </h3>
+                {offeringCargoSpace.length === 0 ? (
+                  <p className="text-xs" style={{ color: COLORS.textMuted }}>אף אחד עדיין לא סימן מקום פנוי לציוד</p>
+                ) : (
+                  <div className="grid sm:grid-cols-2 gap-1.5">
+                    {offeringCargoSpace.map((m) => {
+                      const d = rideInfo[m.name];
+                      return (
+                        <div key={m.name} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.accent2Light }}>
+                          <div className="font-semibold">{m.name}{d.city ? ` · ${d.city}` : ""}</div>
+                          <div style={{ color: COLORS.accent2Dark }}>
+                            {d.arrivalDay ? formatDate(d.arrivalDay) : "יום לא צוין"}{d.cargoNote ? ` · ${d.cargoNote}` : ""}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="sm:col-span-2">
+                <h3 className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
+                  <Car size={15} /> יכולת גרירה - וו/עגלה נגררת ({towingCapable.length})
+                </h3>
+                {towingCapable.length === 0 ? (
+                  <p className="text-xs" style={{ color: COLORS.textMuted }}>אף אחד עדיין לא סימן יכולת גרירה</p>
+                ) : (
+                  <div className="grid sm:grid-cols-2 gap-1.5">
+                    {towingCapable.map((m) => {
+                      const d = rideInfo[m.name];
+                      const bits = [];
+                      if (d.vehicleType) bits.push(d.vehicleType);
+                      if (d.hasTowHitch === "yes") bits.push("וו גרירה");
+                      if (d.hasTrailer === "yes") bits.push("עגלה נגררת");
+                      return (
+                        <div key={m.name} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.accentLight }}>
+                          <div className="font-semibold">{m.name}{d.city ? ` · ${d.city}` : ""}</div>
+                          <div style={{ color: COLORS.accentDark }}>{bits.join(" · ") || "—"}</div>
                         </div>
                       );
                     })}
