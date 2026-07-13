@@ -312,18 +312,20 @@ function LoginScreen({ members, passwords, onVerified, onSetPassword }) {
 
         <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>שם</label>
         <div className="relative mb-3">
-          <select
+          <input
+            list="members-datalist"
             value={name}
             onChange={(e) => { setName(e.target.value); setError(""); setPasswordVal(""); setConfirmPassword(""); setIdVal(""); setForgotMode(false); }}
-            className="w-full appearance-none pl-9 pr-3 py-2.5 rounded-xl text-sm outline-none"
+            placeholder="הקלד/י או בחר/י שם..."
+            autoComplete="off"
+            className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
             style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-          >
-            <option value="">בחר/י שם...</option>
+          />
+          <datalist id="members-datalist">
             {members.map((m) => (
-              <option key={m.name} value={m.name}>{m.name}</option>
+              <option key={m.name} value={m.name} />
             ))}
-          </select>
-          <ChevronDown size={16} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: COLORS.text }} />
+          </datalist>
         </div>
 
         {selected && (!hasPassword || forgotMode) && needsId && (
