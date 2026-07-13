@@ -21,7 +21,12 @@ const COLORS = {
   danger: "#c43d3d",
 };
 
-const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;500;600;700;800&family=Frank+Ruhl+Libre:wght@500;700;900&family=Assistant:wght@400;500;600;700&display=swap');`;
+const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;500;600;700;800&family=Frank+Ruhl+Libre:wght@500;700;900&family=Assistant:wght@400;500;600;700&display=swap');
+.text-xs { font-weight: 600 !important; }
+.text-sm { font-weight: 600 !important; }
+.text-base { font-weight: 600 !important; }
+input, select, textarea, button { font-weight: 600 !important; }
+`;
 const FONT_HEADING = `"Caprasimo", "Frank Ruhl Libre", serif`;
 const FONT_BODY = `"Figtree", "Assistant", sans-serif`;
 const FONT_NUM = `"Figtree", "Assistant", sans-serif`;
@@ -1605,7 +1610,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 500, fontWeight: 500 }} className="flex items-center justify-center p-10">
+      <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 500, fontWeight: 600 }} className="flex items-center justify-center p-10">
         <style>{FONT_IMPORT}</style>
         טוען...
       </div>
@@ -1614,7 +1619,7 @@ export default function App() {
 
   if (!identity) {
     return (
-      <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 700, fontWeight: 500 }}>
+      <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 700, fontWeight: 600 }}>
         <style>{FONT_IMPORT}</style>
         <LoginScreen members={allMembers} passwords={memberPasswords} onVerified={handleVerified} onSetPassword={setMemberPassword} />
       </div>
@@ -1622,7 +1627,7 @@ export default function App() {
   }
 
   return (
-    <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 700, fontWeight: 500 }}>
+    <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 700, fontWeight: 600 }}>
       <style>{FONT_IMPORT}</style>
 
       {/* Header */}
@@ -1666,14 +1671,14 @@ export default function App() {
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold transition-colors"
             style={{
               background: tab === t.id ? COLORS.accent : COLORS.surface,
               color: tab === t.id ? COLORS.bg : COLORS.textMuted,
               border: `1px solid ${tab === t.id ? COLORS.accent : COLORS.divider}`,
             }}
           >
-            {t.icon && <t.icon size={13} />} {t.label}
+            {t.icon && <t.icon size={16} />} {t.label}
           </button>
         ))}
       </div>
@@ -2168,6 +2173,21 @@ export default function App() {
                                 >
                                   {joined ? "בטל" : full ? "מלא" : "הצטרף"}
                                 </button>
+                              </div>
+                            )}
+                            {isAdmin && !isTeardown && (
+                              <div className="mt-2 pt-2 border-t" style={{ borderColor: COLORS.divider }}>
+                                {names.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mb-1.5">
+                                    {names.map((n) => (
+                                      <span key={n} className="text-[10px] pl-1 pr-1.5 py-0.5 rounded-full flex items-center gap-0.5" style={{ background: COLORS.surface2 }}>
+                                        {n}
+                                        <button onClick={() => leave(s, n)} style={{ color: COLORS.textMuted }}><X size={9} /></button>
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                <AdminAssignPicker members={allMembers} onAssign={(name) => join(s, name)} />
                               </div>
                             )}
                           </div>
