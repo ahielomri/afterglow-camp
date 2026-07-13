@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
-import { Users, CalendarDays, Clock, Flame, Tent, Sparkles, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History } from "lucide-react";
+import { Users, CalendarDays, Clock, Flame, Tent, Sparkles, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff } from "lucide-react";
+import { pushSupported, pushPermission, enablePush, disablePush } from "./push.js";
 
 // ---------------------------------------------------------------------------
 // Design tokens - "Organic" palette (matches the shared design-system folder)
@@ -1020,7 +1021,6 @@ export default function App() {
   const [rideInfo, setRideInfo] = useState({});
   const [feeOverrides, setFeeOverrides] = useState({});
   const [memberEmails, setMemberEmails] = useState({});
-  const [reminderPrefs, setReminderPrefs] = useState({});
   const [checklistState, setChecklistState] = useState({});
   const [manualTeamMembers, setManualTeamMembers] = useState({});
   const [activityLog, setActivityLog] = useState([]);
@@ -1046,6 +1046,7 @@ export default function App() {
   const [shiftsView, setShiftsView] = useState("calendar");
   const [expandedTeam, setExpandedTeam] = useState(null);
   const [toast, setToast] = useState(null);
+  const [pushStatus, setPushStatus] = useState("unsupported");
 
   useEffect(() => {
     (async () => {
@@ -1124,12 +1125,6 @@ export default function App() {
         setMemberEmails(savedEmails && savedEmails.value ? JSON.parse(savedEmails.value) : {});
       } catch {
         setMemberEmails({});
-      }
-      try {
-        const savedReminders = await window.storage.get("reminder-prefs", true);
-        setReminderPrefs(savedReminders && savedReminders.value ? JSON.parse(savedReminders.value) : {});
-      } catch {
-        setReminderPrefs({});
       }
       try {
         const savedChecklists = await window.storage.get("team-checklists", true);
@@ -1283,6 +1278,34 @@ export default function App() {
     setTimeout(() => setToast(null), 3200);
   }
 
+  useEffect(() => {
+    setPushStatus(pushPermission());
+  }, [identity]);
+
+  async function handleEnablePush() {
+    try {
+      await enablePush(identity);
+      setPushStatus("granted");
+      showToast("התראות פעילות! תקבל/י הודעה על מודעות וסקרים חדשים", "ok");
+    } catch (err) {
+      if (err.message === "permission-denied") {
+        showToast("ההרשאה נדחתה - אפשר לשנות בהגדרות הדפדפן", "error");
+        setPushStatus("denied");
+      } else {
+        showToast("לא ניתן להפעיל התראות במכשיר/דפדפן הזה", "error");
+      }
+    }
+  }
+
+  async function handleDisablePush() {
+    try {
+      await disablePush(identity);
+      showToast("התראות בוטלו", "ok");
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
   async function logActivity(action, details) {
     const entry = { ts: Date.now(), actor: identity || "לא ידוע", action, details: details || "" };
     const next = [entry, ...activityLog].slice(0, 200);
@@ -1425,17 +1448,6 @@ export default function App() {
     setMemberEmails(next);
     try {
       await window.storage.set("member-emails", JSON.stringify(next), true);
-    } catch {
-      showToast("שמירה נכשלה", "error");
-    }
-  }
-
-  async function setReminderPref(name, channel, value) {
-    const current = reminderPrefs[name] || {};
-    const next = { ...reminderPrefs, [name]: { ...current, [channel]: value } };
-    setReminderPrefs(next);
-    try {
-      await window.storage.set("reminder-prefs", JSON.stringify(next), true);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -2877,7 +2889,6 @@ export default function App() {
           <div className="space-y-2">
             {allMembers.map((m) => {
               const canEdit = isAdmin || m.name === identity;
-              const prefs = reminderPrefs[m.name] || {};
               return (
                 <div key={m.name} className="rounded-xl px-4 py-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                   <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -2910,17 +2921,17 @@ export default function App() {
                       </div>
                     )}
                   </div>
-                  {canEdit && (
-                    <div className="flex items-center gap-3 mt-2 text-xs" style={{ color: COLORS.textMuted }}>
-                      <span>תזכורות:</span>
-                      <label className="flex items-center gap-1">
-                        <input type="checkbox" checked={!!prefs.email} onChange={(e) => setReminderPref(m.name, "email", e.target.checked)} />
-                        במייל
-                      </label>
-                      <label className="flex items-center gap-1">
-                        <input type="checkbox" checked={!!prefs.mobile} onChange={(e) => setReminderPref(m.name, "mobile", e.target.checked)} />
-                        בנייד
-                      </label>
+                  {m.name === identity && pushStatus !== "unsupported" && (
+                    <div className="mt-2">
+                      {pushStatus === "granted" ? (
+                        <button onClick={handleDisablePush} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold" style={{ background: COLORS.accent2Light, color: COLORS.accent2Dark }}>
+                          <Bell size={12} /> התראות דחיפה פעילות - לחץ/י לביטול
+                        </button>
+                      ) : (
+                        <button onClick={handleEnablePush} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold" style={{ background: COLORS.accent, color: COLORS.bg }}>
+                          <BellOff size={12} /> הפעלת התראות דחיפה למודעות וסקרים
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
