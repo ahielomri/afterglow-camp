@@ -1,0 +1,2580 @@
+import { useState, useEffect, useMemo } from "react";
+import { Users, CalendarDays, Clock, Flame, Tent, Sparkles, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse } from "lucide-react";
+
+// ---------------------------------------------------------------------------
+// Design tokens - "Organic" palette (matches the shared design-system folder)
+// ---------------------------------------------------------------------------
+const COLORS = {
+  bg: "#f5ead8",
+  surface: "#ebddc5",
+  surface2: "#dcd3c4",
+  input: "#f9f4ed",
+  text: "#201e1d",
+  textMuted: "rgba(32,30,29,0.6)",
+  divider: "rgba(32,30,29,0.16)",
+  accent: "#c67139",
+  accentDark: "#8c491a",
+  accentLight: "#ffe1d0",
+  accent2: "#7a8a5e",
+  accent2Dark: "#56633f",
+  accent2Light: "#e1eecc",
+  danger: "#a8442e",
+};
+
+const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;500;600;700;800&family=Frank+Ruhl+Libre:wght@500;700;900&family=Assistant:wght@400;500;600;700&display=swap');`;
+const FONT_HEADING = `"Caprasimo", "Frank Ruhl Libre", serif`;
+const FONT_BODY = `"Figtree", "Assistant", sans-serif`;
+const FONT_NUM = `"Figtree", "Assistant", sans-serif`;
+
+// ---------------------------------------------------------------------------
+// Static reference data (mirrors the Wix CMS collections already built)
+// idNumber is used only to verify identity at login - never displayed.
+// Admins can add more members at runtime (stored separately, merged in-app).
+// ---------------------------------------------------------------------------
+const MEMBERS = [
+  { name: "אורנה חזוט צורים", id: "40180390", role: "admin" },
+  { name: "עומרי אחיאל", id: "200450633", role: "admin" },
+  { name: "שרון אור", id: "16447070", role: "member" },
+  { name: "ליאת ציטרון", id: "31688716", role: "member" },
+  { name: "איתי כהן", id: "043019223", role: "member" },
+  { name: "מירי אביהו", id: "307802926", role: "member" },
+  { name: "גיא יצחקי", id: "052325815", role: "member" },
+  { name: "מתיאס זיפיליבן", id: "328893292", role: "member" },
+  { name: "גלעד אהרוני", id: "032214579", role: "member" },
+  { name: "רוני דאיה", id: "033640640", role: "member" },
+  { name: "נטע קישיניאבסקי שני", id: "033178419", role: "admin" },
+  { name: "נעם אלמוג", id: "034201764", role: "member" },
+  { name: "נירי כהן", id: "201603594", role: "member" },
+  { name: "אסי כהן", id: "038399556", role: "member" },
+  { name: "אן קליוט", id: null, role: "member" },
+  { name: "טליה הבר", id: "0506982095", role: "member" },
+  { name: "תמיר צמח", id: "024059131", role: "member" },
+  { name: "דן דורות", id: "301592549", role: "member" },
+  { name: "אלירם לגזיאל", id: "062840160", role: "member" },
+  { name: "ליאת בן סעדון", id: "036536068", role: "member" },
+  { name: "אבישי גרינגרד", id: "0526808009", role: "member" },
+  { name: "טלי שגב", id: "038704920", role: "member" },
+  { name: "רווה מדר", id: "062836291", role: "member" },
+  { name: "עידן טחן", id: "212976294", role: "member" },
+  { name: "אנה קנטרוביץ", id: "014445746", role: "member" },
+  { name: "בתאל בר גיורא", id: "036236602", role: "member" },
+  { name: "רותם פלש", id: "037728409", role: "member" },
+  { name: "גילי דגן", id: null, role: "member" },
+  { name: "יעל נאש", id: null, role: "member" },
+  { name: "שלומי קוך", id: null, role: "member" },
+];
+
+const DEFAULT_TEAM_LEADS = {
+  "הקמות": "גלעד אהרוני",
+  "צוות תקציב": "רותם פלש",
+  "רכש ולוגיסטיקה": "אורנה חזוט צורים",
+  "פירוקים": "תמיר צמח",
+  "מים": "מתיאס זיפיליבן",
+  "שירותים ומקלחות": "בתאל בר גיורא",
+  "צוות חשל\"ש": "יעל נאש",
+  "עיצוב המחנה ותפאורה": "רוני דאיה",
+  "צוות תוכן גיפט": "מירי אביהו",
+  "אחראי קרח": "איתי כהן",
+};
+
+const TEAMS = [
+  { name: "תכנון המחנה", desc: "תכנון פיזי והעמדה של הקמפ: מיקומי המטבח, השירותים, המקלחות, אזור הלינה ומרחב הגיפט/הסלון" },
+  { name: "הקמות", desc: "הגעה לפלאיה יומיים-שלושה לפני פתיחת האירוע. בנייה פיזית של כל תשתיות ומבני המחנה מאפס" },
+  { name: "פירוקים", desc: "ניהול אופרציית הפירוק ביום האחרון - כולם משתתפים ללא יוצא מן הכלל" },
+  { name: "צוות המטבח", desc: "תפריט, כמויות, קנייה מרוכזת וניהול משמרות בישול קבועות ברוטציה של חברי מחנה" },
+  { name: "מים", desc: "התקשרות מול ספק מים, מעקב מלאי ותיאום פינוי מים אפורים" },
+  { name: "שירותים ומקלחות", desc: "תיאום ספקים וניהול תורנויות ניקיון" },
+  { name: "צוות חשל\"ש", desc: "Leave No Trace, מיחזור, פינוי פחים ובדיקת MOOP" },
+  { name: "אחראי קרח", desc: "רכישת קרח יומי מהנקודה הרשמית בפלאיה, בסבב מתנדבים" },
+  { name: "עיצוב המחנה ותפאורה", desc: "שפה חזותית, שילוט והקמת הסלון המרכזי" },
+  { name: "צוות תוכן גיפט", desc: "הפעילויות והתוכן במרחב הגיפט, כולל הטקס היומי אחרי השקיעה" },
+  { name: "צוות תקציב", desc: "דמי מחנה, גבייה מרוכזת ומעקב תקציבי" },
+  { name: "רכש ולוגיסטיקה", desc: "רכש ציוד קמפינג משותף ותיאום הובלות" },
+  { name: "נציג.ת מיט\"ה", desc: "הכתובת המוסמכת של המחנה למרחב בטוח ומניעת הטרדות" },
+  { name: "חשמל וגז", desc: "לוח חשמל, עומסים וכבלים תקניים; מערכת גז תקינה ומטפי כיבוי - בטיחות בסיסית של מחנה מתפקד" },
+];
+
+const TEAM_CHECKLISTS = {
+  "מים": [
+    "מים לשתייה", "מים לבישול", "מים לשטיפת כלים", "מים למקלחות", "רזרבה",
+    "מיכל מים מתאים", "משאבה", "צינורות וחיבורים", "ברזים חלופיים", "בדיקת נזילות",
+    "סימון ברור בין מי שתייה למים אחרים", "מיכל מים אפורים", "ניקוז סגור",
+    "מעקב אחר מפלס המיכל", "תוכנית לפינוי המים",
+  ],
+  "שירותים ומקלחות": [
+    "משטח מקלחת יציב", "פרטיות", "משטח נגד החלקה", "תאורה במקלחות", "ניקוי יומי",
+  ],
+  "צוות המטבח": [
+    "תפריט לכל יום", "כמויות לפי מספר החברים", "רשימת אלרגיות", "משמרות בישול", "משמרות ניקיון",
+    "מקררים או צידניות", "משטחי עבודה", "אחסון מזון סגור", "ציוד בישול", "כלי אוכל רב פעמיים",
+    "עמדת שטיפת ידיים", "עמדת שטיפת כלים", "סבון ונייר", "יריעה מתחת למטבח",
+    "פחים נגישים ומסומנים", "פתרון לשאריות מזון", "פתיחה וסגירה יומית של המטבח",
+  ],
+  "חשמל וגז": [
+    "רשימת כל צרכני החשמל", "חישוב עומס", "לוח חשמל", "כבלים תקניים", "שקעים ומפצלים",
+    "הגנה על חיבורים", "תאורה למרחב הציבורי", "תאורה לשבילים", "תאורת חירום",
+    "מפסק ראשי מסומן", "אדם שיודע לנתק את המערכת", "בדיקה יומית של כבלים וחיבורים",
+    "מערכת גז תקינה", "בדיקה ואישור בהתאם לנהלי האירוע", "בלונים במקום מוגן ומסומן",
+    "צנרת מוגנת", "אחראי גז", "מטפים בתוקף", "שמיכת כיבוי במטבח", "אין אש ללא השגחה",
+    "כל חברי הקמפ יודעים איפה המטפים", "כל חברי הקמפ יודעים איך סוגרים את הגז",
+  ],
+  "צוות חשל\"ש": [
+    "אחראי לנ\"ת", "תחנת פסולת מסודרת מהיום הראשון", "פחים מסומנים לפי סוג", "שקיות חזקות",
+    "מקום סגור לאחסון פסולת", "מאפרות כיס", "דליים לאיסוף MOOP", "כפפות", "מטאטאים ויעה",
+    "מגנט לאיסוף ברגים ומתכת", "יריעות מתחת למטבח ולאזורי עבודה", "סריקה קצרה בכל בוקר",
+    "סריקה אחרי כל פעילות", "סריקה בסוף כל יום", "סריקה אחרי פירוק כל אזור",
+  ],
+  "הקמות": [
+    "לו\"ז הקמות לפי ימים", "רשימת נוכחות לכל יום", "סדר כניסת רכבים", "רשימת משימות",
+    "אחראי לכל משימה", "ארגז הקמות נגיש", "מים ואוכל לצוות", "אזור צל לצוות",
+    "תדריך בטיחות בתחילת כל יום", "הקמת תשתיות לפני עיצוב", "בדיקת גז", "בדיקת חשמל",
+    "בדיקת יציאות ומעברים", "סריקת MOOP בסוף כל יום", "צילום הקמפ לאחר סיום ההקמה",
+  ],
+  "תכנון המחנה": [
+    "לוח משמרות ברור", "אחראי תורן", "פתיחה וסגירה יומית של אזור הפעילות",
+    "בדיקת גז לפני שימוש", "בדיקת חשמל", "בדיקת מים ונזילות", "בדיקת צל ועיגונים",
+    "פינוי פסולת", "ניקיון מקלחות", "סריקת MOOP", "בדיקת מלאי",
+    "זמן מנוחה גם לאנשים שמובילים את הקמפ", "קשר טוב עם הקמפים השכנים", "תיעוד תקלות וציוד שנשבר",
+  ],
+  "פירוקים": [
+    "צוות פירוק מחויב מראש", "לו\"ז פירוק", "חלוקת משימות", "ניתוק גז", "ניתוק חשמל",
+    "ריקון ופינוי מים אפורים", "פינוי מזון", "פינוי כל הפסולת", "ניקוי ציוד לפני העמסה",
+    "ספירת ציוד", "החזרת ציוד לבעלים", "הוצאת כל היתדות הברגים והעוגנים", "מעבר עם מגנט",
+    "סריקת MOOP בקווים", "בדיקה נוספת באור יום", "צילום השטח הנקי", "אף אחד לא עוזב לפני שהשטח נקי",
+  ],
+};
+
+function buildShifts() {
+  const shifts = [];
+  const setupDays = ["2026-10-30", "2026-10-31", "2026-11-01"];
+  setupDays.forEach((d) =>
+    shifts.push({ id: `setup-${d}`, phase: "הקמות", title: "יום הקמה", team: "הקמות", date: d, start: "08:00", end: "18:00", spots: 8, desc: "בנייה פיזית של תשתיות ומבני המחנה" })
+  );
+
+  const eventDays = ["2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06", "2026-11-07"];
+  const lastDay = "2026-11-07";
+  eventDays.forEach((d) => {
+    shifts.push({ id: `kitchen-am-${d}`, phase: "ימי האירוע", title: "משמרת בישול - בוקר", team: "צוות המטבח", date: d, start: "06:30", end: "09:00", spots: 3, desc: "הכנה והגשה של ארוחת בוקר" });
+    if (d !== lastDay) {
+      shifts.push({ id: `kitchen-noon-${d}`, phase: "ימי האירוע", title: "משמרת בישול - צהריים", team: "צוות המטבח", date: d, start: "11:30", end: "14:00", spots: 3, desc: "הכנה והגשה של ארוחת צהריים" });
+      shifts.push({ id: `kitchen-eve-${d}`, phase: "ימי האירוע", title: "משמרת בישול - ערב", team: "צוות המטבח", date: d, start: "17:30", end: "20:00", spots: 3, desc: "הכנה והגשה של ארוחת ערב" });
+    }
+    if (d === lastDay) return;
+    shifts.push({ id: `ice-${d}`, phase: "ימי האירוע", title: "הבאת קרח", team: "אחראי קרח", date: d, start: "10:00", end: "11:00", spots: 1, desc: "רכישת קרח יומי מנקודת המכירה הרשמית" });
+    shifts.push({ id: `clean-${d}`, phase: "ימי האירוע", title: "ניקיון שירותים ומקלחות", team: "שירותים ומקלחות", date: d, start: "09:00", end: "10:00", spots: 2, desc: "ניקיון ותחזוקה יומית" });
+    shifts.push({ id: `moop-${d}`, phase: "ימי האירוע", title: "חשל\"ש ופינוי פסולת", team: "צוות חשל\"ש", date: d, start: "16:00", end: "17:00", spots: 2, desc: "מיחזור, פינוי פחים ובדיקת MOOP" });
+  });
+
+  shifts.push({ id: "teardown-2026-11-07", phase: "פירוקים", title: "יום פירוק", team: "פירוקים", date: "2026-11-07", start: "08:00", end: "22:00", spots: MEMBERS.length, desc: "פירוק תשתיות, בדיקת MOOP סופית וניקיון השטח - כולם משתתפים" });
+
+  return shifts;
+}
+const TEARDOWN_TASKS = [
+  "פירוק מטבח", "פירוק מקלחות", "פירוק הצללה", "פירוק תפאורה", "פירוק וקיפול PVC",
+  "ריקון מים אפורים", "פינוי פסולת", "החזרת ציוד לספקים", "החזרה וסידור ציוד במכולה",
+  "סריקת חשל\"ש", "אישור מחלקת חשל\"ש מידברן שהשטח נקי",
+];
+const TEARDOWN_ID = "teardown-2026-11-07";
+const SHIFTS = buildShifts();
+const BUDGET_CATEGORIES = [
+  "מטבח ומזון", "מים", "שירותים ומקלחות", "הובלות", "ציוד", "בנייה והקמות",
+  "עיצוב ותפאורה", "תוכן וגיפט", "חשמל", "דלק", "קרח", "חשל\"ש", "ביטוח", "שונות",
+];
+
+const TEAM_FILTERS = [...new Set(SHIFTS.map((s) => s.team))];
+const TRAVEL_DAYS = ["2026-10-30", "2026-10-31", "2026-11-01"];
+
+const WEEKDAYS_HE = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+function formatDate(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return `יום ${WEEKDAYS_HE[dt.getDay()]}, ${d}.${m}`;
+}
+function formatDateShort(iso) {
+  const [, m, d] = iso.split("-").map(Number);
+  return `${d}.${m}`;
+}
+
+const EVENT_START = new Date(2026, 10, 2);
+function daysUntil() {
+  return Math.ceil((EVENT_START - new Date()) / (1000 * 60 * 60 * 24));
+}
+
+function normalizeId(str) {
+  return (str || "").replace(/\D/g, "").replace(/^0+/, "");
+}
+
+// ---------------------------------------------------------------------------
+// Signature visual - echoes the camp logo, retuned to the Organic palette
+// ---------------------------------------------------------------------------
+function SunsetMark({ size = 56 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100">
+      <defs>
+        <clipPath id="sm-clip"><circle cx="50" cy="50" r="46" /></clipPath>
+        <linearGradient id="sm-sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={COLORS.accent2Dark} />
+          <stop offset="50%" stopColor={COLORS.accent} />
+          <stop offset="100%" stopColor={COLORS.accentLight} />
+        </linearGradient>
+      </defs>
+      <circle cx="50" cy="50" r="48" fill={COLORS.accent} />
+      <g clipPath="url(#sm-clip)">
+        <rect x="0" y="0" width="100" height="100" fill="url(#sm-sky)" />
+        {[36, 27, 18].map((r, i) => (
+          <circle key={i} cx="50" cy="62" r={r} fill="none" stroke={COLORS.text} strokeOpacity="0.25" strokeWidth="2" />
+        ))}
+        <circle cx="50" cy="62" r="16" fill={COLORS.accentLight} />
+        {[0, 1, 2, 3, 4].map((i) => (
+          <rect key={i} x="4" y={65 + i * 6.5} width="92" height="2" fill={COLORS.text} opacity="0.35" />
+        ))}
+      </g>
+    </svg>
+  );
+}
+
+function FillRing({ filled, total, size = 34 }) {
+  const r = 14;
+  const c = 2 * Math.PI * r;
+  const pct = total > 0 ? Math.min(filled / total, 1) : 0;
+  const full = filled >= total;
+  return (
+    <svg width={size} height={size} viewBox="0 0 36 36">
+      <circle cx="18" cy="18" r={r} fill="none" stroke={COLORS.divider} strokeWidth="4" />
+      <circle
+        cx="18" cy="18" r={r} fill="none"
+        stroke={full ? COLORS.accent2 : COLORS.accent}
+        strokeWidth="4" strokeLinecap="round"
+        strokeDasharray={`${c * pct} ${c}`}
+        transform="rotate(-90 18 18)"
+      />
+      <text x="18" y="21" textAnchor="middle" fontSize="10" fontWeight="700" fontFamily={FONT_NUM} fill={COLORS.text}>
+        {filled}/{total}
+      </text>
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Login gate - verifies name + ID against the roster
+// ---------------------------------------------------------------------------
+function LoginScreen({ members, passwords, onVerified, onSetPassword }) {
+  const [name, setName] = useState("");
+  const [idVal, setIdVal] = useState("");
+  const [password, setPasswordVal] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [forgotMode, setForgotMode] = useState(false);
+  const [error, setError] = useState("");
+
+  const selected = members.find((m) => m.name === name);
+  const needsId = selected && selected.id !== null;
+  const hasPassword = selected && !!passwords[selected.name];
+  const resetting = hasPassword && forgotMode;
+
+  function submit() {
+    if (!selected) return setError("בחר/י שם מהרשימה");
+
+    if (hasPassword && !forgotMode) {
+      if (password !== passwords[selected.name]) {
+        return setError("סיסמה שגויה");
+      }
+      onVerified(selected.name);
+      return;
+    }
+
+    // first-time setup OR password-reset flow: both require re-verifying identity then choosing a new password
+    if (needsId && normalizeId(idVal) !== normalizeId(selected.id)) {
+      return setError("תעודת הזהות לא תואמת לשם שנבחר");
+    }
+    if (!password || password.length < 4) {
+      return setError("בחר/י סיסמה של לפחות 4 תווים");
+    }
+    if (password !== confirmPassword) {
+      return setError("הסיסמאות לא תואמות");
+    }
+    onSetPassword(selected.name, password);
+    onVerified(selected.name);
+  }
+
+  return (
+    <div className="flex items-center justify-center min-h-[500px] px-6">
+      <div className="w-full max-w-sm rounded-3xl p-6" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+        <SunsetMark size={48} />
+        <h2 style={{ fontFamily: FONT_HEADING }} className="text-xl mt-4 mb-1">כניסה למחנה</h2>
+        <p className="text-xs mb-5" style={{ color: COLORS.textMuted }}>
+          {resetting ? "איפוס סיסמה - נזהה אותך שוב לפי ת.ז ותבחר/י סיסמה חדשה" : hasPassword ? "מזהים אותך לפי שם וסיסמה" : "כניסה ראשונה - נזהה אותך ותבחר/י סיסמה לפעם הבאה"}
+        </p>
+
+        <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>שם</label>
+        <div className="relative mb-3">
+          <select
+            value={name}
+            onChange={(e) => { setName(e.target.value); setError(""); setPasswordVal(""); setConfirmPassword(""); setIdVal(""); setForgotMode(false); }}
+            className="w-full appearance-none pl-9 pr-3 py-2.5 rounded-xl text-sm outline-none"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          >
+            <option value="">בחר/י שם...</option>
+            {members.map((m) => (
+              <option key={m.name} value={m.name}>{m.name}</option>
+            ))}
+          </select>
+          <ChevronDown size={16} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: COLORS.text }} />
+        </div>
+
+        {selected && (!hasPassword || forgotMode) && needsId && (
+          <>
+            <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>תעודת זהות (לאימות זהות)</label>
+            <input
+              value={idVal}
+              onChange={(e) => { setIdVal(e.target.value); setError(""); }}
+              placeholder="הזן/י ת.ז"
+              className="w-full px-3 py-2.5 rounded-xl text-sm outline-none mb-3"
+              style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+            />
+          </>
+        )}
+        {selected && !hasPassword && !needsId && (
+          <p className="text-xs mb-3" style={{ color: COLORS.textMuted }}>אין ת.ז רשומה עבורך במערכת - בחר/י סיסמה כדי להמשיך</p>
+        )}
+        {selected && forgotMode && !needsId && (
+          <p className="text-xs mb-3" style={{ color: COLORS.danger }}>אין ת.ז רשומה עבורך במערכת - פנה/י למנהל הקמפ כדי לאפס את הסיסמה</p>
+        )}
+
+        {selected && hasPassword && !forgotMode && (
+          <>
+            <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>סיסמה</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => { setPasswordVal(e.target.value); setError(""); }}
+              placeholder="הזן/י סיסמה"
+              className="w-full px-3 py-2.5 rounded-xl text-sm outline-none mb-1.5"
+              style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+            />
+            <button onClick={() => setForgotMode(true)} className="text-xs mb-3" style={{ color: COLORS.accentDark }}>
+              שכחת סיסמה?
+            </button>
+          </>
+        )}
+
+        {selected && (!hasPassword || (forgotMode && needsId)) && (
+          <>
+            <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>{forgotMode ? "סיסמה חדשה" : "בחר/י סיסמה"}</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => { setPasswordVal(e.target.value); setError(""); }}
+              placeholder="לפחות 4 תווים"
+              className="w-full px-3 py-2.5 rounded-xl text-sm outline-none mb-3"
+              style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+            />
+            <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>אימות סיסמה</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => { setConfirmPassword(e.target.value); setError(""); }}
+              placeholder="הקלד/י שוב"
+              className="w-full px-3 py-2.5 rounded-xl text-sm outline-none mb-3"
+              style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+            />
+          </>
+        )}
+
+        {error && <p className="text-xs mb-3" style={{ color: COLORS.danger }}>{error}</p>}
+
+        <button
+          onClick={submit}
+          disabled={selected && forgotMode && !needsId}
+          className="w-full py-2.5 rounded-xl text-sm font-bold"
+          style={{ background: COLORS.accent, color: COLORS.bg, fontFamily: FONT_HEADING, opacity: selected && forgotMode && !needsId ? 0.5 : 1 }}
+        >
+          כניסה
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CategoryBudgetForm({ onSet }) {
+  const [cat, setCat] = useState(BUDGET_CATEGORIES[0]);
+  const [amount, setAmount] = useState("");
+
+  return (
+    <div className="rounded-2xl p-4 mb-4 flex items-end gap-2 flex-wrap" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <div className="flex-1 min-w-[160px]">
+        <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>מחלקה</label>
+        <div className="relative">
+          <select
+            value={cat} onChange={(e) => setCat(e.target.value)}
+            className="w-full appearance-none pl-9 pr-3 py-2.5 rounded-xl text-sm outline-none"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          >
+            {BUDGET_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <ChevronDown size={15} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: COLORS.text }} />
+        </div>
+      </div>
+      <div className="flex-1 min-w-[140px]">
+        <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>תקציב מתוכנן (₪)</label>
+        <input
+          type="number" value={amount} onChange={(e) => setAmount(e.target.value)}
+          placeholder="0"
+          className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+      </div>
+      <button
+        onClick={() => { onSet(cat, amount); setAmount(""); }}
+        className="px-4 py-2.5 rounded-xl text-sm font-semibold"
+        style={{ background: COLORS.accent, color: COLORS.bg }}
+      >
+        עדכון תקציב
+      </button>
+    </div>
+  );
+}
+
+function BudgetForm({ onAdd, onCancel, lockedCategory }) {
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState(lockedCategory || BUDGET_CATEGORIES[0]);
+  const [committed, setCommitted] = useState("");
+  const [paid, setPaid] = useState("");
+  const [notes, setNotes] = useState("");
+
+  return (
+    <div className="rounded-2xl p-4 mb-6 space-y-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <div className="grid sm:grid-cols-2 gap-2">
+        <input
+          value={name} onChange={(e) => setName(e.target.value)}
+          placeholder="שם הסעיף (למשל: שכירת גנרטור)"
+          className="px-3 py-2 rounded-xl text-sm outline-none sm:col-span-2"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        <select
+          value={category} onChange={(e) => setCategory(e.target.value)}
+          disabled={!!lockedCategory}
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}`, opacity: lockedCategory ? 0.7 : 1 }}
+        >
+          {(lockedCategory ? [lockedCategory] : BUDGET_CATEGORIES).map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <input
+          value={notes} onChange={(e) => setNotes(e.target.value)}
+          placeholder="הערות (אופציונלי)"
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        <input
+          type="number" value={committed} onChange={(e) => setCommitted(e.target.value)}
+          placeholder="סכום שהתחייבנו (₪)"
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        <input
+          type="number" value={paid} onChange={(e) => setPaid(e.target.value)}
+          placeholder="סכום ששולם בפועל (₪)"
+          className="px-3 py-2 rounded-xl text-sm outline-none sm:col-span-2"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+      </div>
+      <div className="flex gap-2 pt-1">
+        <button
+          onClick={() => onAdd({ name, category, committed, paid, notes })}
+          className="px-4 py-2 rounded-full text-sm font-semibold"
+          style={{ background: COLORS.accent, color: COLORS.bg }}
+        >
+          הוספה
+        </button>
+        <button onClick={onCancel} className="px-4 py-2 rounded-full text-sm" style={{ color: COLORS.textMuted }}>
+          ביטול
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TeardownTaskPicker({ selected, onToggle, compact }) {
+  const enough = selected.length >= 2;
+  return (
+    <div>
+      <div className={compact ? "flex flex-wrap gap-1 mt-1" : "flex flex-wrap gap-1.5 mt-2"}>
+        {TEARDOWN_TASKS.map((task) => {
+          const active = selected.includes(task);
+          return (
+            <button
+              key={task}
+              onClick={() => onToggle(task)}
+              className={compact ? "px-1.5 py-0.5 rounded-md text-[10px] font-medium" : "px-2.5 py-1 rounded-full text-xs font-medium"}
+              style={{
+                background: active ? COLORS.accent2 : COLORS.surface2,
+                color: active ? COLORS.bg : COLORS.text,
+              }}
+            >
+              {task}
+            </button>
+          );
+        })}
+      </div>
+      <div className={compact ? "text-[10px] mt-1" : "text-xs mt-1.5"} style={{ color: enough ? COLORS.accent2Dark : COLORS.danger }}>
+        {enough ? `✓ ${selected.length} משימות נבחרו` : `נבחרו ${selected.length}/2 - צריך לבחור לפחות 2 משימות`}
+      </div>
+    </div>
+  );
+}
+
+function AddPaymentForm({ onAdd }) {
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState("");
+  return (
+    <div className="flex gap-2 items-center flex-wrap">
+      <input
+        type="number" value={amount} onChange={(e) => setAmount(e.target.value)}
+        placeholder="סכום (₪)"
+        className="w-28 px-2 py-1.5 rounded-xl text-sm outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      />
+      <input
+        type="date" value={date} onChange={(e) => setDate(e.target.value)}
+        className="px-2 py-1.5 rounded-xl text-sm outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      />
+      <button
+        onClick={() => { onAdd(amount, date); setAmount(""); setDate(""); }}
+        className="px-3 py-1.5 rounded-full text-xs font-semibold"
+        style={{ background: COLORS.accent, color: COLORS.bg }}
+      >
+        <Plus size={13} className="inline -mt-0.5" /> הוספת תשלום
+      </button>
+    </div>
+  );
+}
+
+function TeamLeadPicker({ team, current, members, onSet }) {
+  const [val, setVal] = useState(current || "");
+  return (
+    <div className="flex items-center gap-1.5 mt-1" onClick={(e) => e.stopPropagation()}>
+      <select
+        value={val}
+        onChange={(e) => { setVal(e.target.value); onSet(team, e.target.value); }}
+        className="text-xs px-2 py-1 rounded-lg outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      >
+        <option value="">ללא מוביל/ה</option>
+        {members.map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function AddMemberForm({ onAdd }) {
+  const [name, setName] = useState("");
+  const [id, setId] = useState("");
+  return (
+    <div className="rounded-2xl p-4 flex items-end gap-2 flex-wrap" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <div className="flex-1 min-w-[140px]">
+        <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>שם מלא</label>
+        <input
+          value={name} onChange={(e) => setName(e.target.value)}
+          placeholder="שם החבר החדש"
+          className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+      </div>
+      <div className="flex-1 min-w-[120px]">
+        <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>ת.ז (אופציונלי)</label>
+        <input
+          value={id} onChange={(e) => setId(e.target.value)}
+          placeholder="תעודת זהות"
+          className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+      </div>
+      <button
+        onClick={() => { if (name.trim()) { onAdd(name.trim(), id.trim() || null); setName(""); setId(""); } }}
+        className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold"
+        style={{ background: COLORS.accent, color: COLORS.bg }}
+      >
+        <UserPlus size={15} /> הוספת חבר
+      </button>
+    </div>
+  );
+}
+
+function YesNoButtons({ value, onChange }) {
+  return (
+    <div className="flex gap-2">
+      {[{ v: "yes", label: "כן" }, { v: "no", label: "לא" }].map((o) => (
+        <button
+          key={o.v}
+          onClick={() => onChange(o.v)}
+          className="px-4 py-1.5 rounded-full text-sm font-semibold"
+          style={{
+            background: value === o.v ? COLORS.accent : COLORS.input,
+            color: value === o.v ? COLORS.bg : COLORS.text,
+            border: `1px solid ${COLORS.divider}`,
+          }}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function RideWizard({ data, onChange }) {
+  const d = data || {};
+  const [local, setLocal] = useState({
+    city: d.city || "",
+    hasCar: d.hasCar,
+    offerRide: d.offerRide,
+    offerDay: d.offerDay || "",
+    seats: d.seats || "",
+    hasWay: d.hasWay,
+  });
+  const [saved, setSaved] = useState(false);
+  const set = (patch) => { setLocal({ ...local, ...patch }); setSaved(false); };
+
+  return (
+    <div className="rounded-2xl p-4 space-y-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <div>
+        <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>עיר</label>
+        <input
+          value={local.city}
+          onChange={(e) => set({ city: e.target.value })}
+          placeholder="עיר מגורים"
+          autoComplete="off"
+          className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+      </div>
+
+      <div>
+        <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>מגיע/ה עם רכב?</label>
+        <YesNoButtons value={local.hasCar} onChange={(v) => set({ hasCar: v, offerRide: undefined, hasWay: undefined })} />
+      </div>
+
+      {local.hasCar === "yes" && (
+        <div>
+          <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>מעוניין/ת לאסוף מישהו איתך בדרך?</label>
+          <YesNoButtons value={local.offerRide} onChange={(v) => set({ offerRide: v })} />
+          {local.offerRide === "no" && (
+            <p className="text-xs mt-1.5" style={{ color: COLORS.textMuted }}>בסדר גמור - הפרטים שלך לא יפורסמו בטאב הגעה לברן.</p>
+          )}
+          {local.offerRide === "yes" && (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>באיזה יום יוצא/ת?</label>
+                <select
+                  value={local.offerDay}
+                  onChange={(e) => set({ offerDay: e.target.value })}
+                  className="w-full px-2 py-1.5 rounded-lg text-sm outline-none"
+                  style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                >
+                  <option value="">בחר/י יום</option>
+                  {TRAVEL_DAYS.map((day) => <option key={day} value={day}>{formatDate(day)}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>כמה מקומות פנויים?</label>
+                <input
+                  type="number"
+                  value={local.seats}
+                  onChange={(e) => set({ seats: e.target.value })}
+                  placeholder="0"
+                  className="w-full px-2 py-1.5 rounded-lg text-sm outline-none"
+                  style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {local.hasCar === "no" && (
+        <div>
+          <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>כבר יש לך איך להגיע?</label>
+          <YesNoButtons value={local.hasWay} onChange={(v) => set({ hasWay: v })} />
+          {local.hasWay === "yes" && (
+            <p className="text-xs mt-1.5" style={{ color: COLORS.textMuted }}>מעולה - הפרטים שלך לא יפורסמו בטאב הגעה לברן.</p>
+          )}
+          {local.hasWay === "no" && (
+            <p className="text-xs mt-1.5" style={{ color: COLORS.textMuted }}>תפורסם/י ברשימת "מחפשים טרמפ".</p>
+          )}
+        </div>
+      )}
+
+      <div className="flex items-center gap-3 pt-1">
+        <button
+          onClick={() => { onChange({ ...local, seats: Number(local.seats) || 0 }); setSaved(true); }}
+          className="px-4 py-2 rounded-full text-sm font-semibold"
+          style={{ background: COLORS.accent, color: COLORS.bg }}
+        >
+          שמירה
+        </button>
+        {saved && <span className="text-xs" style={{ color: COLORS.accent2Dark }}>✓ נשמר</span>}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main app
+// ---------------------------------------------------------------------------
+function AnnouncementForm({ onPost }) {
+  const [text, setText] = useState("");
+  return (
+    <div className="flex gap-2 items-end mb-5">
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="מה תרצה לפרסם ללוח המודעות?"
+        rows={2}
+        className="flex-1 px-3 py-2 rounded-xl text-sm outline-none resize-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      />
+      <button
+        onClick={() => { onPost(text); setText(""); }}
+        className="px-4 py-2.5 rounded-xl text-sm font-semibold shrink-0"
+        style={{ background: COLORS.accent, color: COLORS.bg }}
+      >
+        פרסום
+      </button>
+    </div>
+  );
+}
+
+function ReplyBox({ onReply }) {
+  const [text, setText] = useState("");
+  return (
+    <div className="flex gap-1.5 mt-2">
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="הגב/י..."
+        className="flex-1 px-2 py-1 rounded-lg text-xs outline-none"
+        style={{ background: "rgba(255,255,255,0.5)", color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      />
+      <button
+        onClick={() => { onReply(text); setText(""); }}
+        className="text-xs px-2.5 py-1 rounded-lg font-semibold"
+        style={{ background: COLORS.text, color: COLORS.bg }}
+      >
+        שלח
+      </button>
+    </div>
+  );
+}
+
+function EmergencyCardForm({ data, onChange }) {
+  const d = data || {};
+  const [local, setLocal] = useState({
+    contactName: d.contactName || "",
+    contactPhone: d.contactPhone || "",
+    allergies: d.allergies || "",
+    medical: d.medical || "",
+    dietary: d.dietary || "",
+  });
+  const [saved, setSaved] = useState(false);
+  const set = (patch) => { setLocal({ ...local, ...patch }); setSaved(false); };
+
+  return (
+    <div className="rounded-2xl p-4 space-y-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <div className="grid sm:grid-cols-2 gap-2">
+        <div>
+          <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>איש קשר לחירום - שם</label>
+          <input
+            value={local.contactName}
+            onChange={(e) => set({ contactName: e.target.value })}
+            placeholder="שם מלא"
+            autoComplete="off"
+            className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          />
+        </div>
+        <div>
+          <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>איש קשר לחירום - טלפון</label>
+          <input
+            value={local.contactPhone}
+            onChange={(e) => set({ contactPhone: e.target.value })}
+            placeholder="טלפון"
+            dir="ltr"
+            autoComplete="off"
+            className="w-full px-3 py-2 rounded-xl text-sm outline-none text-right"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          />
+        </div>
+      </div>
+      <div>
+        <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>אלרגיות</label>
+        <input
+          value={local.allergies}
+          onChange={(e) => set({ allergies: e.target.value })}
+          placeholder="למשל: בוטנים, פניצילין..."
+          autoComplete="off"
+          className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+      </div>
+      <div>
+        <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>מגבלות רפואיות / תרופות קבועות</label>
+        <input
+          value={local.medical}
+          onChange={(e) => set({ medical: e.target.value })}
+          placeholder="אופציונלי - רק אם רלוונטי לחירום"
+          autoComplete="off"
+          className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+      </div>
+      <div>
+        <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>העדפות תזונה</label>
+        <input
+          value={local.dietary}
+          onChange={(e) => set({ dietary: e.target.value })}
+          placeholder="טבעוני/צמחוני/ללא גלוטן..."
+          autoComplete="off"
+          className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+      </div>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => { onChange(local); setSaved(true); }}
+          className="px-4 py-2 rounded-full text-sm font-semibold"
+          style={{ background: COLORS.accent, color: COLORS.bg }}
+        >
+          שמירה
+        </button>
+        {saved && <span className="text-xs" style={{ color: COLORS.accent2Dark }}>✓ נשמר</span>}
+      </div>
+      <p className="text-xs" style={{ color: COLORS.textMuted }}>
+        המידע הזה פרטי - רק אתה/את ומנהלי הקמפ יכולים לראות אותו, לשעת חירום בלבד.
+      </p>
+    </div>
+  );
+}
+
+function PollForm({ onCreate, onCancel }) {
+  const [question, setQuestion] = useState("");
+  const [options, setOptions] = useState(["", ""]);
+
+  return (
+    <div className="rounded-2xl p-4 mb-4 space-y-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <input
+        value={question} onChange={(e) => setQuestion(e.target.value)}
+        placeholder="השאלה שלך"
+        className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      />
+      {options.map((opt, i) => (
+        <input
+          key={i}
+          value={opt}
+          onChange={(e) => setOptions(options.map((o, j) => (j === i ? e.target.value : o)))}
+          placeholder={`אפשרות ${i + 1}`}
+          className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+      ))}
+      <button onClick={() => setOptions([...options, ""])} className="text-xs font-semibold" style={{ color: COLORS.accentDark }}>
+        + עוד אפשרות
+      </button>
+      <div className="flex gap-2 pt-1">
+        <button
+          onClick={() => onCreate(question, options)}
+          className="px-4 py-2 rounded-full text-sm font-semibold"
+          style={{ background: COLORS.accent, color: COLORS.bg }}
+        >
+          פרסום סקר
+        </button>
+        <button onClick={onCancel} className="px-4 py-2 rounded-full text-sm" style={{ color: COLORS.textMuted }}>
+          ביטול
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  const [identity, setIdentity] = useState(null);
+  const [assignments, setAssignments] = useState({});
+  const [budgetItems, setBudgetItems] = useState([]);
+  const [categoryBudgets, setCategoryBudgets] = useState({});
+  const [teardownTasks, setTeardownTasks] = useState({});
+  const [memberPayments, setMemberPayments] = useState({});
+  const [campFee, setCampFee] = useState(0);
+  const [teamLeads, setTeamLeadsState] = useState({});
+  const [memberPhones, setMemberPhones] = useState({});
+  const [rideInfo, setRideInfo] = useState({});
+  const [feeOverrides, setFeeOverrides] = useState({});
+  const [memberEmails, setMemberEmails] = useState({});
+  const [reminderPrefs, setReminderPrefs] = useState({});
+  const [checklistState, setChecklistState] = useState({});
+  const [extraMembers, setExtraMembers] = useState([]);
+  const [removedMembers, setRemovedMembers] = useState([]);
+  const [memberPasswords, setMemberPasswords] = useState({});
+  const [announcements, setAnnouncements] = useState([]);
+  const [emergencyInfo, setEmergencyInfo] = useState({});
+  const [polls, setPolls] = useState([]);
+  const [expandedEmergency, setExpandedEmergency] = useState(null);
+  const [showEmergencyList, setShowEmergencyList] = useState(false);
+  const [showMemberList, setShowMemberList] = useState(false);
+  const [openPersonalSection, setOpenPersonalSection] = useState(null);
+  const [showPollForm, setShowPollForm] = useState(false);
+  const [expandedMember, setExpandedMember] = useState(null);
+  const [showBudgetForm, setShowBudgetForm] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState("dashboard-personal");
+  const [teamFilter, setTeamFilter] = useState("הכל");
+  const [shiftsView, setShiftsView] = useState("calendar");
+  const [expandedTeam, setExpandedTeam] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await window.storage.get("shift-assignments", true);
+        setAssignments(saved && saved.value ? JSON.parse(saved.value) : {});
+      } catch {
+        setAssignments({});
+      }
+      try {
+        const savedBudget = await window.storage.get("budget-items", true);
+        setBudgetItems(savedBudget && savedBudget.value ? JSON.parse(savedBudget.value) : []);
+      } catch {
+        setBudgetItems([]);
+      }
+      try {
+        const savedCatBudget = await window.storage.get("category-budgets", true);
+        setCategoryBudgets(savedCatBudget && savedCatBudget.value ? JSON.parse(savedCatBudget.value) : {});
+      } catch {
+        setCategoryBudgets({});
+      }
+      try {
+        const savedTeardown = await window.storage.get("teardown-tasks", true);
+        setTeardownTasks(savedTeardown && savedTeardown.value ? JSON.parse(savedTeardown.value) : {});
+      } catch {
+        setTeardownTasks({});
+      }
+      try {
+        const savedPayments = await window.storage.get("member-payments", true);
+        const parsed = savedPayments && savedPayments.value ? JSON.parse(savedPayments.value) : {};
+        const normalized = {};
+        Object.keys(parsed).forEach((name) => {
+          normalized[name] = Array.isArray(parsed[name]) ? parsed[name] : [];
+        });
+        setMemberPayments(normalized);
+      } catch {
+        setMemberPayments({});
+      }
+      try {
+        const savedFee = await window.storage.get("camp-fee", true);
+        setCampFee(savedFee && savedFee.value ? JSON.parse(savedFee.value) : 0);
+      } catch {
+        setCampFee(0);
+      }
+      try {
+        const savedLeads = await window.storage.get("team-leads", true);
+        if (savedLeads && savedLeads.value) {
+          setTeamLeadsState(JSON.parse(savedLeads.value));
+        } else {
+          setTeamLeadsState(DEFAULT_TEAM_LEADS);
+          window.storage.set("team-leads", JSON.stringify(DEFAULT_TEAM_LEADS), true).catch(() => {});
+        }
+      } catch {
+        setTeamLeadsState(DEFAULT_TEAM_LEADS);
+      }
+      try {
+        const savedPhones = await window.storage.get("member-phones", true);
+        setMemberPhones(savedPhones && savedPhones.value ? JSON.parse(savedPhones.value) : {});
+      } catch {
+        setMemberPhones({});
+      }
+      try {
+        const savedRides = await window.storage.get("ride-info", true);
+        setRideInfo(savedRides && savedRides.value ? JSON.parse(savedRides.value) : {});
+      } catch {
+        setRideInfo({});
+      }
+      try {
+        const savedFeeOv = await window.storage.get("fee-overrides", true);
+        setFeeOverrides(savedFeeOv && savedFeeOv.value ? JSON.parse(savedFeeOv.value) : {});
+      } catch {
+        setFeeOverrides({});
+      }
+      try {
+        const savedEmails = await window.storage.get("member-emails", true);
+        setMemberEmails(savedEmails && savedEmails.value ? JSON.parse(savedEmails.value) : {});
+      } catch {
+        setMemberEmails({});
+      }
+      try {
+        const savedReminders = await window.storage.get("reminder-prefs", true);
+        setReminderPrefs(savedReminders && savedReminders.value ? JSON.parse(savedReminders.value) : {});
+      } catch {
+        setReminderPrefs({});
+      }
+      try {
+        const savedChecklists = await window.storage.get("team-checklists", true);
+        setChecklistState(savedChecklists && savedChecklists.value ? JSON.parse(savedChecklists.value) : {});
+      } catch {
+        setChecklistState({});
+      }
+      try {
+        const savedExtra = await window.storage.get("extra-members", true);
+        setExtraMembers(savedExtra && savedExtra.value ? JSON.parse(savedExtra.value) : []);
+      } catch {
+        setExtraMembers([]);
+      }
+      try {
+        const savedRemoved = await window.storage.get("removed-members", true);
+        setRemovedMembers(savedRemoved && savedRemoved.value ? JSON.parse(savedRemoved.value) : []);
+      } catch {
+        setRemovedMembers([]);
+      }
+      try {
+        const savedPasswords = await window.storage.get("member-passwords", true);
+        setMemberPasswords(savedPasswords && savedPasswords.value ? JSON.parse(savedPasswords.value) : {});
+      } catch {
+        setMemberPasswords({});
+      }
+      try {
+        const savedAnn = await window.storage.get("announcements", true);
+        setAnnouncements(savedAnn && savedAnn.value ? JSON.parse(savedAnn.value) : []);
+      } catch {
+        setAnnouncements([]);
+      }
+      try {
+        const savedEmg = await window.storage.get("emergency-info", true);
+        setEmergencyInfo(savedEmg && savedEmg.value ? JSON.parse(savedEmg.value) : {});
+      } catch {
+        setEmergencyInfo({});
+      }
+      try {
+        const savedPolls = await window.storage.get("polls", true);
+        setPolls(savedPolls && savedPolls.value ? JSON.parse(savedPolls.value) : []);
+      } catch {
+        setPolls([]);
+      }
+      try {
+        const savedMe = await window.storage.get("my-identity", false);
+        if (savedMe && savedMe.value) setIdentity(savedMe.value);
+      } catch {}
+      setLoading(false);
+    })();
+  }, []);
+
+  async function persistAssignments(next) {
+    setAssignments(next);
+    try {
+      await window.storage.set("shift-assignments", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה, נסה שוב", "error");
+    }
+  }
+
+  async function persistBudget(next) {
+    setBudgetItems(next);
+    try {
+      await window.storage.set("budget-items", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה, נסה שוב", "error");
+    }
+  }
+
+  function addBudgetItem(item) {
+    if (!item.name || !item.category) return showToast("צריך שם וקטגוריה", "error");
+    const next = [...budgetItems, { ...item, id: Date.now().toString(), owner: identity }];
+    persistBudget(next);
+    setShowBudgetForm(false);
+    showToast("הסעיף נוסף לתקציב", "ok");
+  }
+
+  function removeBudgetItem(id) {
+    persistBudget(budgetItems.filter((b) => b.id !== id));
+  }
+
+  async function persistCategoryBudgets(next) {
+    setCategoryBudgets(next);
+    try {
+      await window.storage.set("category-budgets", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה, נסה שוב", "error");
+    }
+  }
+
+  function setCategoryBudget(cat, amount) {
+    persistCategoryBudgets({ ...categoryBudgets, [cat]: Number(amount) || 0 });
+    showToast(`תקציב ${cat} עודכן`, "ok");
+  }
+
+  async function handleVerified(name) {
+    setIdentity(name);
+    try {
+      await window.storage.set("my-identity", name, false);
+    } catch {}
+  }
+
+  async function logout() {
+    setIdentity(null);
+    try {
+      await window.storage.delete("my-identity", false);
+    } catch {}
+  }
+
+  function showToast(text, kind = "ok") {
+    setToast({ text, kind });
+    setTimeout(() => setToast(null), 3200);
+  }
+
+  function overlaps(a, b) {
+    return a.start < b.end && b.start < a.end;
+  }
+
+  function isJoined(shiftId) {
+    if (shiftId === TEARDOWN_ID) return true;
+    return (assignments[shiftId] || []).includes(identity);
+  }
+
+  function join(shift) {
+    const names = assignments[shift.id] || [];
+    if (names.includes(identity)) return;
+    if (names.length >= shift.spots) return showToast("אין מקומות פנויים במשמרת הזו", "error");
+
+    const conflict = SHIFTS.find(
+      (s) => s.id !== shift.id && s.date === shift.date && (assignments[s.id] || []).includes(identity) && overlaps(s, shift)
+    );
+    if (conflict) return showToast(`יש חפיפה עם "${conflict.title}" באותו יום`, "error");
+
+    persistAssignments({ ...assignments, [shift.id]: [...names, identity] });
+    showToast(`שובצת ל-${shift.title}`, "ok");
+  }
+
+  function leave(shift) {
+    const names = assignments[shift.id] || [];
+    persistAssignments({ ...assignments, [shift.id]: names.filter((n) => n !== identity) });
+  }
+
+  async function toggleTeardownTask(task) {
+    const mine = teardownTasks[identity] || [];
+    const nextMine = mine.includes(task) ? mine.filter((t) => t !== task) : [...mine, task];
+    const next = { ...teardownTasks, [identity]: nextMine };
+    setTeardownTasks(next);
+    try {
+      await window.storage.set("teardown-tasks", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function setCampFeeValue(amount) {
+    const val = Number(amount) || 0;
+    setCampFee(val);
+    try {
+      await window.storage.set("camp-fee", JSON.stringify(val), true);
+      showToast("דמי הקמפ עודכנו לכולם", "ok");
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function addPayment(name, amount, date) {
+    if (!amount) return;
+    const list = Array.isArray(memberPayments[name]) ? memberPayments[name] : [];
+    const next = { ...memberPayments, [name]: [...list, { id: Date.now().toString(), amount: Number(amount), date }] };
+    setMemberPayments(next);
+    try {
+      await window.storage.set("member-payments", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function removePayment(name, id) {
+    const list = Array.isArray(memberPayments[name]) ? memberPayments[name] : [];
+    const next = { ...memberPayments, [name]: list.filter((p) => p.id !== id) };
+    setMemberPayments(next);
+    try {
+      await window.storage.set("member-payments", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function setTeamLead(team, name) {
+    const next = { ...teamLeads };
+    if (name) next[team] = name; else delete next[team];
+    setTeamLeadsState(next);
+    try {
+      await window.storage.set("team-leads", JSON.stringify(next), true);
+      showToast(`מוביל/ה ${team} עודכן`, "ok");
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function setPhone(name, phone) {
+    const next = { ...memberPhones, [name]: phone };
+    setMemberPhones(next);
+    try {
+      await window.storage.set("member-phones", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function setRideData(name, data) {
+    const next = { ...rideInfo, [name]: data };
+    setRideInfo(next);
+    try {
+      await window.storage.set("ride-info", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function setFeeOverride(name, amount) {
+    const next = { ...feeOverrides };
+    if (amount === "" || amount === null) delete next[name];
+    else next[name] = Number(amount);
+    setFeeOverrides(next);
+    try {
+      await window.storage.set("fee-overrides", JSON.stringify(next), true);
+      showToast(`דמי הקמפ של ${name} עודכנו`, "ok");
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function setEmail(name, email) {
+    const next = { ...memberEmails, [name]: email };
+    setMemberEmails(next);
+    try {
+      await window.storage.set("member-emails", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function setReminderPref(name, channel, value) {
+    const current = reminderPrefs[name] || {};
+    const next = { ...reminderPrefs, [name]: { ...current, [channel]: value } };
+    setReminderPrefs(next);
+    try {
+      await window.storage.set("reminder-prefs", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function toggleChecklistItem(team, index) {
+    const current = checklistState[team] || {};
+    const next = { ...checklistState, [team]: { ...current, [index]: !current[index] } };
+    setChecklistState(next);
+    try {
+      await window.storage.set("team-checklists", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function addMember(name, id) {
+    const next = [...extraMembers, { name, id: id || null, role: "member" }];
+    setExtraMembers(next);
+    try {
+      await window.storage.set("extra-members", JSON.stringify(next), true);
+      showToast(`${name} נוסף/ה לקמפ`, "ok");
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function removeMember(name) {
+    const next = [...removedMembers, name];
+    setRemovedMembers(next);
+    try {
+      await window.storage.set("removed-members", JSON.stringify(next), true);
+      showToast(`${name} הוסר/ה מהקמפ`, "ok");
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function restoreMember(name) {
+    const next = removedMembers.filter((n) => n !== name);
+    setRemovedMembers(next);
+    try {
+      await window.storage.set("removed-members", JSON.stringify(next), true);
+      showToast(`${name} שוחזר/ה`, "ok");
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function setMemberPassword(name, password) {
+    const next = { ...memberPasswords, [name]: password };
+    setMemberPasswords(next);
+    try {
+      await window.storage.set("member-passwords", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function clearMemberPassword(name) {
+    const next = { ...memberPasswords };
+    delete next[name];
+    setMemberPasswords(next);
+    try {
+      await window.storage.set("member-passwords", JSON.stringify(next), true);
+      showToast(`הסיסמה של ${name} אופסה`, "ok");
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function addAnnouncement(text) {
+    if (!text.trim()) return;
+    const next = [{ id: Date.now().toString(), author: identity, text: text.trim(), ts: Date.now(), replies: [] }, ...announcements];
+    setAnnouncements(next);
+    try {
+      await window.storage.set("announcements", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function removeAnnouncement(id) {
+    const next = announcements.filter((a) => a.id !== id);
+    setAnnouncements(next);
+    try {
+      await window.storage.set("announcements", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function addReply(annId, text) {
+    if (!text.trim()) return;
+    const next = announcements.map((a) =>
+      a.id === annId
+        ? { ...a, replies: [...(a.replies || []), { id: Date.now().toString(), author: identity, text: text.trim(), ts: Date.now() }] }
+        : a
+    );
+    setAnnouncements(next);
+    try {
+      await window.storage.set("announcements", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function setEmergencyData(name, data) {
+    const next = { ...emergencyInfo, [name]: data };
+    setEmergencyInfo(next);
+    try {
+      await window.storage.set("emergency-info", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function createPoll(question, options) {
+    if (!question.trim() || options.filter((o) => o.trim()).length < 2) {
+      return showToast("צריך שאלה ולפחות 2 אפשרויות", "error");
+    }
+    const next = [{ id: Date.now().toString(), question: question.trim(), options: options.filter((o) => o.trim()), responses: {}, ts: Date.now() }, ...polls];
+    setPolls(next);
+    try {
+      await window.storage.set("polls", JSON.stringify(next), true);
+      showToast("הסקר פורסם", "ok");
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function removePoll(id) {
+    const next = polls.filter((p) => p.id !== id);
+    setPolls(next);
+    try {
+      await window.storage.set("polls", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function respondToPoll(pollId, optionIndex) {
+    const next = polls.map((p) =>
+      p.id === pollId ? { ...p, responses: { ...p.responses, [identity]: optionIndex } } : p
+    );
+    setPolls(next);
+    try {
+      await window.storage.set("polls", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  function teamMembers(teamName) {
+    const teamShiftIds = SHIFTS.filter((s) => s.team === teamName).map((s) => s.id);
+    const names = new Set();
+    teamShiftIds.forEach((id) => {
+      (id === TEARDOWN_ID ? allMembers.map((m) => m.name) : (assignments[id] || [])).forEach((n) => names.add(n));
+    });
+    return [...names];
+  }
+  function teamLead(teamName) {
+    const name = teamLeads[teamName];
+    return name ? allMembers.find((m) => m.name === name) : null;
+  }
+
+  function teamStats(team) {
+    const teamShifts = SHIFTS.filter((s) => s.team === team && s.id !== TEARDOWN_ID);
+    const unfilled = teamShifts.filter((s) => (assignments[s.id] || []).length < s.spots).length;
+    const planned = Number(categoryBudgets[team]) || 0;
+    const paid = budgetItems.filter((b) => b.category === team).reduce((s, b) => s + (Number(b.paid) || 0), 0);
+    return { totalShifts: teamShifts.length, unfilled, planned, paid };
+  }
+
+  const allMembers = useMemo(
+    () => [...MEMBERS, ...extraMembers].filter((m) => !removedMembers.includes(m.name)).sort((a, b) => a.name.localeCompare(b.name, "he")),
+    [extraMembers, removedMembers]
+  );
+
+  const currentMember = allMembers.find((m) => m.name === identity);
+  const isAdmin = currentMember?.role === "admin";
+  const myLeadTeam = !isAdmin ? Object.keys(teamLeads).find((t) => teamLeads[t] === identity) : null;
+  const canEditBudget = isAdmin || !!myLeadTeam;
+
+  const myShifts = useMemo(
+    () => SHIFTS.filter((s) => isJoined(s.id)).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start)),
+    [assignments, identity]
+  );
+  const openShiftsCount = useMemo(
+    () => SHIFTS.filter((s) => (assignments[s.id] || []).length < s.spots).length,
+    [assignments]
+  );
+  const unfilledShiftsCount = useMemo(
+    () => SHIFTS.filter((s) => s.id !== TEARDOWN_ID && (assignments[s.id] || []).length < s.spots).length,
+    [assignments]
+  );
+  const membersWithoutShift = useMemo(
+    () => allMembers.filter((m) => !SHIFTS.some((s) => s.id !== TEARDOWN_ID && (assignments[s.id] || []).includes(m.name))).length,
+    [assignments, allMembers]
+  );
+  const overBudgetCategories = useMemo(() => {
+    return BUDGET_CATEGORIES.filter((cat) => {
+      const planned = Number(categoryBudgets[cat]) || 0;
+      const paid = budgetItems.filter((b) => b.category === cat).reduce((s, b) => s + (Number(b.paid) || 0), 0);
+      return planned > 0 && paid > planned;
+    });
+  }, [categoryBudgets, budgetItems]);
+
+  const budgetTotals = useMemo(() => {
+    const planned = Object.values(categoryBudgets).reduce((sum, v) => sum + (Number(v) || 0), 0);
+    const committed = budgetItems.reduce((sum, b) => sum + (Number(b.committed) || 0), 0);
+    const paid = budgetItems.reduce((sum, b) => sum + (Number(b.paid) || 0), 0);
+    return { planned, committed, paid, remaining: planned - committed };
+  }, [budgetItems, categoryBudgets]);
+
+  const paymentTotals = useMemo(() => {
+    let due = 0;
+    let paid = 0;
+    allMembers.forEach((m) => {
+      due += feeOverrides[m.name] !== undefined ? Number(feeOverrides[m.name]) : campFee;
+      const list = memberPayments[m.name];
+      paid += (Array.isArray(list) ? list : []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    });
+    return { due, paid, remaining: due - paid };
+  }, [memberPayments, campFee, allMembers, feeOverrides]);
+
+  const offeringRides = allMembers.filter((m) => {
+    const d = rideInfo[m.name];
+    return d && d.hasCar === "yes" && d.offerRide === "yes";
+  });
+  const lookingForRide = allMembers.filter((m) => {
+    const d = rideInfo[m.name];
+    return d && d.hasCar === "no" && d.hasWay === "no";
+  });
+  const membersWithoutRideInfo = useMemo(
+    () => allMembers.filter((m) => !rideInfo[m.name]).length,
+    [allMembers, rideInfo]
+  );
+
+  const dashboardTabs = useMemo(() => {
+    if (isAdmin) {
+      return [
+        { id: "dashboard-admin", label: "לוח בקרה מנהל" },
+        { id: "dashboard-personal", label: "לוח בקרה אישי" },
+      ];
+    }
+    if (myLeadTeam) {
+      return [
+        { id: "dashboard-team", label: "לוח בקרה צוות" },
+        { id: "dashboard-personal", label: "לוח בקרה אישי" },
+      ];
+    }
+    return [{ id: "dashboard-personal", label: "לוח בקרה" }];
+  }, [isAdmin, myLeadTeam]);
+
+  const visibleShifts = teamFilter === "הכל" ? SHIFTS : SHIFTS.filter((s) => s.team === teamFilter);
+
+  if (loading) {
+    return (
+      <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 500 }} className="flex items-center justify-center p-10">
+        <style>{FONT_IMPORT}</style>
+        טוען...
+      </div>
+    );
+  }
+
+  if (!identity) {
+    return (
+      <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 700 }}>
+        <style>{FONT_IMPORT}</style>
+        <LoginScreen members={allMembers} passwords={memberPasswords} onVerified={handleVerified} onSetPassword={setMemberPassword} />
+      </div>
+    );
+  }
+
+  return (
+    <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 700 }}>
+      <style>{FONT_IMPORT}</style>
+
+      {/* Header */}
+      <div className="px-6 pt-8 pb-6" style={{ background: COLORS.surface, borderBottom: `1px solid ${COLORS.divider}` }}>
+        <div className="flex items-center gap-4 max-w-4xl mx-auto">
+          <SunsetMark size={64} />
+          <div className="flex-1">
+            <h1 style={{ fontFamily: FONT_HEADING }} className="text-3xl tracking-tight">
+              Afterglow
+            </h1>
+            <p className="text-sm" style={{ color: COLORS.textMuted }}>מערכת ניהול קמפ · מידברן 2026</p>
+          </div>
+          <div className="text-center px-4 py-2 rounded-2xl" style={{ background: COLORS.accentLight }}>
+            <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{daysUntil()}</div>
+            <div className="text-xs" style={{ color: COLORS.accentDark }}>ימים לפתיחת השערים</div>
+          </div>
+        </div>
+
+        <div className="max-w-4xl mx-auto mt-5 flex items-center justify-between">
+          <span className="text-sm">
+            שלום, <b style={{ color: COLORS.accentDark }}>{identity}</b>
+          </span>
+          <button onClick={logout} className="text-xs flex items-center gap-1" style={{ color: COLORS.textMuted }}>
+            <LogOut size={13} /> לא אני, החלף/י משתמש
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="max-w-4xl mx-auto px-6 pt-4 flex gap-2 flex-wrap">
+        {[
+          ...dashboardTabs,
+          { id: "shifts", label: "שיבוץ עצמי", icon: CalendarDays },
+          { id: "board", label: "לוח מודעות", icon: Megaphone },
+          { id: "budget", label: "תקציב", icon: Wallet },
+          ...(isAdmin ? [{ id: "finances", label: "כספים", icon: CreditCard }] : []),
+          { id: "teams", label: "צוותים", icon: Tent },
+          { id: "rides", label: "הגעה לברן", icon: Car },
+          { id: "contacts", label: "חברי קמפ", icon: Phone },
+        ].map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+            style={{
+              background: tab === t.id ? COLORS.accent : COLORS.surface,
+              color: tab === t.id ? COLORS.bg : COLORS.textMuted,
+              border: `1px solid ${tab === t.id ? COLORS.accent : COLORS.divider}`,
+            }}
+          >
+            {t.icon && <t.icon size={13} />} {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div className="max-w-4xl mx-auto px-6 py-6">
+        {tab === "dashboard-admin" && isAdmin && (
+          <div>
+            <h2 className="text-sm font-bold mb-3" style={{ color: COLORS.accentDark }}>לוח בקרה למנהל</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: "חברי קמפ", value: allMembers.length },
+                { label: "נגבה", value: `₪${paymentTotals.paid.toLocaleString()}` },
+                { label: "יתרה לגבייה", value: `₪${paymentTotals.remaining.toLocaleString()}` },
+                { label: "תקציב מתוכנן", value: `₪${budgetTotals.planned.toLocaleString()}` },
+                { label: "הוצאות בפועל", value: `₪${budgetTotals.paid.toLocaleString()}` },
+                { label: "משמרות לא מלאות", value: unfilledShiftsCount },
+                { label: "חברים ללא משמרת", value: membersWithoutShift },
+                { label: "ימים לפתיחת השערים", value: daysUntil() },
+              ].map((c) => (
+                <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                  <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
+                  <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                </div>
+              ))}
+            </div>
+
+            <h3 className="text-xs font-bold mt-5 mb-2" style={{ color: COLORS.textMuted }}>מוכנות הגעה לברן</h3>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: "טרם מילאו פרטי הגעה", value: membersWithoutRideInfo },
+                { label: "מציעים טרמפ", value: offeringRides.length },
+                { label: "מחפשים טרמפ", value: lookingForRide.length },
+              ].map((c) => (
+                <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                  <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
+                  <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {(paymentTotals.remaining > 0 || unfilledShiftsCount > 0 || membersWithoutShift > 0 || overBudgetCategories.length > 0 || lookingForRide.length > 0) && (
+              <div className="mt-4 rounded-2xl p-4 space-y-2" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
+                <div className="text-xs font-bold mb-1" style={{ color: COLORS.accentDark }}>התרעות חשובות</div>
+                {paymentTotals.remaining > 0 && <div className="text-xs">💰 עוד ₪{paymentTotals.remaining.toLocaleString()} לגבייה מחברי הקמפ</div>}
+                {unfilledShiftsCount > 0 && <div className="text-xs">📋 {unfilledShiftsCount} משמרות עדיין לא מלאות</div>}
+                {membersWithoutShift > 0 && <div className="text-xs">🙋 {membersWithoutShift} חברים עדיין לא שיבצו אף משמרת</div>}
+                {lookingForRide.length > 0 && <div className="text-xs">🚗 {lookingForRide.length} חברים מחפשים טרמפ ועדיין לא שובצו</div>}
+                {overBudgetCategories.map((cat) => (
+                  <div key={cat} className="text-xs">⚠️ הקטגוריה "{cat}" חרגה מהתקציב המתוכנן</div>
+                ))}
+              </div>
+            )}
+
+            <h3 className="text-sm font-bold mt-6 mb-2" style={{ color: COLORS.textMuted }}>הוספת חבר קמפ</h3>
+            <AddMemberForm onAdd={addMember} />
+
+            <button
+              onClick={() => setShowMemberList(!showMemberList)}
+              className="w-full flex items-center justify-between mt-4 mb-2 text-sm font-bold"
+              style={{ color: COLORS.textMuted }}
+            >
+              <span className="flex items-center gap-1.5"><Users size={14} /> ניהול חברי קמפ ({allMembers.length})</span>
+              <ChevronDown size={15} style={{ transform: showMemberList ? "rotate(180deg)" : "none" }} />
+            </button>
+            {showMemberList && (
+              <div>
+                <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
+                  {allMembers.map((m) => (
+                    <div key={m.name} className="flex items-center justify-between text-sm rounded-lg px-3 py-1.5" style={{ background: COLORS.surface }}>
+                      <span>{m.name}{m.role === "admin" && <span className="text-xs" style={{ color: COLORS.accentDark }}> (מנהל)</span>}</span>
+                      <div className="flex items-center gap-1">
+                        {memberPasswords[m.name] && (
+                          <button
+                            onClick={() => { if (window.confirm(`לאפס את הסיסמה של ${m.name}? הוא/היא יצטרך/תצטרך לבחור סיסמה חדשה בכניסה הבאה.`)) clearMemberPassword(m.name); }}
+                            className="text-xs px-2 py-1 rounded-lg"
+                            style={{ color: COLORS.textMuted }}
+                          >
+                            איפוס סיסמה
+                          </button>
+                        )}
+                        <button
+                          onClick={() => { if (window.confirm(`להסיר את ${m.name} מהקמפ?`)) removeMember(m.name); }}
+                          className="text-xs px-2 py-1 rounded-lg"
+                          style={{ color: COLORS.danger }}
+                        >
+                          הסרה
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {removedMembers.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-xs mb-1" style={{ color: COLORS.textMuted }}>הוסרו מהקמפ:</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {removedMembers.map((name) => (
+                        <button
+                          key={name}
+                          onClick={() => restoreMember(name)}
+                          className="text-xs px-2.5 py-1 rounded-full"
+                          style={{ background: COLORS.input, color: COLORS.textMuted }}
+                        >
+                          {name} · שחזור
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowEmergencyList(!showEmergencyList)}
+              className="w-full flex items-center justify-between mt-6 mb-2 text-sm font-bold"
+              style={{ color: COLORS.textMuted }}
+            >
+              <span className="flex items-center gap-1.5"><HeartPulse size={14} /> כרטיסי חירום של חברי הקמפ</span>
+              <ChevronDown size={15} style={{ transform: showEmergencyList ? "rotate(180deg)" : "none" }} />
+            </button>
+            {showEmergencyList && (
+              <div className="space-y-1.5">
+                {allMembers.map((m) => {
+                  const d = emergencyInfo[m.name];
+                  const filled = d && (d.contactName || d.allergies || d.medical || d.dietary);
+                  const open = expandedEmergency === m.name;
+                  return (
+                    <div key={m.name} className="rounded-xl overflow-hidden" style={{ background: COLORS.surface, borderRight: `3px solid ${filled ? COLORS.accent2 : "transparent"}` }}>
+                      <button onClick={() => setExpandedEmergency(open ? null : m.name)} className="w-full flex items-center justify-between px-3 py-2 text-sm">
+                        <span>{m.name}</span>
+                        <div className="flex items-center gap-2">
+                          {!filled && <span className="text-xs" style={{ color: COLORS.textMuted }}>לא מולא</span>}
+                          <ChevronDown size={13} style={{ transform: open ? "rotate(180deg)" : "none" }} />
+                        </div>
+                      </button>
+                      {open && (
+                        <div className="px-3 pb-3 text-xs space-y-1" style={{ color: COLORS.textMuted }}>
+                          <div>איש קשר: {d?.contactName || "—"} {d?.contactPhone ? `· ${d.contactPhone}` : ""}</div>
+                          <div>אלרגיות: {d?.allergies || "—"}</div>
+                          <div>מגבלות רפואיות: {d?.medical || "—"}</div>
+                          <div>תזונה: {d?.dietary || "—"}</div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <h3 className="text-sm font-bold mt-6 mb-2 flex items-center gap-1.5" style={{ color: COLORS.textMuted }}>
+              <Sparkles size={14} /> יצירת סקר לכולם
+            </h3>
+            {showPollForm ? (
+              <PollForm onCreate={(q, opts) => { createPoll(q, opts); setShowPollForm(false); }} onCancel={() => setShowPollForm(false)} />
+            ) : (
+              <button
+                onClick={() => setShowPollForm(true)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold mb-3"
+                style={{ background: COLORS.accent, color: COLORS.bg }}
+              >
+                <Plus size={14} /> סקר חדש
+              </button>
+            )}
+            {polls.length > 0 && (
+              <div className="space-y-2 mt-2">
+                {polls.map((p) => {
+                  const counts = p.options.map((_, i) => Object.values(p.responses || {}).filter((v) => v === i).length);
+                  const total = counts.reduce((a, b) => a + b, 0) || 1;
+                  return (
+                    <div key={p.id} className="rounded-xl p-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold">{p.question}</span>
+                        <button onClick={() => removePoll(p.id)} style={{ color: COLORS.textMuted }}><Trash2 size={13} /></button>
+                      </div>
+                      <div className="space-y-1 mt-2">
+                        {p.options.map((o, i) => (
+                          <div key={i} className="text-xs">
+                            <div className="flex items-center justify-between mb-0.5">
+                              <span>{o}</span>
+                              <span style={{ color: COLORS.textMuted }}>{counts[i]}</span>
+                            </div>
+                            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: COLORS.divider }}>
+                              <div className="h-full rounded-full" style={{ width: `${(counts[i] / total) * 100}%`, background: COLORS.accent2 }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === "dashboard-team" && myLeadTeam && (
+          <div>
+            <h2 className="text-sm font-bold mb-3" style={{ color: COLORS.accentDark }}>לוח בקרה - צוות {myLeadTeam}</h2>
+            <div className="grid grid-cols-2 gap-3">
+              {(() => {
+                const t = teamStats(myLeadTeam);
+                return [
+                  { label: "משמרות הצוות", value: t.totalShifts },
+                  { label: "משמרות לא מלאות", value: t.unfilled },
+                  { label: "תקציב הצוות", value: `₪${t.planned.toLocaleString()}` },
+                  { label: "שולם בפועל", value: `₪${t.paid.toLocaleString()}` },
+                ].map((c) => (
+                  <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                    <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
+                    <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                  </div>
+                ));
+              })()}
+            </div>
+
+            <h3 className="text-xs font-bold mt-5 mb-2" style={{ color: COLORS.textMuted }}>המשמרות של הצוות</h3>
+            <div className="space-y-1.5">
+              {SHIFTS.filter((s) => s.team === myLeadTeam).map((s) => {
+                const names = assignments[s.id] || [];
+                return (
+                  <div key={s.id} className="rounded-xl px-3 py-2 flex items-center justify-between text-xs" style={{ background: COLORS.surface }}>
+                    <span>{s.title} · {formatDate(s.date)}{s.id !== TEARDOWN_ID ? ` · ${s.start}–${s.end}` : ""}</span>
+                    <span className="px-2 py-0.5 rounded-full" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>{names.length}/{s.spots}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {tab === "dashboard-personal" && (
+          <div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {[
+                { label: "המשמרות שלי", value: myShifts.length },
+                { label: "משמרות עם מקום פנוי", value: openShiftsCount },
+                { label: "ימים לפתיחת השערים", value: daysUntil() },
+              ].map((c) => (
+                <div key={c.label} className="rounded-2xl p-5" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                  <div className="text-3xl font-black mt-1" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
+                  <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                </div>
+              ))}
+              {(campFee > 0 || feeOverrides[identity] !== undefined) && (
+                <div className="col-span-2 sm:col-span-3 rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                  <div className="text-xs mb-1" style={{ color: COLORS.textMuted }}>דמי הקמפ שלי</div>
+                  {(() => {
+                    const myList = Array.isArray(memberPayments[identity]) ? memberPayments[identity] : [];
+                    const myPaid = myList.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+                    const myFee = feeOverrides[identity] !== undefined ? Number(feeOverrides[identity]) : campFee;
+                    const myRemaining = myFee - myPaid;
+                    return (
+                      <div className="text-sm">
+                        שילמת <b style={{ color: COLORS.accent2Dark }}>₪{myPaid.toLocaleString()}</b> מתוך ₪{myFee.toLocaleString()}
+                        {myRemaining > 0 && <span> · נותר <b style={{ color: COLORS.danger }}>₪{myRemaining.toLocaleString()}</b></span>}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
+              <h3 className="text-sm font-bold mb-3 flex items-center gap-2" style={{ color: COLORS.accentDark }}>
+                <CalendarDays size={15} /> היומן שלי
+              </h3>
+              {myShifts.length === 0 ? (
+                <p className="text-xs" style={{ color: COLORS.textMuted }}>עדיין לא שיבצת אף משמרת. עבור/י לטאב "שיבוץ עצמי" כדי להצטרף.</p>
+              ) : (
+                <div className="flex gap-3 overflow-x-auto pb-2">
+                  {myShifts.map((s) => (
+                    <div key={s.id} className="shrink-0 rounded-2xl px-4 py-3 min-w-[130px]" style={{ background: COLORS.surface, borderTop: `3px solid ${COLORS.accent}` }}>
+                      <div className="text-xs font-bold" style={{ color: COLORS.accentDark }}>{formatDateShort(s.date)}</div>
+                      <div className="text-sm font-semibold mt-1">{s.title}</div>
+                      {s.id !== TEARDOWN_ID && (
+                        <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{s.start}–{s.end}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
+              <button
+                onClick={() => setOpenPersonalSection(openPersonalSection === "updates" ? null : "updates")}
+                className="w-full flex items-center justify-between text-sm font-bold"
+                style={{ color: COLORS.accentDark }}
+              >
+                <span className="flex items-center gap-2"><Megaphone size={15} /> עדכוני קמפ</span>
+                <ChevronDown size={15} style={{ transform: openPersonalSection === "updates" ? "rotate(180deg)" : "none" }} />
+              </button>
+              {openPersonalSection === "updates" && (
+              <div className="mt-3">
+              {polls.filter((p) => p.responses[identity] === undefined).map((p) => (
+                <div key={p.id} className="rounded-2xl p-3 mb-2" style={{ background: COLORS.accentLight }}>
+                  <div className="text-sm font-semibold mb-2">{p.question}</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {p.options.map((o, i) => (
+                      <button
+                        key={i}
+                        onClick={() => respondToPoll(p.id, i)}
+                        className="text-xs px-3 py-1.5 rounded-full font-semibold"
+                        style={{ background: COLORS.accent, color: COLORS.bg }}
+                      >
+                        {o}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {polls.filter((p) => p.responses[identity] !== undefined).map((p) => (
+                <div key={p.id} className="rounded-2xl p-3 mb-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                  {p.question} - ענית: <b style={{ color: COLORS.accentDark }}>{p.options[p.responses[identity]]}</b>
+                </div>
+              ))}
+
+              {announcements.length === 0 ? (
+                <p className="text-xs" style={{ color: COLORS.textMuted }}>אין עדכונים חדשים.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {announcements.slice(0, 3).map((a) => (
+                    <div key={a.id} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                      <b style={{ color: COLORS.accentDark }}>{a.author}:</b> {a.text}
+                    </div>
+                  ))}
+                </div>
+              )}
+              </div>
+              )}
+            </div>
+
+
+            <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
+              <button
+                onClick={() => setOpenPersonalSection(openPersonalSection === "emergency" ? null : "emergency")}
+                className="w-full flex items-center justify-between text-sm font-bold"
+                style={{ color: COLORS.accentDark }}
+              >
+                <span className="flex items-center gap-2"><HeartPulse size={15} /> כרטיס אישי - לשעת חירום</span>
+                <ChevronDown size={15} style={{ transform: openPersonalSection === "emergency" ? "rotate(180deg)" : "none" }} />
+              </button>
+              {openPersonalSection === "emergency" && (
+                <div className="mt-3">
+                  <EmergencyCardForm data={emergencyInfo[identity]} onChange={(d) => setEmergencyData(identity, d)} />
+                </div>
+              )}
+            </div>
+
+            <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
+              <button
+                onClick={() => setOpenPersonalSection(openPersonalSection === "ride" ? null : "ride")}
+                className="w-full flex items-center justify-between text-sm font-bold"
+                style={{ color: COLORS.accentDark }}
+              >
+                <span className="flex items-center gap-2"><Car size={15} /> הגעה לברן - הפרטים שלי</span>
+                <ChevronDown size={15} style={{ transform: openPersonalSection === "ride" ? "rotate(180deg)" : "none" }} />
+              </button>
+              {openPersonalSection === "ride" && (
+                <div className="mt-3">
+                  <RideWizard data={rideInfo[identity]} onChange={(d) => setRideData(identity, d)} />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {tab === "shifts" && (
+          <div>
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              <div className="flex gap-2 flex-wrap">
+                {["הכל", ...TEAM_FILTERS].map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setTeamFilter(t)}
+                    className="px-3 py-1.5 rounded-full text-xs font-semibold"
+                    style={{
+                      background: teamFilter === t ? COLORS.accent : COLORS.surface,
+                      color: teamFilter === t ? COLORS.bg : COLORS.text,
+                    }}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+              <div className="flex rounded-full p-1" style={{ background: COLORS.surface }}>
+                {[{ id: "list", label: "רשימה" }, { id: "calendar", label: "יומן" }].map((v) => (
+                  <button
+                    key={v.id}
+                    onClick={() => setShiftsView(v.id)}
+                    className="px-3 py-1.5 rounded-full text-xs font-semibold"
+                    style={{ background: shiftsView === v.id ? COLORS.accent2 : "transparent", color: shiftsView === v.id ? COLORS.bg : COLORS.text }}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {shiftsView === "calendar" ? (
+              <div className="flex gap-4 overflow-x-auto pb-3 mb-2">
+                {[...new Set(visibleShifts.map((s) => s.date))].map((date) => {
+                  const [dy, dm, dd] = date.split("-").map(Number);
+                  const dow = WEEKDAYS_HE[new Date(dy, dm - 1, dd).getDay()];
+                  return (
+                  <div key={date} className="shrink-0 w-60 rounded-3xl overflow-hidden" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, boxShadow: "0 3px 10px rgba(32,30,29,0.08)" }}>
+                    <div className="px-4 py-3 flex items-center justify-between" style={{ background: COLORS.accent }}>
+                      <span className="text-xs font-semibold" style={{ color: COLORS.accentLight }}>יום {dow}</span>
+                      <span className="text-lg font-black" style={{ fontFamily: FONT_NUM, color: COLORS.bg }}>{dd}.{dm}</span>
+                    </div>
+                    <div className="p-3 space-y-2.5">
+                      {visibleShifts.filter((s) => s.date === date).sort((a, b) => a.start.localeCompare(b.start)).map((s) => {
+                        const isTeardown = s.id === TEARDOWN_ID;
+                        const names = isTeardown ? allMembers.map((m) => m.name) : (assignments[s.id] || []);
+                        const spots = isTeardown ? allMembers.length : s.spots;
+                        const joined = isJoined(s.id);
+                        const full = names.length >= spots && !joined;
+                        return (
+                          <div key={s.id} className="rounded-2xl p-3" style={{ background: COLORS.input, borderRight: `3px solid ${joined ? COLORS.accent2 : COLORS.accent}` }}>
+                            {!isTeardown && (
+                              <div className="text-xs flex items-center gap-1" style={{ color: COLORS.accentDark, fontFamily: FONT_NUM }}>
+                                <Clock size={11} /> {s.start}–{s.end}
+                              </div>
+                            )}
+                            <div className="text-sm font-bold mt-1">{s.title}</div>
+                            {isTeardown ? (
+                              <TeardownTaskPicker selected={teardownTasks[identity] || []} onToggle={toggleTeardownTask} compact />
+                            ) : (
+                              <div className="flex items-center justify-between mt-2">
+                                <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: COLORS.accentLight, color: COLORS.accentDark, fontFamily: FONT_NUM }}>{names.length}/{spots}</span>
+                                <button
+                                  onClick={() => (joined ? leave(s) : join(s))}
+                                  disabled={full}
+                                  className="text-xs px-3 py-1 rounded-full font-semibold"
+                                  style={{
+                                    background: joined ? "transparent" : full ? COLORS.divider : COLORS.accent,
+                                    border: joined ? `1px solid ${COLORS.accent}` : "none",
+                                    color: joined ? COLORS.accentDark : COLORS.bg,
+                                    opacity: full ? 0.6 : 1,
+                                  }}
+                                >
+                                  {joined ? "בטל" : full ? "מלא" : "הצטרף"}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  );
+                })}
+              </div>
+            ) : (
+            <div className="space-y-2 mb-8">
+              {visibleShifts.map((s) => {
+                const isTeardown = s.id === TEARDOWN_ID;
+                const names = isTeardown ? allMembers.map((m) => m.name) : (assignments[s.id] || []);
+                const spots = isTeardown ? allMembers.length : s.spots;
+                const joined = isJoined(s.id);
+                const full = names.length >= spots && !joined;
+                return (
+                  <div key={s.id} className="rounded-2xl p-4 flex items-center gap-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                    <FillRing filled={names.length} total={spots} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold">{s.title}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>{s.team}</span>
+                        {isTeardown && <span className="text-xs" style={{ color: COLORS.textMuted }}>כולם משתתפים</span>}
+                      </div>
+                      <div className="text-xs mt-1 flex items-center gap-3 flex-wrap" style={{ color: COLORS.textMuted }}>
+                        <span className="flex items-center gap-1"><CalendarDays size={12} /> {formatDate(s.date)}</span>
+                        {!isTeardown && <span className="flex items-center gap-1"><Clock size={12} /> {s.start}–{s.end}</span>}
+                      </div>
+                      {isTeardown && (
+                        <TeardownTaskPicker selected={teardownTasks[identity] || []} onToggle={toggleTeardownTask} />
+                      )}
+                    </div>
+                    {!isTeardown && (
+                      <button
+                        onClick={() => (joined ? leave(s) : join(s))}
+                        disabled={full}
+                        className="shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition-opacity"
+                        style={{
+                          background: joined ? "transparent" : full ? COLORS.divider : COLORS.accent,
+                          border: joined ? `1px solid ${COLORS.accent}` : "none",
+                          color: joined ? COLORS.accentDark : COLORS.bg,
+                          opacity: full ? 0.6 : 1,
+                          cursor: full ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        {joined ? "לבטל שיבוץ" : full ? "מלא" : "אני משתבץ/ת"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            )}
+          </div>
+        )}
+
+        {tab === "board" && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold" style={{ color: COLORS.accentDark }}>סקרים</h3>
+              {showPollForm ? null : (
+                <button
+                  onClick={() => setShowPollForm(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
+                  style={{ background: COLORS.accent, color: COLORS.bg }}
+                >
+                  <Plus size={13} /> סקר חדש
+                </button>
+              )}
+            </div>
+            {showPollForm && (
+              <PollForm onCreate={(q, opts) => { createPoll(q, opts); setShowPollForm(false); }} onCancel={() => setShowPollForm(false)} />
+            )}
+            {polls.length > 0 && (
+              <div className="space-y-2 mb-6">
+                {polls.map((p) => {
+                  const counts = p.options.map((_, i) => Object.values(p.responses || {}).filter((v) => v === i).length);
+                  const total = counts.reduce((a, b) => a + b, 0) || 1;
+                  const answered = p.responses[identity] !== undefined || isAdmin;
+                  return (
+                    <div key={p.id} className="rounded-2xl p-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold">{p.question}</span>
+                        {(isAdmin) && (
+                          <button onClick={() => removePoll(p.id)} style={{ color: COLORS.textMuted }}><Trash2 size={13} /></button>
+                        )}
+                      </div>
+                      {!answered ? (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {p.options.map((o, i) => (
+                            <button
+                              key={i}
+                              onClick={() => respondToPoll(p.id, i)}
+                              className="text-xs px-3 py-1.5 rounded-full font-semibold"
+                              style={{ background: COLORS.accent, color: COLORS.bg }}
+                            >
+                              {o}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="space-y-1 mt-2">
+                          {p.options.map((o, i) => (
+                            <div key={i} className="text-xs">
+                              <div className="flex items-center justify-between mb-0.5">
+                                <span>{o}{i === p.responses[identity] ? " ✓" : ""}</span>
+                                <span style={{ color: COLORS.textMuted }}>{counts[i]}</span>
+                              </div>
+                              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: COLORS.divider }}>
+                                <div className="h-full rounded-full" style={{ width: `${(counts[i] / total) * 100}%`, background: COLORS.accent2 }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <h3 className="text-sm font-bold mb-3" style={{ color: COLORS.accentDark }}>לוח מודעות</h3>
+            <AnnouncementForm onPost={addAnnouncement} />
+            {announcements.length === 0 ? (
+              <p className="text-xs text-center py-10" style={{ color: COLORS.textMuted }}>עדיין אין מודעות. תהיה/י הראשון/ה לפרסם.</p>
+            ) : (
+              <div className="grid sm:grid-cols-2 gap-6 pt-2">
+                {announcements.map((a, i) => {
+                  const tints = [COLORS.accentLight, COLORS.accent2Light, "#fdf0c9", COLORS.surface2];
+                  const rotations = ["-1.5deg", "1deg", "-0.5deg", "1.5deg"];
+                  const tint = tints[i % tints.length];
+                  const rot = rotations[i % rotations.length];
+                  return (
+                    <div
+                      key={a.id}
+                      className="relative rounded-md p-4 pt-6"
+                      style={{ background: tint, transform: `rotate(${rot})`, boxShadow: "0 6px 14px rgba(32,30,29,0.18)" }}
+                    >
+                      <div
+                        className="absolute rounded-full"
+                        style={{
+                          top: -8, left: "50%", marginLeft: -8, width: 16, height: 16,
+                          background: COLORS.danger, boxShadow: "0 2px 3px rgba(0,0,0,0.35)",
+                        }}
+                      />
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold" style={{ color: COLORS.accentDark }}>{a.author}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs" style={{ color: COLORS.textMuted }}>{new Date(a.ts).toLocaleDateString("he-IL")}</span>
+                          {(isAdmin || a.author === identity) && (
+                            <button onClick={() => removeAnnouncement(a.id)} style={{ color: COLORS.textMuted }}>
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap" style={{ fontFamily: FONT_HEADING, lineHeight: 1.5 }}>{a.text}</p>
+
+                      {(a.replies || []).length > 0 && (
+                        <div className="mt-3 space-y-1.5">
+                          {a.replies.map((r) => (
+                            <div key={r.id} className="text-xs rounded-lg px-2 py-1.5" style={{ background: "rgba(255,255,255,0.45)" }}>
+                              <b style={{ color: COLORS.accentDark }}>{r.author}:</b> {r.text}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <ReplyBox onReply={(text) => addReply(a.id, text)} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === "budget" && (
+          <div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+              {[
+                { label: "תקציב מתוכנן", value: budgetTotals.planned },
+                { label: "התחייבויות", value: budgetTotals.committed },
+                { label: "שולם בפועל", value: budgetTotals.paid },
+                { label: "יתרה זמינה", value: budgetTotals.remaining },
+              ].map((c) => (
+                <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                  <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: c.label === "יתרה זמינה" && c.value < 0 ? COLORS.danger : COLORS.text }}>
+                    ₪{c.value.toLocaleString()}
+                  </div>
+                  <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {canEditBudget && (
+              showBudgetForm ? (
+                <BudgetForm onAdd={addBudgetItem} onCancel={() => setShowBudgetForm(false)} lockedCategory={isAdmin ? null : myLeadTeam} />
+              ) : (
+                <button
+                  onClick={() => setShowBudgetForm(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold mb-6"
+                  style={{ background: COLORS.accent, color: COLORS.bg }}
+                >
+                  <Plus size={15} /> הוספת סעיף תקציב
+                </button>
+              )
+            )}
+
+            {isAdmin && (
+              <>
+                <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.textMuted }}>הגדרת תקציב למחלקה</h3>
+                <CategoryBudgetForm onSet={setCategoryBudget} />
+              </>
+            )}
+
+            <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.textMuted }}>תקציב לפי קטגוריה</h3>
+            <div className="space-y-2 mb-6">
+              {BUDGET_CATEGORIES.map((cat) => {
+                const items = budgetItems.filter((b) => b.category === cat);
+                const planned = Number(categoryBudgets[cat]) || 0;
+                const paid = items.reduce((s, b) => s + (Number(b.paid) || 0), 0);
+                const toPay = planned - paid;
+                const pct = planned > 0 ? Math.min(paid / planned, 1) * 100 : 0;
+                return (
+                  <div key={cat} className="rounded-2xl px-4 py-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <span className="font-bold">{cat}</span>
+                      <div className="flex items-center gap-4 text-xs">
+                        <span>סכום לתשלום: <b style={{ color: toPay > 0 ? COLORS.danger : COLORS.accent2Dark }}>₪{toPay.toLocaleString()}</b></span>
+                        <span>סה"כ שולם: <b style={{ color: COLORS.accent2Dark }}>₪{paid.toLocaleString()}</b></span>
+                      </div>
+                    </div>
+                    <div className="h-1.5 rounded-full mt-2 overflow-hidden" style={{ background: COLORS.divider }}>
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: COLORS.accent }} />
+                    </div>
+                    <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>תקציב מתוכנן: ₪{planned.toLocaleString()}</div>
+
+                    {items.length > 0 && (
+                      <div className="mt-3 space-y-1.5">
+                        {items.map((b) => (
+                          <div key={b.id} className="flex items-center justify-between text-xs rounded-xl px-3 py-2" style={{ background: COLORS.input }}>
+                            <div className="min-w-0">
+                              <div className="font-semibold">{b.name}</div>
+                              <div className="mt-0.5" style={{ color: COLORS.textMuted }}>
+                                התחייבנו ₪{Number(b.committed || 0).toLocaleString()} · שולם ₪{Number(b.paid || 0).toLocaleString()}
+                                {b.notes ? ` · ${b.notes}` : ""}
+                              </div>
+                              <div className="mt-0.5" style={{ color: COLORS.textMuted, opacity: 0.7 }}>הוזן ע"י {b.owner}</div>
+                            </div>
+                            {(isAdmin || myLeadTeam === cat) && (
+                              <button onClick={() => removeBudgetItem(b.id)} style={{ color: COLORS.textMuted }} className="shrink-0">
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+          </div>
+        )}
+
+        {tab === "finances" && isAdmin && (
+          <div>
+            <div className="rounded-2xl p-4 mb-5 flex items-end gap-2 flex-wrap" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+              <div>
+                <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>דמי קמפ אחידים לכולם (₪)</label>
+                <input
+                  type="number"
+                  defaultValue={campFee || ""}
+                  onBlur={(e) => setCampFeeValue(e.target.value)}
+                  placeholder="0"
+                  className="px-3 py-2 rounded-xl text-sm outline-none w-40"
+                  style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                />
+              </div>
+              <span className="text-xs pb-2" style={{ color: COLORS.textMuted }}>חל אוטומטית על כל חברי הקמפ</span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              {[
+                { label: "סה\"כ לגבייה", value: paymentTotals.due },
+                { label: "סה\"כ נגבה", value: paymentTotals.paid },
+                { label: "יתרה לגבייה", value: paymentTotals.remaining },
+              ].map((c) => (
+                <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                  <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: c.label === "יתרה לגבייה" && c.value > 0 ? COLORS.danger : COLORS.text }}>
+                    ₪{c.value.toLocaleString()}
+                  </div>
+                  <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-1.5">
+              {allMembers.map((m) => {
+                const list = Array.isArray(memberPayments[m.name]) ? memberPayments[m.name] : [];
+                const paid = list.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+                const effectiveFee = feeOverrides[m.name] !== undefined ? Number(feeOverrides[m.name]) : campFee;
+                const remaining = effectiveFee - paid;
+                const settled = effectiveFee > 0 && paid >= effectiveFee;
+                const open = expandedMember === m.name;
+                return (
+                  <div key={m.name} className="rounded-xl overflow-hidden" style={{ background: COLORS.surface, borderRight: `3px solid ${settled ? COLORS.accent2 : "transparent"}` }}>
+                    <button
+                      onClick={() => setExpandedMember(open ? null : m.name)}
+                      className="w-full flex items-center justify-between px-3 py-2.5 text-sm"
+                    >
+                      <span>{m.name}{feeOverrides[m.name] !== undefined && <span className="text-xs" style={{ color: COLORS.accentDark }}> (מותאם אישית)</span>}</span>
+                      <div className="flex items-center gap-3 text-xs">
+                        <span style={{ color: COLORS.textMuted }}>שולם ₪{paid.toLocaleString()}</span>
+                        <span style={{ color: remaining > 0 ? COLORS.danger : COLORS.accent2Dark }}>יתרה ₪{remaining.toLocaleString()}</span>
+                        <ChevronDown size={14} style={{ transform: open ? "rotate(180deg)" : "none" }} />
+                      </div>
+                    </button>
+                    {open && (
+                      <div className="px-3 pb-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs" style={{ color: COLORS.textMuted }}>דמי קמפ אישיים (השאר ריק לברירת מחדל ₪{campFee.toLocaleString()}):</label>
+                          <input
+                            type="number"
+                            defaultValue={feeOverrides[m.name] ?? ""}
+                            onBlur={(e) => setFeeOverride(m.name, e.target.value)}
+                            placeholder={String(campFee)}
+                            className="w-24 px-2 py-1 rounded-lg text-xs outline-none"
+                            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                          />
+                        </div>
+                        {list.length > 0 && (
+                          <div className="space-y-1">
+                            {list.map((p) => (
+                              <div key={p.id} className="flex items-center justify-between text-xs rounded-lg px-2.5 py-1.5" style={{ background: COLORS.input }}>
+                                <span>₪{Number(p.amount).toLocaleString()} · {p.date || "ללא תאריך"}</span>
+                                <button onClick={() => removePayment(m.name, p.id)} style={{ color: COLORS.textMuted }}>
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <AddPaymentForm onAdd={(amount, date) => addPayment(m.name, amount, date)} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {tab === "teams" && (
+          <div className="grid sm:grid-cols-2 gap-3">
+            {TEAMS.map((t) => {
+              const lead = teamLead(t.name);
+              const members = teamMembers(t.name);
+              const open = expandedTeam === t.name;
+              return (
+                <div key={t.name} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                  <button onClick={() => setExpandedTeam(open ? null : t.name)} className="w-full text-right">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold" style={{ color: COLORS.accentDark }}>{t.name}</span>
+                      <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none", opacity: 0.7 }} />
+                    </div>
+                    {lead && <div className="text-xs mt-0.5" style={{ color: COLORS.textMuted }}>מוביל/ה: {lead.name}</div>}
+                  </button>
+
+                  {isAdmin && (
+                    <TeamLeadPicker team={t.name} current={teamLeads[t.name]} members={allMembers} onSet={setTeamLead} />
+                  )}
+
+                  <div className="text-xs leading-relaxed mt-2" style={{ color: COLORS.textMuted }}>{t.desc}</div>
+                  {open && (
+                    <div className="mt-3 pt-3 border-t" style={{ borderColor: COLORS.divider }}>
+                      <div className="text-xs mb-1.5" style={{ color: COLORS.textMuted }}>מי הצטרף לצוות ({members.length})</div>
+                      {members.length === 0 ? (
+                        <div className="text-xs" style={{ color: COLORS.textMuted }}>עדיין אף אחד לא שיבץ משמרת בצוות הזה</div>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {members.map((n) => (
+                            <span key={n} className="text-xs px-2 py-0.5 rounded-full" style={{ background: COLORS.input }}>{n}</span>
+                          ))}
+                        </div>
+                      )}
+
+                      {TEAM_CHECKLISTS[t.name] && (() => {
+                        const items = TEAM_CHECKLISTS[t.name];
+                        const state = checklistState[t.name] || {};
+                        const doneCount = items.filter((_, i) => state[i]).length;
+                        return (
+                          <div className="mt-3 pt-3 border-t" style={{ borderColor: COLORS.divider }}>
+                            <div className="text-xs mb-1.5 flex items-center justify-between" style={{ color: COLORS.textMuted }}>
+                              <span>צ'קליסט בטיחות ותפעול</span>
+                              <span>{doneCount}/{items.length}</span>
+                            </div>
+                            <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
+                              {items.map((item, i) => (
+                                <label key={i} className="flex items-center gap-2 text-xs cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={!!state[i]}
+                                    onChange={() => toggleChecklistItem(t.name, i)}
+                                  />
+                                  <span style={{ textDecoration: state[i] ? "line-through" : "none", opacity: state[i] ? 0.6 : 1 }}>{item}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {tab === "rides" && (
+          <div>
+            <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>
+              את הפרטים שלך (עיר, רכב, טרמפים) ממלאים בטאב "לוח בקרה אישי". כאן רואים את התוצאה המשותפת של כולם.
+            </p>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <h3 className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: COLORS.accent2Dark }}>
+                  <Car size={15} /> מציעים טרמפ ({offeringRides.length})
+                </h3>
+                {offeringRides.length === 0 ? (
+                  <p className="text-xs" style={{ color: COLORS.textMuted }}>אף אחד עדיין לא הציע טרמפ</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {offeringRides.map((m) => {
+                      const d = rideInfo[m.name];
+                      return (
+                        <div key={m.name} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.accent2Light }}>
+                          <div className="font-semibold">{m.name}{d.city ? ` · ${d.city}` : ""}</div>
+                          <div style={{ color: COLORS.accent2Dark }}>
+                            {d.offerDay ? formatDate(d.offerDay) : "יום לא צוין"}{d.seats ? ` · ${d.seats} מקומות פנויים` : ""}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h3 className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
+                  <Users size={15} /> מחפשים טרמפ ({lookingForRide.length})
+                </h3>
+                {lookingForRide.length === 0 ? (
+                  <p className="text-xs" style={{ color: COLORS.textMuted }}>אף אחד עדיין לא מחפש טרמפ</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {lookingForRide.map((m) => {
+                      const d = rideInfo[m.name];
+                      return (
+                        <div key={m.name} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.accentLight }}>
+                          <div className="font-semibold">{m.name}{d.city ? ` · ${d.city}` : ""}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab === "contacts" && (
+          <div className="space-y-2">
+            {allMembers.map((m) => {
+              const canEdit = isAdmin || m.name === identity;
+              const prefs = reminderPrefs[m.name] || {};
+              return (
+                <div key={m.name} className="rounded-xl px-4 py-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <span className="text-sm font-semibold">
+                      {m.name}
+                      {rideInfo[m.name]?.city && <span className="font-normal" style={{ color: COLORS.textMuted }}> · {rideInfo[m.name].city}</span>}
+                    </span>
+                    {canEdit ? (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <input
+                          defaultValue={memberPhones[m.name] || ""}
+                          onBlur={(e) => setPhone(m.name, e.target.value)}
+                          placeholder="טלפון"
+                          dir="ltr"
+                          className="text-sm px-2 py-1 rounded-lg outline-none text-left"
+                          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}`, width: 130 }}
+                        />
+                        <input
+                          defaultValue={memberEmails[m.name] || ""}
+                          onBlur={(e) => setEmail(m.name, e.target.value)}
+                          placeholder="אימייל"
+                          dir="ltr"
+                          className="text-sm px-2 py-1 rounded-lg outline-none text-left"
+                          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}`, width: 170 }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="text-sm text-left" dir="ltr" style={{ color: COLORS.textMuted }}>
+                        {memberPhones[m.name] || "—"} · {memberEmails[m.name] || "—"}
+                      </div>
+                    )}
+                  </div>
+                  {canEdit && (
+                    <div className="flex items-center gap-3 mt-2 text-xs" style={{ color: COLORS.textMuted }}>
+                      <span>תזכורות:</span>
+                      <label className="flex items-center gap-1">
+                        <input type="checkbox" checked={!!prefs.email} onChange={(e) => setReminderPref(m.name, "email", e.target.checked)} />
+                        במייל
+                      </label>
+                      <label className="flex items-center gap-1">
+                        <input type="checkbox" checked={!!prefs.mobile} onChange={(e) => setReminderPref(m.name, "mobile", e.target.checked)} />
+                        בנייד
+                      </label>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {toast && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-full text-sm font-semibold shadow-lg flex items-center gap-2"
+          style={{ background: toast.kind === "error" ? COLORS.danger : COLORS.accent2, color: "white" }}
+        >
+          {toast.kind === "error" ? <X size={16} /> : <Check size={16} />}
+          {toast.text}
+        </div>
+      )}
+    </div>
+  );
+}
