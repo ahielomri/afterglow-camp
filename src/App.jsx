@@ -2647,7 +2647,13 @@ export default function App() {
             </div>
 
             <div className="space-y-1.5">
-              {allMembers.map((m) => {
+              {[...allMembers]
+                .sort((a, b) => {
+                  const paidA = (Array.isArray(memberPayments[a.name]) ? memberPayments[a.name] : []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+                  const paidB = (Array.isArray(memberPayments[b.name]) ? memberPayments[b.name] : []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+                  return paidA - paidB;
+                })
+                .map((m) => {
                 const list = Array.isArray(memberPayments[m.name]) ? memberPayments[m.name] : [];
                 const paid = list.reduce((s, p) => s + (Number(p.amount) || 0), 0);
                 const effectiveFee = feeOverrides[m.name] !== undefined ? Number(feeOverrides[m.name]) : campFee;
