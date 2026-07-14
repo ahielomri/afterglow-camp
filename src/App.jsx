@@ -97,7 +97,8 @@ const TEAMS = [
   { name: "צוות תקציב", desc: "דמי מחנה, גבייה מרוכזת ומעקב תקציבי" },
   { name: "רכש ולוגיסטיקה", desc: "רכש ציוד קמפינג משותף ותיאום הובלות" },
   { name: "נציג.ת מיט\"ה", desc: "הכתובת המוסמכת של המחנה למרחב בטוח ומניעת הטרדות" },
-  { name: "חשמל וגז", desc: "לוח חשמל, עומסים וכבלים תקניים; מערכת גז תקינה ומטפי כיבוי - בטיחות בסיסית של מחנה מתפקד" },
+  { name: "חשמל", desc: "לוח חשמל, חישוב עומסים, כבלים תקניים ותאורה - בטיחות חשמלית בסיסית של מחנה מתפקד" },
+  { name: "גז", desc: "מערכת גז תקינה, מטפי כיבוי ובטיחות אש במטבח ובמחנה" },
 ];
 
 const TEAM_CHECKLISTS = {
@@ -116,10 +117,12 @@ const TEAM_CHECKLISTS = {
     "עמדת שטיפת ידיים", "עמדת שטיפת כלים", "סבון ונייר", "יריעה מתחת למטבח",
     "פחים נגישים ומסומנים", "פתרון לשאריות מזון", "פתיחה וסגירה יומית של המטבח",
   ],
-  "חשמל וגז": [
+  "חשמל": [
     "רשימת כל צרכני החשמל", "חישוב עומס", "לוח חשמל", "כבלים תקניים", "שקעים ומפצלים",
     "הגנה על חיבורים", "תאורה למרחב הציבורי", "תאורה לשבילים", "תאורת חירום",
     "מפסק ראשי מסומן", "אדם שיודע לנתק את המערכת", "בדיקה יומית של כבלים וחיבורים",
+  ],
+  "גז": [
     "מערכת גז תקינה", "בדיקה ואישור בהתאם לנהלי האירוע", "בלונים במקום מוגן ומסומן",
     "צנרת מוגנת", "אחראי גז", "מטפים בתוקף", "שמיכת כיבוי במטבח", "אין אש ללא השגחה",
     "כל חברי הקמפ יודעים איפה המטפים", "כל חברי הקמפ יודעים איך סוגרים את הגז",
@@ -1029,6 +1032,7 @@ export default function App() {
   const [showLoginHistory, setShowLoginHistory] = useState(false);
   const [extraMembers, setExtraMembers] = useState([]);
   const [removedMembers, setRemovedMembers] = useState([]);
+  const [idOverrides, setIdOverrides] = useState({});
   const [memberPasswords, setMemberPasswords] = useState({});
   const [announcements, setAnnouncements] = useState([]);
   const [emergencyInfo, setEmergencyInfo] = useState({});
@@ -1049,147 +1053,83 @@ export default function App() {
   const [pushStatus, setPushStatus] = useState("unsupported");
 
   useEffect(() => {
+    async function safeGet(key, shared) {
+      try {
+        const r = await window.storage.get(key, shared);
+        return r && r.value ? r.value : null;
+      } catch {
+        return null;
+      }
+    }
+
     (async () => {
-      try {
-        const saved = await window.storage.get("shift-assignments", true);
-        setAssignments(saved && saved.value ? JSON.parse(saved.value) : {});
-      } catch {
-        setAssignments({});
-      }
-      try {
-        const savedBudget = await window.storage.get("budget-items", true);
-        setBudgetItems(savedBudget && savedBudget.value ? JSON.parse(savedBudget.value) : []);
-      } catch {
-        setBudgetItems([]);
-      }
-      try {
-        const savedCatBudget = await window.storage.get("category-budgets", true);
-        setCategoryBudgets(savedCatBudget && savedCatBudget.value ? JSON.parse(savedCatBudget.value) : {});
-      } catch {
-        setCategoryBudgets({});
-      }
-      try {
-        const savedTeardown = await window.storage.get("teardown-tasks", true);
-        setTeardownTasks(savedTeardown && savedTeardown.value ? JSON.parse(savedTeardown.value) : {});
-      } catch {
-        setTeardownTasks({});
-      }
-      try {
-        const savedPayments = await window.storage.get("member-payments", true);
-        const parsed = savedPayments && savedPayments.value ? JSON.parse(savedPayments.value) : {};
-        const normalized = {};
-        Object.keys(parsed).forEach((name) => {
-          normalized[name] = Array.isArray(parsed[name]) ? parsed[name] : [];
-        });
-        setMemberPayments(normalized);
-      } catch {
-        setMemberPayments({});
-      }
-      try {
-        const savedFee = await window.storage.get("camp-fee", true);
-        setCampFee(savedFee && savedFee.value ? JSON.parse(savedFee.value) : 0);
-      } catch {
-        setCampFee(0);
-      }
-      try {
-        const savedLeads = await window.storage.get("team-leads", true);
-        if (savedLeads && savedLeads.value) {
-          setTeamLeadsState(JSON.parse(savedLeads.value));
-        } else {
-          setTeamLeadsState(DEFAULT_TEAM_LEADS);
-          window.storage.set("team-leads", JSON.stringify(DEFAULT_TEAM_LEADS), true).catch(() => {});
-        }
-      } catch {
+      const [
+        rawAssignments, rawBudget, rawCatBudget, rawTeardown, rawPayments, rawFee,
+        rawLeads, rawPhones, rawRides, rawFeeOv, rawEmails, rawChecklists,
+        rawManualTeam, rawLog, rawLogins, rawExtra, rawRemoved, rawPasswords,
+        rawAnn, rawEmg, rawPolls, rawMe,
+      ] = await Promise.all([
+        safeGet("shift-assignments", true),
+        safeGet("budget-items", true),
+        safeGet("category-budgets", true),
+        safeGet("teardown-tasks", true),
+        safeGet("member-payments", true),
+        safeGet("camp-fee", true),
+        safeGet("team-leads", true),
+        safeGet("member-phones", true),
+        safeGet("ride-info", true),
+        safeGet("fee-overrides", true),
+        safeGet("member-emails", true),
+        safeGet("team-checklists", true),
+        safeGet("manual-team-members", true),
+        safeGet("activity-log", true),
+        safeGet("login-history", true),
+        safeGet("extra-members", true),
+        safeGet("removed-members", true),
+        safeGet("member-passwords", true),
+        safeGet("announcements", true),
+        safeGet("emergency-info", true),
+        safeGet("polls", true),
+        safeGet("my-identity", false),
+      ]);
+
+      setAssignments(rawAssignments ? JSON.parse(rawAssignments) : {});
+      setBudgetItems(rawBudget ? JSON.parse(rawBudget) : []);
+      setCategoryBudgets(rawCatBudget ? JSON.parse(rawCatBudget) : {});
+      setTeardownTasks(rawTeardown ? JSON.parse(rawTeardown) : {});
+
+      const parsedPayments = rawPayments ? JSON.parse(rawPayments) : {};
+      const normalizedPayments = {};
+      Object.keys(parsedPayments).forEach((name) => {
+        normalizedPayments[name] = Array.isArray(parsedPayments[name]) ? parsedPayments[name] : [];
+      });
+      setMemberPayments(normalizedPayments);
+
+      setCampFee(rawFee ? JSON.parse(rawFee) : 0);
+
+      if (rawLeads) {
+        setTeamLeadsState(JSON.parse(rawLeads));
+      } else {
         setTeamLeadsState(DEFAULT_TEAM_LEADS);
+        window.storage.set("team-leads", JSON.stringify(DEFAULT_TEAM_LEADS), true).catch(() => {});
       }
-      try {
-        const savedPhones = await window.storage.get("member-phones", true);
-        setMemberPhones(savedPhones && savedPhones.value ? JSON.parse(savedPhones.value) : {});
-      } catch {
-        setMemberPhones({});
-      }
-      try {
-        const savedRides = await window.storage.get("ride-info", true);
-        setRideInfo(savedRides && savedRides.value ? JSON.parse(savedRides.value) : {});
-      } catch {
-        setRideInfo({});
-      }
-      try {
-        const savedFeeOv = await window.storage.get("fee-overrides", true);
-        setFeeOverrides(savedFeeOv && savedFeeOv.value ? JSON.parse(savedFeeOv.value) : {});
-      } catch {
-        setFeeOverrides({});
-      }
-      try {
-        const savedEmails = await window.storage.get("member-emails", true);
-        setMemberEmails(savedEmails && savedEmails.value ? JSON.parse(savedEmails.value) : {});
-      } catch {
-        setMemberEmails({});
-      }
-      try {
-        const savedChecklists = await window.storage.get("team-checklists", true);
-        setChecklistState(savedChecklists && savedChecklists.value ? JSON.parse(savedChecklists.value) : {});
-      } catch {
-        setChecklistState({});
-      }
-      try {
-        const savedManualTeam = await window.storage.get("manual-team-members", true);
-        setManualTeamMembers(savedManualTeam && savedManualTeam.value ? JSON.parse(savedManualTeam.value) : {});
-      } catch {
-        setManualTeamMembers({});
-      }
-      try {
-        const savedLog = await window.storage.get("activity-log", true);
-        setActivityLog(savedLog && savedLog.value ? JSON.parse(savedLog.value) : []);
-      } catch {
-        setActivityLog([]);
-      }
-      try {
-        const savedLogins = await window.storage.get("login-history", true);
-        setLoginHistory(savedLogins && savedLogins.value ? JSON.parse(savedLogins.value) : []);
-      } catch {
-        setLoginHistory([]);
-      }
-      try {
-        const savedExtra = await window.storage.get("extra-members", true);
-        setExtraMembers(savedExtra && savedExtra.value ? JSON.parse(savedExtra.value) : []);
-      } catch {
-        setExtraMembers([]);
-      }
-      try {
-        const savedRemoved = await window.storage.get("removed-members", true);
-        setRemovedMembers(savedRemoved && savedRemoved.value ? JSON.parse(savedRemoved.value) : []);
-      } catch {
-        setRemovedMembers([]);
-      }
-      try {
-        const savedPasswords = await window.storage.get("member-passwords", true);
-        setMemberPasswords(savedPasswords && savedPasswords.value ? JSON.parse(savedPasswords.value) : {});
-      } catch {
-        setMemberPasswords({});
-      }
-      try {
-        const savedAnn = await window.storage.get("announcements", true);
-        setAnnouncements(savedAnn && savedAnn.value ? JSON.parse(savedAnn.value) : []);
-      } catch {
-        setAnnouncements([]);
-      }
-      try {
-        const savedEmg = await window.storage.get("emergency-info", true);
-        setEmergencyInfo(savedEmg && savedEmg.value ? JSON.parse(savedEmg.value) : {});
-      } catch {
-        setEmergencyInfo({});
-      }
-      try {
-        const savedPolls = await window.storage.get("polls", true);
-        setPolls(savedPolls && savedPolls.value ? JSON.parse(savedPolls.value) : []);
-      } catch {
-        setPolls([]);
-      }
-      try {
-        const savedMe = await window.storage.get("my-identity", false);
-        if (savedMe && savedMe.value) setIdentity(savedMe.value);
-      } catch {}
+
+      setMemberPhones(rawPhones ? JSON.parse(rawPhones) : {});
+      setRideInfo(rawRides ? JSON.parse(rawRides) : {});
+      setFeeOverrides(rawFeeOv ? JSON.parse(rawFeeOv) : {});
+      setMemberEmails(rawEmails ? JSON.parse(rawEmails) : {});
+      setChecklistState(rawChecklists ? JSON.parse(rawChecklists) : {});
+      setManualTeamMembers(rawManualTeam ? JSON.parse(rawManualTeam) : {});
+      setActivityLog(rawLog ? JSON.parse(rawLog) : []);
+      setLoginHistory(rawLogins ? JSON.parse(rawLogins) : []);
+      setExtraMembers(rawExtra ? JSON.parse(rawExtra) : []);
+      setRemovedMembers(rawRemoved ? JSON.parse(rawRemoved) : []);
+      setMemberPasswords(rawPasswords ? JSON.parse(rawPasswords) : {});
+      setAnnouncements(rawAnn ? JSON.parse(rawAnn) : []);
+      setEmergencyInfo(rawEmg ? JSON.parse(rawEmg) : {});
+      setPolls(rawPolls ? JSON.parse(rawPolls) : []);
+      if (rawMe) setIdentity(rawMe);
+
       setLoading(false);
     })();
   }, []);
@@ -1324,26 +1264,37 @@ export default function App() {
     return (assignments[shiftId] || []).includes(identity);
   }
 
-  function join(shift, targetMember) {
+  async function getLatestAssignments() {
+    try {
+      const fresh = await window.storage.get("shift-assignments", true);
+      return fresh && fresh.value ? JSON.parse(fresh.value) : assignments;
+    } catch {
+      return assignments;
+    }
+  }
+
+  async function join(shift, targetMember) {
     const who = targetMember || identity;
-    const names = assignments[shift.id] || [];
+    const latest = await getLatestAssignments();
+    const names = latest[shift.id] || [];
     if (names.includes(who)) return;
     if (names.length >= shift.spots) return showToast("אין מקומות פנויים במשמרת הזו", "error");
 
     const conflict = SHIFTS.find(
-      (s) => s.id !== shift.id && s.date === shift.date && (assignments[s.id] || []).includes(who) && overlaps(s, shift)
+      (s) => s.id !== shift.id && s.date === shift.date && (latest[s.id] || []).includes(who) && overlaps(s, shift)
     );
     if (conflict) return showToast(`יש חפיפה עם "${conflict.title}" באותו יום`, "error");
 
-    persistAssignments({ ...assignments, [shift.id]: [...names, who] });
+    persistAssignments({ ...latest, [shift.id]: [...names, who] });
     showToast(targetMember ? `${who} שובץ/ה ל-${shift.title}` : `שובצת ל-${shift.title}`, "ok");
     if (targetMember) logActivity("שיבוץ ידני", `${who} → ${shift.title} (${formatDate(shift.date)})`);
   }
 
-  function leave(shift, targetMember) {
+  async function leave(shift, targetMember) {
     const who = targetMember || identity;
-    const names = assignments[shift.id] || [];
-    persistAssignments({ ...assignments, [shift.id]: names.filter((n) => n !== who) });
+    const latest = await getLatestAssignments();
+    const names = latest[shift.id] || [];
+    persistAssignments({ ...latest, [shift.id]: names.filter((n) => n !== who) });
     if (targetMember) logActivity("ביטול שיבוץ ידני", `${who} ← ${shift.title} (${formatDate(shift.date)})`);
   }
 
@@ -1612,7 +1563,7 @@ export default function App() {
       (id === TEARDOWN_ID ? allMembers.map((m) => m.name) : (assignments[id] || [])).forEach((n) => names.add(n));
     });
     (manualTeamMembers[teamName] || []).forEach((n) => names.add(n));
-    return [...names];
+    return [...names].filter((n) => !removedMembers.includes(n));
   }
   function isManualTeamMember(teamName, name) {
     return (manualTeamMembers[teamName] || []).includes(name);
@@ -1670,7 +1621,7 @@ export default function App() {
     [assignments, identity]
   );
   const openShiftsCount = useMemo(
-    () => SHIFTS.filter((s) => (assignments[s.id] || []).length < s.spots).length,
+    () => SHIFTS.filter((s) => s.id !== TEARDOWN_ID && (assignments[s.id] || []).length < s.spots).length,
     [assignments]
   );
   const unfilledShiftsCount = useMemo(
@@ -1845,7 +1796,7 @@ export default function App() {
             </div>
 
             <h3 className="text-xs font-bold mt-5 mb-2" style={{ color: COLORS.textMuted }}>מוכנות התניידות</h3>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-3 mb-3">
               {[
                 { label: "טרם מילאו פרטי הגעה", value: membersWithoutRideInfo },
                 { label: "מציעים טרמפ", value: offeringRides.length },
@@ -1853,6 +1804,17 @@ export default function App() {
               ].map((c) => (
                 <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                   <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
+                  <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: "יש להם מקום לציוד", value: offeringCargoSpace.length },
+                { label: "יכולת גרירה (וו/עגלה)", value: towingCapable.length },
+              ].map((c) => (
+                <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                  <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accent2Dark }}>{c.value}</div>
                   <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
                 </div>
               ))}
@@ -2086,11 +2048,13 @@ export default function App() {
             <h3 className="text-xs font-bold mt-5 mb-2" style={{ color: COLORS.textMuted }}>המשמרות של הצוות</h3>
             <div className="space-y-1.5">
               {SHIFTS.filter((s) => s.team === myLeadTeam).map((s) => {
-                const names = assignments[s.id] || [];
+                const isTeardownRow = s.id === TEARDOWN_ID;
+                const names = isTeardownRow ? allMembers.map((m) => m.name) : (assignments[s.id] || []);
+                const spots = isTeardownRow ? allMembers.length : s.spots;
                 return (
                   <div key={s.id} className="rounded-xl px-3 py-2 flex items-center justify-between text-xs" style={{ background: COLORS.surface }}>
-                    <span>{s.title} · {formatDate(s.date)}{s.id !== TEARDOWN_ID ? ` · ${s.start}–${s.end}` : ""}</span>
-                    <span className="px-2 py-0.5 rounded-full" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>{names.length}/{s.spots}</span>
+                    <span>{s.title} · {formatDate(s.date)}{!isTeardownRow ? ` · ${s.start}–${s.end}` : ""}</span>
+                    <span className="px-2 py-0.5 rounded-full" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>{names.length}/{spots}</span>
                   </div>
                 );
               })}
@@ -2273,7 +2237,7 @@ export default function App() {
                   const [dy, dm, dd] = date.split("-").map(Number);
                   const dow = WEEKDAYS_HE[new Date(dy, dm - 1, dd).getDay()];
                   return (
-                  <div key={date} className="shrink-0 w-60 rounded-3xl overflow-hidden" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, boxShadow: "0 3px 10px rgba(32,30,29,0.08)" }}>
+                  <div key={date} className="shrink-0 w-60 rounded-3xl overflow-hidden" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, boxShadow: "0 3px 10px rgba(58,34,42,0.10)" }}>
                     <div className="px-4 py-3 flex items-center justify-between" style={{ background: COLORS.accent }}>
                       <span className="text-xs font-semibold" style={{ color: COLORS.accentLight }}>יום {dow}</span>
                       <span className="text-lg font-black" style={{ fontFamily: FONT_NUM, color: COLORS.bg }}>{dd}.{dm}</span>
@@ -2281,7 +2245,7 @@ export default function App() {
                     <div className="p-3 space-y-2.5">
                       {visibleShifts.filter((s) => s.date === date).sort((a, b) => a.start.localeCompare(b.start)).map((s) => {
                         const isTeardown = s.id === TEARDOWN_ID;
-                        const names = isTeardown ? allMembers.map((m) => m.name) : (assignments[s.id] || []);
+                        const names = (isTeardown ? allMembers.map((m) => m.name) : (assignments[s.id] || [])).filter((n) => !removedMembers.includes(n));
                         const spots = isTeardown ? allMembers.length : s.spots;
                         const joined = isJoined(s.id);
                         const full = names.length >= spots && !joined;
@@ -2340,7 +2304,7 @@ export default function App() {
             <div className="space-y-2 mb-8">
               {visibleShifts.map((s) => {
                 const isTeardown = s.id === TEARDOWN_ID;
-                const names = isTeardown ? allMembers.map((m) => m.name) : (assignments[s.id] || []);
+                const names = (isTeardown ? allMembers.map((m) => m.name) : (assignments[s.id] || [])).filter((n) => !removedMembers.includes(n));
                 const spots = isTeardown ? allMembers.length : s.spots;
                 const joined = isJoined(s.id);
                 const full = names.length >= spots && !joined;
@@ -2484,7 +2448,7 @@ export default function App() {
                     <div
                       key={a.id}
                       className="relative rounded-md p-4 pt-6"
-                      style={{ background: tint, transform: `rotate(${rot})`, boxShadow: "0 6px 14px rgba(32,30,29,0.18)" }}
+                      style={{ background: tint, transform: `rotate(${rot})`, boxShadow: "0 6px 14px rgba(58,34,42,0.20)" }}
                     >
                       <div
                         className="absolute rounded-full"
