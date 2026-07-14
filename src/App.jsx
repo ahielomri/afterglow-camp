@@ -538,6 +538,89 @@ function BudgetForm({ onAdd, onCancel, lockedCategory }) {
   );
 }
 
+function BudgetExpenseForm({ onAdd, lockedAllocation }) {
+  const [allocation, setAllocation] = useState(lockedAllocation || "");
+  const [subcategory, setSubcategory] = useState("");
+  const [vendor, setVendor] = useState("");
+  const [amount, setAmount] = useState("");
+  const [vatIncluded, setVatIncluded] = useState(true);
+  const [paidBy, setPaidBy] = useState("");
+  const [method, setMethod] = useState("");
+  const [isRefund, setIsRefund] = useState(false);
+
+  function submit() {
+    onAdd({ allocation, subcategory, vendor, amount, vatIncluded, paidBy, method, isRefund });
+    setSubcategory(""); setVendor(""); setAmount(""); setPaidBy(""); setMethod(""); setIsRefund(false);
+  }
+
+  return (
+    <div className="rounded-2xl p-4 space-y-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <div className="grid sm:grid-cols-2 gap-2">
+        <input
+          value={allocation} onChange={(e) => setAllocation(e.target.value)}
+          placeholder="שיוך תקציבי (מחנה/סלון/מים/...)"
+          disabled={!!lockedAllocation}
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}`, opacity: lockedAllocation ? 0.7 : 1 }}
+        />
+        <input
+          value={subcategory} onChange={(e) => setSubcategory(e.target.value)}
+          placeholder="סעיף (תת-קטגוריה, למשל: קרח)"
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        <input
+          value={vendor} onChange={(e) => setVendor(e.target.value)}
+          placeholder="ספק"
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        <input
+          type="number" value={amount} onChange={(e) => setAmount(e.target.value)}
+          placeholder="סכום"
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        <input
+          value={paidBy} onChange={(e) => setPaidBy(e.target.value)}
+          placeholder={'שולם ע"י (מי בפועל שילם)'}
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        <select
+          value={method} onChange={(e) => setMethod(e.target.value)}
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        >
+          <option value="">אופן תשלום</option>
+          <option value="מזומן">מזומן</option>
+          <option value="העברה">העברה</option>
+          <option value="ביט">ביט</option>
+          <option value="פייבוקס">פייבוקס</option>
+          <option value="כרטיס">כרטיס</option>
+        </select>
+      </div>
+      <div className="flex items-center gap-4">
+        <label className="flex items-center gap-1.5 text-xs" style={{ color: COLORS.textMuted }}>
+          <input type="checkbox" checked={vatIncluded} onChange={(e) => setVatIncluded(e.target.checked)} />
+          כולל מע"מ
+        </label>
+        <label className="flex items-center gap-1.5 text-xs" style={{ color: COLORS.textMuted }}>
+          <input type="checkbox" checked={isRefund} onChange={(e) => setIsRefund(e.target.checked)} />
+          זו תנועת זיכוי/החזר
+        </label>
+      </div>
+      <button
+        onClick={submit}
+        className="px-4 py-2 rounded-full text-sm font-semibold"
+        style={{ background: COLORS.accent, color: COLORS.bg }}
+      >
+        רישום הוצאה
+      </button>
+    </div>
+  );
+}
+
 function TeardownTaskPicker({ selected, onToggle, compact }) {
   const enough = selected.length >= 2;
   return (
@@ -1011,6 +1094,144 @@ function AdminAssignPicker({ members, onAssign }) {
   );
 }
 
+function NumField({ label, value, onChange, placeholder, suffix }) {
+  return (
+    <div>
+      {label && <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>{label}</label>}
+      <div className="flex items-center gap-1">
+        <input
+          type="number"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder || "0"}
+          className="w-full px-2 py-1.5 rounded-lg text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        {suffix && <span className="text-xs shrink-0" style={{ color: COLORS.textMuted }}>{suffix}</span>}
+      </div>
+    </div>
+  );
+}
+
+// Repeating rows of {name, qty, price} - used for equipment/lounge items etc.
+function ItemRowsEditor({ rows, onChange, qtyLabel = "כמות", priceLabel = "מחיר ליחידה" }) {
+  function updateRow(i, patch) {
+    onChange(rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  }
+  const subtotal = rows.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.price) || 0), 0);
+  return (
+    <div className="space-y-2">
+      {rows.map((r, i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <input
+            value={r.name}
+            onChange={(e) => updateRow(i, { name: e.target.value })}
+            placeholder="שם הפריט"
+            className="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-sm outline-none"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          />
+          <input
+            type="number" value={r.qty} onChange={(e) => updateRow(i, { qty: e.target.value })}
+            placeholder={qtyLabel}
+            className="w-20 px-2 py-1.5 rounded-lg text-sm outline-none"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          />
+          <input
+            type="number" value={r.price} onChange={(e) => updateRow(i, { price: e.target.value })}
+            placeholder={priceLabel}
+            className="w-24 px-2 py-1.5 rounded-lg text-sm outline-none"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          />
+          <button onClick={() => onChange(rows.filter((_, idx) => idx !== i))} style={{ color: COLORS.textMuted }}><X size={14} /></button>
+        </div>
+      ))}
+      <div className="flex items-center justify-between">
+        <button onClick={() => onChange([...rows, { name: "", qty: "", price: "" }])} className="text-xs font-semibold" style={{ color: COLORS.accentDark }}>
+          + הוספת שורה
+        </button>
+        <span className="text-xs" style={{ color: COLORS.textMuted }}>סכום ביניים: ₪{subtotal.toLocaleString()}</span>
+      </div>
+    </div>
+  );
+}
+
+// Repeating rows of {name, amount} - used for one-time income, cashflow channels, alcohol categories (extended below)
+function AmountRowsEditor({ rows, onChange, placeholder = "שם" }) {
+  function updateRow(i, patch) {
+    onChange(rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  }
+  const subtotal = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  return (
+    <div className="space-y-2">
+      {rows.map((r, i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <input
+            value={r.name}
+            onChange={(e) => updateRow(i, { name: e.target.value })}
+            placeholder={placeholder}
+            className="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-sm outline-none"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          />
+          <input
+            type="number" value={r.amount} onChange={(e) => updateRow(i, { amount: e.target.value })}
+            placeholder="סכום"
+            className="w-28 px-2 py-1.5 rounded-lg text-sm outline-none"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          />
+          <button onClick={() => onChange(rows.filter((_, idx) => idx !== i))} style={{ color: COLORS.textMuted }}><X size={14} /></button>
+        </div>
+      ))}
+      <div className="flex items-center justify-between">
+        <button onClick={() => onChange([...rows, { name: "", amount: "" }])} className="text-xs font-semibold" style={{ color: COLORS.accentDark }}>
+          + הוספת שורה
+        </button>
+        <span className="text-xs" style={{ color: COLORS.textMuted }}>סכום ביניים: ₪{subtotal.toLocaleString()}</span>
+      </div>
+    </div>
+  );
+}
+
+// Alcohol categories: {name, units, price}
+function AlcoholRowsEditor({ rows, onChange }) {
+  function updateRow(i, patch) {
+    onChange(rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  }
+  const subtotal = rows.reduce((s, r) => s + (Number(r.units) || 0) * (Number(r.price) || 0), 0);
+  return (
+    <div className="space-y-2">
+      {rows.map((r, i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <input
+            value={r.name} onChange={(e) => updateRow(i, { name: e.target.value })}
+            placeholder="סוג משקה (בירה/יין/ספיריטים...)"
+            className="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-sm outline-none"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          />
+          <input
+            type="number" value={r.units} onChange={(e) => updateRow(i, { units: e.target.value })}
+            placeholder="כמות יחידות"
+            className="w-24 px-2 py-1.5 rounded-lg text-sm outline-none"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          />
+          <input
+            type="number" value={r.price} onChange={(e) => updateRow(i, { price: e.target.value })}
+            placeholder="מחיר ליחידה"
+            className="w-24 px-2 py-1.5 rounded-lg text-sm outline-none"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          />
+          <button onClick={() => onChange(rows.filter((_, idx) => idx !== i))} style={{ color: COLORS.textMuted }}><X size={14} /></button>
+        </div>
+      ))}
+      <div className="flex items-center justify-between">
+        <button onClick={() => onChange([...rows, { name: "", units: "", price: "" }])} className="text-xs font-semibold" style={{ color: COLORS.accentDark }}>
+          + הוספת סוג משקה
+        </button>
+        <span className="text-xs" style={{ color: COLORS.textMuted }}>סכום ביניים: ₪{subtotal.toLocaleString()}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [identity, setIdentity] = useState(null);
   const [assignments, setAssignments] = useState({});
@@ -1026,6 +1247,20 @@ export default function App() {
   const [memberEmails, setMemberEmails] = useState({});
   const [checklistState, setChecklistState] = useState({});
   const [manualTeamMembers, setManualTeamMembers] = useState({});
+  const [budgetParams, setBudgetParams] = useState({
+    global: { N: "", setupDays: "", eventDays: "", contingencyPct: "", vatIncluded: false },
+    campInfra: { items: [], loungeItems: [], oneTimeIncome: [], icePricePerKg: "", iceKgPerDay: "", iceDays: "", elecPricePerKw: "", elecKw: "" },
+    water: { literPerPersonPerDay: "", tankFaucetCost: "", fillCost: "", fillCount: "", drainCost: "", drainCount: "", showerUnitCost: "", showerUnitsCount: "" },
+    sanitation: { pumpFreqPerPersonPerDay: "", pumpCost: "", sawdustFreq: "", sawdustCost: "", drainCellCost: "", chemicalToiletsCost: "" },
+    food: { setupPeopleCount: "", setupDays: "", setupCostPerDay: "", actualDiners: "", mealsPerDay: "", eventDays: "", costPerMeal: "", contingencyAmount: "" },
+    alcohol: { categories: [], deferredReserve: "" },
+    general: { fixedAnnualCost: "", splitRatioPct: "" },
+    contingencyOverrides: {},
+    income: { vatRefund: "", externalGross: "", externalNet: "" },
+    cashflow: { channels: [], pendingPayments: "", knownCommitments: "" },
+  });
+  const [budgetExpenses, setBudgetExpenses] = useState([]);
+  const [showBudgetSection, setShowBudgetSection] = useState(null);
   const [activityLog, setActivityLog] = useState([]);
   const [loginHistory, setLoginHistory] = useState([]);
   const [showActivityLog, setShowActivityLog] = useState(false);
@@ -1067,7 +1302,7 @@ export default function App() {
         rawAssignments, rawBudget, rawCatBudget, rawTeardown, rawPayments, rawFee,
         rawLeads, rawPhones, rawRides, rawFeeOv, rawEmails, rawChecklists,
         rawManualTeam, rawLog, rawLogins, rawExtra, rawRemoved, rawPasswords,
-        rawAnn, rawEmg, rawPolls, rawMe,
+        rawAnn, rawEmg, rawPolls, rawMe, rawBudgetParams, rawBudgetExpenses,
       ] = await Promise.all([
         safeGet("shift-assignments", true),
         safeGet("budget-items", true),
@@ -1091,6 +1326,8 @@ export default function App() {
         safeGet("emergency-info", true),
         safeGet("polls", true),
         safeGet("my-identity", false),
+        safeGet("budget-params", true),
+        safeGet("budget-expenses", true),
       ]);
 
       setAssignments(rawAssignments ? JSON.parse(rawAssignments) : {});
@@ -1129,6 +1366,12 @@ export default function App() {
       setEmergencyInfo(rawEmg ? JSON.parse(rawEmg) : {});
       setPolls(rawPolls ? JSON.parse(rawPolls) : []);
       if (rawMe) setIdentity(rawMe);
+      if (rawBudgetParams) {
+        try {
+          setBudgetParams((prev) => ({ ...prev, ...JSON.parse(rawBudgetParams) }));
+        } catch {}
+      }
+      setBudgetExpenses(rawBudgetExpenses ? JSON.parse(rawBudgetExpenses) : []);
 
       setLoading(false);
     })();
@@ -1191,6 +1434,49 @@ export default function App() {
     persistCategoryBudgets({ ...categoryBudgets, [cat]: Number(amount) || 0 });
     showToast(`תקציב ${cat} עודכן`, "ok");
     logActivity("עדכון תקציב מחלקה", `${cat}: ₪${Number(amount) || 0}`);
+  }
+
+  async function patchBudgetParams(section, patch) {
+    const next = { ...budgetParams, [section]: { ...budgetParams[section], ...patch } };
+    setBudgetParams(next);
+    try {
+      await window.storage.set("budget-params", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function setContingencyOverride(section, pct) {
+    const next = { ...budgetParams, contingencyOverrides: { ...budgetParams.contingencyOverrides, [section]: pct } };
+    setBudgetParams(next);
+    try {
+      await window.storage.set("budget-params", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function addBudgetExpense(exp) {
+    if (!exp.amount) return showToast("צריך סכום", "error");
+    const next = [{ ...exp, id: Date.now().toString(), enteredBy: identity }, ...budgetExpenses];
+    setBudgetExpenses(next);
+    try {
+      await window.storage.set("budget-expenses", JSON.stringify(next), true);
+      showToast("ההוצאה נרשמה", "ok");
+      logActivity("רישום הוצאה בפועל", `${exp.vendor || exp.subcategory || ""} ₪${exp.amount}`);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function removeBudgetExpense(id) {
+    const next = budgetExpenses.filter((e) => e.id !== id);
+    setBudgetExpenses(next);
+    try {
+      await window.storage.set("budget-expenses", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
   }
 
   async function handleVerified(name) {
@@ -1657,6 +1943,100 @@ export default function App() {
     });
     return { due, paid, remaining: due - paid };
   }, [memberPayments, campFee, allMembers, feeOverrides]);
+
+  // -------------------------------------------------------------------------
+  // Camp budget engine - implements the handover-doc formulas exactly.
+  // Every number here is an input re-entered each planning cycle; nothing
+  // is hardcoded. Section numbers in comments match the source document.
+  // -------------------------------------------------------------------------
+  const engine = useMemo(() => {
+    const p = budgetParams;
+    const num = (v) => Number(v) || 0;
+    const N = num(p.global.N);
+    const eventDays = num(p.global.eventDays);
+    const defaultPct = num(p.global.contingencyPct);
+    const pctFor = (sectionKey) => {
+      const ov = p.contingencyOverrides[sectionKey];
+      return ov !== undefined && ov !== "" ? num(ov) : defaultPct;
+    };
+    const perPerson = (total) => (N > 0 ? total / N : 0);
+
+    // 02 - מחנה (כולל הסלון)
+    const campItemsTotal = p.campInfra.items.reduce((s, r) => s + num(r.qty) * num(r.price), 0);
+    const loungeItemsTotal = p.campInfra.loungeItems.reduce((s, r) => s + num(r.qty) * num(r.price), 0);
+    const iceCost = num(p.campInfra.icePricePerKg) * num(p.campInfra.iceKgPerDay) * num(p.campInfra.iceDays);
+    const elecCost = num(p.campInfra.elecPricePerKw) * num(p.campInfra.elecKw);
+    const oneTimeIncomeTotal = p.campInfra.oneTimeIncome.reduce((s, r) => s + num(r.amount), 0);
+    const campBase = campItemsTotal + loungeItemsTotal + iceCost + elecCost;
+    const campContingency = campBase * (pctFor("camp") / 100);
+    const campTotal = campBase + campContingency;
+
+    // 03 - מים ומקלחות
+    const w = p.water;
+    const totalLiters = N * num(w.literPerPersonPerDay) * eventDays;
+    const waterBase = num(w.tankFaucetCost) + num(w.fillCost) * num(w.fillCount) + num(w.drainCost) * num(w.drainCount) + num(w.showerUnitCost) * num(w.showerUnitsCount);
+    const waterContingency = waterBase * (pctFor("water") / 100);
+    const waterTotal = waterBase + waterContingency;
+
+    // 04 - שירותים (תברואה)
+    const s = p.sanitation;
+    const pumpOutCost = N * num(s.pumpFreqPerPersonPerDay) * eventDays * num(s.pumpCost);
+    const sanitationBase = pumpOutCost + num(s.sawdustFreq) * num(s.sawdustCost) + num(s.drainCellCost) + num(s.chemicalToiletsCost);
+    const sanitationContingency = sanitationBase * (pctFor("sanitation") / 100);
+    const sanitationTotal = sanitationBase + sanitationContingency;
+
+    // 05 - אוכל
+    const f = p.food;
+    const setupFoodCost = num(f.setupPeopleCount) * num(f.setupDays) * num(f.setupCostPerDay);
+    const eventFoodCost = num(f.actualDiners) * num(f.mealsPerDay) * num(f.eventDays) * num(f.costPerMeal);
+    const foodTotal = setupFoodCost + eventFoodCost + num(f.contingencyAmount);
+
+    // 06 - אלכוהול
+    const alcoholBase = p.alcohol.categories.reduce((sum, c) => sum + num(c.units) * num(c.price), 0);
+    const alcoholTotal = alcoholBase;
+
+    // 07 - כללי
+    const g = p.general;
+    const splitRatio = g.splitRatioPct === "" ? 100 : num(g.splitRatioPct);
+    const generalShare = num(g.fixedAnnualCost) * (splitRatio / 100);
+
+    // 10 - רישום הוצאות בפועל, מקובץ לפי שיוך תקציבי
+    const actualByAllocation = {};
+    budgetExpenses.forEach((e) => {
+      const key = e.allocation || "שונות";
+      const amt = (e.isRefund ? -1 : 1) * num(e.amount);
+      actualByAllocation[key] = (actualByAllocation[key] || 0) + amt;
+    });
+    const totalActual = Object.values(actualByAllocation).reduce((s, v) => s + v, 0);
+
+    // 12 - נוסחת האיחוד הסופית
+    const totalCampCost = campTotal + waterTotal + sanitationTotal + foodTotal + alcoholTotal + generalShare;
+    const duesCollected = paymentTotals.paid;
+    const vatRefund = num(p.income.vatRefund);
+    const externalNet = num(p.income.externalNet);
+    const totalIncome = duesCollected + vatRefund + externalNet;
+    const gapToRaise = totalCampCost - totalIncome;
+
+    // 11 - תזרים מזומנים
+    const channelsTotal = p.cashflow.channels.reduce((s, c) => s + num(c.amount), 0);
+    const pendingPayments = num(p.cashflow.pendingPayments);
+    const knownCommitments = num(p.cashflow.knownCommitments);
+    const cashflowGap = totalCampCost - channelsTotal;
+    const projectedBalance = cashflowGap + vatRefund - knownCommitments;
+
+    return {
+      N, eventDays,
+      campItemsTotal, loungeItemsTotal, iceCost, elecCost, oneTimeIncomeTotal, campBase, campContingency, campTotal, campPerPerson: perPerson(campTotal),
+      totalLiters, waterBase, waterContingency, waterTotal, waterPerPerson: perPerson(waterTotal),
+      pumpOutCost, sanitationBase, sanitationContingency, sanitationTotal, sanitationPerPerson: perPerson(sanitationTotal),
+      setupFoodCost, eventFoodCost, foodTotal,
+      alcoholBase, alcoholTotal, alcoholPerPerson: perPerson(alcoholTotal),
+      generalShare, generalPerPerson: perPerson(generalShare),
+      actualByAllocation, totalActual,
+      totalCampCost, duesCollected, vatRefund, externalNet, totalIncome, gapToRaise,
+      channelsTotal, pendingPayments, knownCommitments, cashflowGap, projectedBalance,
+    };
+  }, [budgetParams, budgetExpenses, paymentTotals]);
 
   const offeringRides = allMembers.filter((m) => {
     const d = rideInfo[m.name];
@@ -2490,91 +2870,330 @@ export default function App() {
 
         {tab === "budget" && (
           <div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-              {[
-                { label: "תקציב מתוכנן", value: budgetTotals.planned },
-                { label: "התחייבויות", value: budgetTotals.committed },
-                { label: "שולם בפועל", value: budgetTotals.paid },
-                { label: "יתרה זמינה", value: budgetTotals.remaining },
-              ].map((c) => (
-                <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                  <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: c.label === "יתרה זמינה" && c.value < 0 ? COLORS.danger : COLORS.text }}>
-                    ₪{c.value.toLocaleString()}
+            {/* 12 - נוסחת האיחוד הסופית */}
+            <div className="rounded-2xl p-4 mb-6" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
+              <div className="text-xs font-bold mb-2" style={{ color: COLORS.accentDark }}>נוסחת האיחוד הסופית</div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {[
+                  { label: "סה\"כ עלות מחנה", value: engine.totalCampCost },
+                  { label: "סה\"כ הכנסות", value: engine.totalIncome },
+                  { label: "פער לגיוס", value: engine.gapToRaise, danger: engine.gapToRaise > 0 },
+                ].map((c) => (
+                  <div key={c.label} className="rounded-xl p-3" style={{ background: COLORS.input }}>
+                    <div className="text-lg font-black" style={{ fontFamily: FONT_NUM, color: c.danger ? COLORS.danger : COLORS.text }}>₪{Math.round(c.value).toLocaleString()}</div>
+                    <div className="text-xs mt-0.5" style={{ color: COLORS.textMuted }}>{c.label}</div>
                   </div>
-                  <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
-                </div>
-              ))}
+                ))}
+              </div>
+              <div className="text-xs mt-2" style={{ color: COLORS.textMuted }}>
+                N = {engine.N || 0} חברים · עלות לנפש: ₪{Math.round(engine.N > 0 ? engine.totalCampCost / engine.N : 0).toLocaleString()}
+              </div>
             </div>
 
-            {canEditBudget && (
-              showBudgetForm ? (
-                <BudgetForm onAdd={addBudgetItem} onCancel={() => setShowBudgetForm(false)} lockedCategory={isAdmin ? null : myLeadTeam} />
-              ) : (
-                <button
-                  onClick={() => setShowBudgetForm(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold mb-6"
-                  style={{ background: COLORS.accent, color: COLORS.bg }}
-                >
-                  <Plus size={15} /> הוספת סעיף תקציב
-                </button>
-              )
+            {!canEditBudget && (
+              <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>הפרמטרים המלאים ניתנים לעריכה על ידי מנהלים בלבד. זו תצוגת הסיכום.</p>
             )}
 
-            {isAdmin && (
-              <>
-                <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.textMuted }}>הגדרת תקציב למחלקה</h3>
-                <CategoryBudgetForm onSet={setCategoryBudget} />
-              </>
-            )}
+            {/* 00 - פרמטרים גלובליים */}
+            {isAdmin && (() => {
+              const open = showBudgetSection === "global";
+              return (
+                <div className="mb-3">
+                  <button onClick={() => setShowBudgetSection(open ? null : "global")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
+                    <span>00 · פרמטרים גלובליים</span>
+                    <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
+                  </button>
+                  {open && (
+                    <div className="rounded-2xl p-4 grid sm:grid-cols-2 gap-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                      <NumField label="N - חברי מחנה" value={budgetParams.global.N} onChange={(v) => patchBudgetParams("global", { N: v })} />
+                      <NumField label={'אחוז בלת"מ (ברירת מחדל)'} value={budgetParams.global.contingencyPct} onChange={(v) => patchBudgetParams("global", { contingencyPct: v })} suffix="%" />
+                      <NumField label="ימי הקמה" value={budgetParams.global.setupDays} onChange={(v) => patchBudgetParams("global", { setupDays: v })} />
+                      <NumField label="ימי אירוע" value={budgetParams.global.eventDays} onChange={(v) => patchBudgetParams("global", { eventDays: v })} />
+                      <label className="flex items-center gap-2 text-xs" style={{ color: COLORS.textMuted }}>
+                        <input type="checkbox" checked={budgetParams.global.vatIncluded} onChange={(e) => patchBudgetParams("global", { vatIncluded: e.target.checked })} />
+                        הסכומים כוללים מע"מ
+                      </label>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
-            <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.textMuted }}>תקציב לפי קטגוריה</h3>
-            <div className="space-y-2 mb-6">
-              {BUDGET_CATEGORIES.map((cat) => {
-                const items = budgetItems.filter((b) => b.category === cat);
-                const planned = Number(categoryBudgets[cat]) || 0;
-                const paid = items.reduce((s, b) => s + (Number(b.paid) || 0), 0);
-                const toPay = planned - paid;
-                const pct = planned > 0 ? Math.min(paid / planned, 1) * 100 : 0;
-                return (
-                  <div key={cat} className="rounded-2xl px-4 py-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <span className="font-bold">{cat}</span>
-                      <div className="flex items-center gap-4 text-xs">
-                        <span>סכום לתשלום: <b style={{ color: toPay > 0 ? COLORS.danger : COLORS.accent2Dark }}>₪{toPay.toLocaleString()}</b></span>
-                        <span>סה"כ שולם: <b style={{ color: COLORS.accent2Dark }}>₪{paid.toLocaleString()}</b></span>
+            {/* 02 - מחנה (כולל הסלון) */}
+            {isAdmin && (() => {
+              const open = showBudgetSection === "camp";
+              return (
+                <div className="mb-3">
+                  <button onClick={() => setShowBudgetSection(open ? null : "camp")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
+                    <span>02 · מחנה - תשתית כללית (כולל הסלון) · ₪{Math.round(engine.campTotal).toLocaleString()}</span>
+                    <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
+                  </button>
+                  {open && (
+                    <div className="rounded-2xl p-4 space-y-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                      <div>
+                        <div className="text-xs font-bold mb-1.5" style={{ color: COLORS.textMuted }}>פריטי ציוד מחנה</div>
+                        <ItemRowsEditor rows={budgetParams.campInfra.items} onChange={(rows) => patchBudgetParams("campInfra", { items: rows })} />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold mb-1.5" style={{ color: COLORS.textMuted }}>ציוד סלון (הצללה, ריהוט, תאורה...)</div>
+                        <ItemRowsEditor rows={budgetParams.campInfra.loungeItems} onChange={(rows) => patchBudgetParams("campInfra", { loungeItems: rows })} />
+                      </div>
+                      <div className="grid sm:grid-cols-3 gap-2">
+                        <NumField label={'קרח - מחיר לק"ג'} value={budgetParams.campInfra.icePricePerKg} onChange={(v) => patchBudgetParams("campInfra", { icePricePerKg: v })} />
+                        <NumField label={'קרח - ק"ג ליום'} value={budgetParams.campInfra.iceKgPerDay} onChange={(v) => patchBudgetParams("campInfra", { iceKgPerDay: v })} />
+                        <NumField label="קרח - מספר ימים" value={budgetParams.campInfra.iceDays} onChange={(v) => patchBudgetParams("campInfra", { iceDays: v })} />
+                      </div>
+                      <div className="grid sm:grid-cols-2 gap-2">
+                        <NumField label="חשמל - מחיר לקילוואט" value={budgetParams.campInfra.elecPricePerKw} onChange={(v) => patchBudgetParams("campInfra", { elecPricePerKw: v })} />
+                        <NumField label="חשמל - הספק מבוקש (קילוואט)" value={budgetParams.campInfra.elecKw} onChange={(v) => patchBudgetParams("campInfra", { elecKw: v })} />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold mb-1.5" style={{ color: COLORS.textMuted }}>תרומות/הכנסות נקודתיות</div>
+                        <AmountRowsEditor rows={budgetParams.campInfra.oneTimeIncome} onChange={(rows) => patchBudgetParams("campInfra", { oneTimeIncome: rows })} />
+                      </div>
+                      <NumField label={'בלת"מ למחנה (אחוז, אופציונלי - דורס ברירת מחדל)'} value={budgetParams.contingencyOverrides.camp ?? ""} onChange={(v) => setContingencyOverride("camp", v)} suffix="%" />
+                      <div className="text-xs pt-2 border-t" style={{ color: COLORS.textMuted, borderColor: COLORS.divider }}>
+                        בסיס: ₪{Math.round(engine.campBase).toLocaleString()} · בלת"מ: ₪{Math.round(engine.campContingency).toLocaleString()} · סה"כ: ₪{Math.round(engine.campTotal).toLocaleString()} · לנפש: ₪{Math.round(engine.campPerPerson).toLocaleString()}
                       </div>
                     </div>
-                    <div className="h-1.5 rounded-full mt-2 overflow-hidden" style={{ background: COLORS.divider }}>
-                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: COLORS.accent }} />
-                    </div>
-                    <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>תקציב מתוכנן: ₪{planned.toLocaleString()}</div>
+                  )}
+                </div>
+              );
+            })()}
 
-                    {items.length > 0 && (
-                      <div className="mt-3 space-y-1.5">
-                        {items.map((b) => (
-                          <div key={b.id} className="flex items-center justify-between text-xs rounded-xl px-3 py-2" style={{ background: COLORS.input }}>
-                            <div className="min-w-0">
-                              <div className="font-semibold">{b.name}</div>
-                              <div className="mt-0.5" style={{ color: COLORS.textMuted }}>
-                                התחייבנו ₪{Number(b.committed || 0).toLocaleString()} · שולם ₪{Number(b.paid || 0).toLocaleString()}
-                                {b.notes ? ` · ${b.notes}` : ""}
+            {/* 03 - מים ומקלחות */}
+            {isAdmin && (() => {
+              const open = showBudgetSection === "water";
+              const w = budgetParams.water;
+              return (
+                <div className="mb-3">
+                  <button onClick={() => setShowBudgetSection(open ? null : "water")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
+                    <span>03 · מים ומקלחות · ₪{Math.round(engine.waterTotal).toLocaleString()}</span>
+                    <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
+                  </button>
+                  {open && (
+                    <div className="rounded-2xl p-4 space-y-3 grid sm:grid-cols-2 gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                      <NumField label="צריכה לנפש ליום (ליטר)" value={w.literPerPersonPerDay} onChange={(v) => patchBudgetParams("water", { literPerPersonPerDay: v })} />
+                      <NumField label="עלות מכל + ברז" value={w.tankFaucetCost} onChange={(v) => patchBudgetParams("water", { tankFaucetCost: v })} />
+                      <NumField label="עלות מילוי" value={w.fillCost} onChange={(v) => patchBudgetParams("water", { fillCost: v })} />
+                      <NumField label="מספר מילויים" value={w.fillCount} onChange={(v) => patchBudgetParams("water", { fillCount: v })} />
+                      <NumField label="עלות ריקון" value={w.drainCost} onChange={(v) => patchBudgetParams("water", { drainCost: v })} />
+                      <NumField label="מספר ריקונים" value={w.drainCount} onChange={(v) => patchBudgetParams("water", { drainCount: v })} />
+                      <NumField label="עלות ליחידת מקלחת" value={w.showerUnitCost} onChange={(v) => patchBudgetParams("water", { showerUnitCost: v })} />
+                      <NumField label="מספר יחידות מקלחת" value={w.showerUnitsCount} onChange={(v) => patchBudgetParams("water", { showerUnitsCount: v })} />
+                      <div className="sm:col-span-2">
+                        <NumField label={'בלת"מ למים (אחוז, אופציונלי)'} value={budgetParams.contingencyOverrides.water ?? ""} onChange={(v) => setContingencyOverride("water", v)} suffix="%" />
+                      </div>
+                      <div className="sm:col-span-2 text-xs pt-2 border-t" style={{ color: COLORS.textMuted, borderColor: COLORS.divider }}>
+                        סה"כ ליטרים: {Math.round(engine.totalLiters).toLocaleString()} · בסיס: ₪{Math.round(engine.waterBase).toLocaleString()} · סה"כ: ₪{Math.round(engine.waterTotal).toLocaleString()} · לנפש: ₪{Math.round(engine.waterPerPerson).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* 04 - שירותים (תברואה) */}
+            {isAdmin && (() => {
+              const open = showBudgetSection === "sanitation";
+              const s = budgetParams.sanitation;
+              return (
+                <div className="mb-3">
+                  <button onClick={() => setShowBudgetSection(open ? null : "sanitation")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
+                    <span>04 · שירותים (תברואה) · ₪{Math.round(engine.sanitationTotal).toLocaleString()}</span>
+                    <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
+                  </button>
+                  {open && (
+                    <div className="rounded-2xl p-4 grid sm:grid-cols-2 gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                      <NumField label="תדירות פינוי (לאדם ליום)" value={s.pumpFreqPerPersonPerDay} onChange={(v) => patchBudgetParams("sanitation", { pumpFreqPerPersonPerDay: v })} />
+                      <NumField label="עלות לפינוי" value={s.pumpCost} onChange={(v) => patchBudgetParams("sanitation", { pumpCost: v })} />
+                      <NumField label="תדירות נסורת (מילויים)" value={s.sawdustFreq} onChange={(v) => patchBudgetParams("sanitation", { sawdustFreq: v })} />
+                      <NumField label="עלות נסורת ליחידה" value={s.sawdustCost} onChange={(v) => patchBudgetParams("sanitation", { sawdustCost: v })} />
+                      <NumField label="עלות תא נגר" value={s.drainCellCost} onChange={(v) => patchBudgetParams("sanitation", { drainCellCost: v })} />
+                      <NumField label="שירותים כימיים" value={s.chemicalToiletsCost} onChange={(v) => patchBudgetParams("sanitation", { chemicalToiletsCost: v })} />
+                      <div className="sm:col-span-2">
+                        <NumField label={'בלת"מ לשירותים (אחוז, אופציונלי)'} value={budgetParams.contingencyOverrides.sanitation ?? ""} onChange={(v) => setContingencyOverride("sanitation", v)} suffix="%" />
+                      </div>
+                      <div className="sm:col-span-2 text-xs pt-2 border-t" style={{ color: COLORS.textMuted, borderColor: COLORS.divider }}>
+                        עלות פינוי: ₪{Math.round(engine.pumpOutCost).toLocaleString()} · בסיס: ₪{Math.round(engine.sanitationBase).toLocaleString()} · סה"כ: ₪{Math.round(engine.sanitationTotal).toLocaleString()} · לנפש: ₪{Math.round(engine.sanitationPerPerson).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* 05 - אוכל */}
+            {isAdmin && (() => {
+              const open = showBudgetSection === "food";
+              const f = budgetParams.food;
+              return (
+                <div className="mb-3">
+                  <button onClick={() => setShowBudgetSection(open ? null : "food")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
+                    <span>05 · אוכל · ₪{Math.round(engine.foodTotal).toLocaleString()}</span>
+                    <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
+                  </button>
+                  {open && (
+                    <div className="rounded-2xl p-4 grid sm:grid-cols-2 gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                      <NumField label="אנשי הקמה" value={f.setupPeopleCount} onChange={(v) => patchBudgetParams("food", { setupPeopleCount: v })} />
+                      <NumField label="ימי הקמה" value={f.setupDays} onChange={(v) => patchBudgetParams("food", { setupDays: v })} />
+                      <NumField label="עלות ליום הקמה (לאדם)" value={f.setupCostPerDay} onChange={(v) => patchBudgetParams("food", { setupCostPerDay: v })} />
+                      <NumField label="סועדים באירוע (בפועל)" value={f.actualDiners} onChange={(v) => patchBudgetParams("food", { actualDiners: v })} />
+                      <NumField label="ארוחות ליום" value={f.mealsPerDay} onChange={(v) => patchBudgetParams("food", { mealsPerDay: v })} />
+                      <NumField label="ימי אירוע (לאוכל)" value={f.eventDays} onChange={(v) => patchBudgetParams("food", { eventDays: v })} />
+                      <NumField label="עלות לארוחה (לאדם)" value={f.costPerMeal} onChange={(v) => patchBudgetParams("food", { costPerMeal: v })} />
+                      <NumField label={'בלת"מ אוכל (סכום קבוע)'} value={f.contingencyAmount} onChange={(v) => patchBudgetParams("food", { contingencyAmount: v })} />
+                      <div className="sm:col-span-2 text-xs pt-2 border-t" style={{ color: COLORS.textMuted, borderColor: COLORS.divider }}>
+                        עלות הקמה: ₪{Math.round(engine.setupFoodCost).toLocaleString()} · עלות אירוע: ₪{Math.round(engine.eventFoodCost).toLocaleString()} · סה"כ: ₪{Math.round(engine.foodTotal).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* 06 - אלכוהול */}
+            {isAdmin && (() => {
+              const open = showBudgetSection === "alcohol";
+              return (
+                <div className="mb-3">
+                  <button onClick={() => setShowBudgetSection(open ? null : "alcohol")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
+                    <span>06 · אלכוהול · ₪{Math.round(engine.alcoholTotal).toLocaleString()}</span>
+                    <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
+                  </button>
+                  {open && (
+                    <div className="rounded-2xl p-4 space-y-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                      <AlcoholRowsEditor rows={budgetParams.alcohol.categories} onChange={(rows) => patchBudgetParams("alcohol", { categories: rows })} />
+                      <NumField label="רזרבה נדחית (נרכשת רק בהתאם לצורך)" value={budgetParams.alcohol.deferredReserve} onChange={(v) => patchBudgetParams("alcohol", { deferredReserve: v })} />
+                      <div className="text-xs pt-2 border-t" style={{ color: COLORS.textMuted, borderColor: COLORS.divider }}>
+                        סה"כ: ₪{Math.round(engine.alcoholTotal).toLocaleString()} · לנפש: ₪{Math.round(engine.alcoholPerPerson).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* 07 - כללי */}
+            {isAdmin && (() => {
+              const open = showBudgetSection === "general";
+              return (
+                <div className="mb-3">
+                  <button onClick={() => setShowBudgetSection(open ? null : "general")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
+                    <span>07 · כללי - עלויות משותפות · ₪{Math.round(engine.generalShare).toLocaleString()}</span>
+                    <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
+                  </button>
+                  {open && (
+                    <div className="rounded-2xl p-4 grid sm:grid-cols-2 gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                      <NumField label="עלות שנתית קבועה" value={budgetParams.general.fixedAnnualCost} onChange={(v) => patchBudgetParams("general", { fixedAnnualCost: v })} />
+                      <NumField label="יחס חלוקה (% על המחנה)" value={budgetParams.general.splitRatioPct} onChange={(v) => patchBudgetParams("general", { splitRatioPct: v })} suffix="%" placeholder="100" />
+                      <div className="sm:col-span-2 text-xs pt-2 border-t" style={{ color: COLORS.textMuted, borderColor: COLORS.divider }}>
+                        חלק המחנה: ₪{Math.round(engine.generalShare).toLocaleString()} · לנפש: ₪{Math.round(engine.generalPerPerson).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* 09 - הכנסות */}
+            {isAdmin && (() => {
+              const open = showBudgetSection === "income";
+              return (
+                <div className="mb-3">
+                  <button onClick={() => setShowBudgetSection(open ? null : "income")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
+                    <span>09 · הכנסות · ₪{Math.round(engine.totalIncome).toLocaleString()}</span>
+                    <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
+                  </button>
+                  {open && (
+                    <div className="rounded-2xl p-4 grid sm:grid-cols-2 gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                      <div className="rounded-xl p-2 text-xs" style={{ background: COLORS.input }}>
+                        דמי חברים שנגבו (מטאב "כספים"): <b>₪{Math.round(engine.duesCollected).toLocaleString()}</b>
+                      </div>
+                      <div />
+                      <NumField label={'החזר מע"מ'} value={budgetParams.income.vatRefund} onChange={(v) => patchBudgetParams("income", { vatRefund: v })} />
+                      <NumField label="הכנסה חיצונית - ברוטו" value={budgetParams.income.externalGross} onChange={(v) => patchBudgetParams("income", { externalGross: v })} />
+                      <NumField label="הכנסה חיצונית - נטו" value={budgetParams.income.externalNet} onChange={(v) => patchBudgetParams("income", { externalNet: v })} />
+                      <div className="sm:col-span-2 text-xs pt-2 border-t" style={{ color: COLORS.textMuted, borderColor: COLORS.divider }}>
+                        סה"כ הכנסות: ₪{Math.round(engine.totalIncome).toLocaleString()} · פער מול עלות מחנה: ₪{Math.round(engine.gapToRaise).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* 11 - תזרים מזומנים */}
+            {isAdmin && (() => {
+              const open = showBudgetSection === "cashflow";
+              return (
+                <div className="mb-3">
+                  <button onClick={() => setShowBudgetSection(open ? null : "cashflow")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
+                    <span>11 · תזרים מזומנים</span>
+                    <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
+                  </button>
+                  {open && (
+                    <div className="rounded-2xl p-4 space-y-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                      <div>
+                        <div className="text-xs font-bold mb-1.5" style={{ color: COLORS.textMuted }}>ערוצי גבייה (בנק, אשראי, ארנקים דיגיטליים, מזומן)</div>
+                        <AmountRowsEditor rows={budgetParams.cashflow.channels} onChange={(rows) => patchBudgetParams("cashflow", { channels: rows })} />
+                      </div>
+                      <div className="grid sm:grid-cols-2 gap-2">
+                        <NumField label="תשלומים תלויים (טרם נסגרו)" value={budgetParams.cashflow.pendingPayments} onChange={(v) => patchBudgetParams("cashflow", { pendingPayments: v })} />
+                        <NumField label="התחייבויות ידועות (טרם שולמו)" value={budgetParams.cashflow.knownCommitments} onChange={(v) => patchBudgetParams("cashflow", { knownCommitments: v })} />
+                      </div>
+                      <div className="text-xs pt-2 border-t" style={{ color: COLORS.textMuted, borderColor: COLORS.divider }}>
+                        מזומן זמין: ₪{Math.round(engine.channelsTotal).toLocaleString()} · פער תזרימי: ₪{Math.round(engine.cashflowGap).toLocaleString()} · יתרה חזויה: ₪{Math.round(engine.projectedBalance).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* 10 - רישום הוצאות בפועל */}
+            {(() => {
+              const open = showBudgetSection === "expenses";
+              return (
+                <div className="mb-3">
+                  <button onClick={() => setShowBudgetSection(open ? null : "expenses")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
+                    <span>10 · רישום הוצאות בפועל ({budgetExpenses.length})</span>
+                    <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
+                  </button>
+                  {open && (
+                    <div className="space-y-3">
+                      {canEditBudget && <BudgetExpenseForm onAdd={addBudgetExpense} lockedAllocation={isAdmin ? null : myLeadTeam} />}
+                      <div className="space-y-1.5">
+                        {budgetExpenses.map((e) => (
+                          <div key={e.id} className="rounded-xl px-3 py-2 text-xs flex items-center justify-between" style={{ background: COLORS.surface }}>
+                            <div>
+                              <div className="font-semibold">{e.allocation}{e.subcategory ? ` · ${e.subcategory}` : ""}{e.vendor ? ` · ${e.vendor}` : ""}</div>
+                              <div style={{ color: COLORS.textMuted }}>
+                                {e.isRefund ? "זיכוי: " : ""}₪{Number(e.amount).toLocaleString()} · {e.vatIncluded ? "כולל מע\"מ" : "לא כולל מע\"מ"} · {e.paidBy ? `שולם ע"י ${e.paidBy}` : ""} {e.method ? `· ${e.method}` : ""}
                               </div>
-                              <div className="mt-0.5" style={{ color: COLORS.textMuted, opacity: 0.7 }}>הוזן ע"י {b.owner}</div>
                             </div>
-                            {(isAdmin || myLeadTeam === cat) && (
-                              <button onClick={() => removeBudgetItem(b.id)} style={{ color: COLORS.textMuted }} className="shrink-0">
-                                <Trash2 size={14} />
-                              </button>
+                            {(isAdmin || myLeadTeam === e.allocation) && (
+                              <button onClick={() => removeBudgetExpense(e.id)} style={{ color: COLORS.textMuted }}><Trash2 size={14} /></button>
                             )}
                           </div>
                         ))}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
+                      {Object.keys(engine.actualByAllocation).length > 0 && (
+                        <div className="rounded-xl p-3 text-xs" style={{ background: COLORS.accent2Light }}>
+                          <div className="font-bold mb-1" style={{ color: COLORS.accent2Dark }}>סה"כ בפועל לפי שיוך תקציבי</div>
+                          {Object.entries(engine.actualByAllocation).map(([k, v]) => (
+                            <div key={k} className="flex items-center justify-between">
+                              <span>{k}</span>
+                              <span>₪{Math.round(v).toLocaleString()}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 
