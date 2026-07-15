@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Users, CalendarDays, Clock, Flame, Tent, Sparkles, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff } from "lucide-react";
+import { Users, CalendarDays, Clock, Flame, Tent, Sparkles, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin } from "lucide-react";
 import { pushSupported, pushPermission, enablePush, disablePush } from "./push.js";
 
 // ---------------------------------------------------------------------------
@@ -189,6 +189,11 @@ const BUDGET_CATEGORIES = [
   "מטבח ומזון", "מים", "שירותים ומקלחות", "הובלות", "ציוד", "בנייה והקמות",
   "עיצוב ותפאורה", "תוכן וגיפט", "חשמל", "דלק", "קרח", "חשל\"ש", "ביטוח", "שונות",
 ];
+
+const EQUIPMENT_CATEGORIES = [
+  "מטבח", "מים", "חשמל וגז", "שירותים ומקלחות", "הקמות ומבנה", "עיצוב ותפאורה", "כלי עבודה", "אחר",
+];
+const EQUIPMENT_CONDITIONS = ["תקין", "דורש תיקון", "חסר / אבד"];
 
 const TEAM_FILTERS = [...new Set(SHIFTS.map((s) => s.team))];
 const TRAVEL_DAYS = ["2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02", "2026-11-03"];
@@ -534,6 +539,73 @@ function BudgetForm({ onAdd, onCancel, lockedCategory }) {
           ביטול
         </button>
       </div>
+    </div>
+  );
+}
+
+function EquipmentForm({ onAdd }) {
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState(EQUIPMENT_CATEGORIES[0]);
+  const [qty, setQty] = useState("");
+  const [condition, setCondition] = useState(EQUIPMENT_CONDITIONS[0]);
+  const [location, setLocation] = useState("");
+  const [notes, setNotes] = useState("");
+
+  function submit() {
+    if (!name.trim() || !qty) return;
+    onAdd({ name: name.trim(), category, qty, condition, location, notes });
+    setName(""); setQty(""); setLocation(""); setNotes(""); setCondition(EQUIPMENT_CONDITIONS[0]);
+  }
+
+  return (
+    <div className="rounded-2xl p-4 space-y-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <div className="grid sm:grid-cols-2 gap-2">
+        <input
+          value={name} onChange={(e) => setName(e.target.value)}
+          placeholder="שם הציוד"
+          className="px-3 py-2 rounded-xl text-sm outline-none sm:col-span-2"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        <select
+          value={category} onChange={(e) => setCategory(e.target.value)}
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        >
+          {EQUIPMENT_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <input
+          type="number" value={qty} onChange={(e) => setQty(e.target.value)}
+          placeholder="כמות"
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        <select
+          value={condition} onChange={(e) => setCondition(e.target.value)}
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        >
+          {EQUIPMENT_CONDITIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <input
+          value={location} onChange={(e) => setLocation(e.target.value)}
+          placeholder="מיקום אחסון (אופציונלי)"
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        <input
+          value={notes} onChange={(e) => setNotes(e.target.value)}
+          placeholder="הערות (אופציונלי)"
+          className="px-3 py-2 rounded-xl text-sm outline-none sm:col-span-2"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+      </div>
+      <button
+        onClick={submit}
+        className="px-4 py-2 rounded-full text-sm font-semibold"
+        style={{ background: COLORS.accent, color: COLORS.bg }}
+      >
+        הוספת ציוד
+      </button>
     </div>
   );
 }
@@ -1260,6 +1332,7 @@ export default function App() {
     cashflow: { channels: [], pendingPayments: "", knownCommitments: "" },
   });
   const [budgetExpenses, setBudgetExpenses] = useState([]);
+  const [campEquipment, setCampEquipment] = useState([]);
   const [showBudgetSection, setShowBudgetSection] = useState(null);
   const [activityLog, setActivityLog] = useState([]);
   const [loginHistory, setLoginHistory] = useState([]);
@@ -1302,7 +1375,7 @@ export default function App() {
         rawAssignments, rawBudget, rawCatBudget, rawTeardown, rawPayments, rawFee,
         rawLeads, rawPhones, rawRides, rawFeeOv, rawEmails, rawChecklists,
         rawManualTeam, rawLog, rawLogins, rawExtra, rawRemoved, rawPasswords,
-        rawAnn, rawEmg, rawPolls, rawMe, rawBudgetParams, rawBudgetExpenses,
+        rawAnn, rawEmg, rawPolls, rawMe, rawBudgetParams, rawBudgetExpenses, rawEquipment,
       ] = await Promise.all([
         safeGet("shift-assignments", true),
         safeGet("budget-items", true),
@@ -1328,6 +1401,7 @@ export default function App() {
         safeGet("my-identity", false),
         safeGet("budget-params", true),
         safeGet("budget-expenses", true),
+        safeGet("camp-equipment", true),
       ]);
 
       setAssignments(rawAssignments ? JSON.parse(rawAssignments) : {});
@@ -1372,6 +1446,7 @@ export default function App() {
         } catch {}
       }
       setBudgetExpenses(rawBudgetExpenses ? JSON.parse(rawBudgetExpenses) : []);
+      setCampEquipment(rawEquipment ? JSON.parse(rawEquipment) : []);
 
       setLoading(false);
     })();
@@ -1474,6 +1549,38 @@ export default function App() {
     setBudgetExpenses(next);
     try {
       await window.storage.set("budget-expenses", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function addEquipment(item) {
+    const next = [...campEquipment, { ...item, id: Date.now().toString() }];
+    setCampEquipment(next);
+    try {
+      await window.storage.set("camp-equipment", JSON.stringify(next), true);
+      showToast("הציוד נוסף לרשימה", "ok");
+      logActivity("הוספת ציוד קמפ", `${item.name} × ${item.qty}`);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function removeEquipment(id) {
+    const next = campEquipment.filter((e) => e.id !== id);
+    setCampEquipment(next);
+    try {
+      await window.storage.set("camp-equipment", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function updateEquipmentField(id, patch) {
+    const next = campEquipment.map((e) => (e.id === id ? { ...e, ...patch } : e));
+    setCampEquipment(next);
+    try {
+      await window.storage.set("camp-equipment", JSON.stringify(next), true);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -2136,6 +2243,7 @@ export default function App() {
           { id: "teams", label: "צוותים", icon: Tent },
           { id: "rides", label: "התניידות", icon: Car },
           { id: "contacts", label: "חברי קמפ", icon: Phone },
+          { id: "equipment", label: "ציוד קמפ", icon: Package },
         ].map((t) => (
           <button
             key={t.id}
@@ -3194,6 +3302,49 @@ export default function App() {
                 </div>
               );
             })()}
+          </div>
+        )}
+
+        {tab === "equipment" && (
+          <div>
+            <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>
+              רשימת הציוד ששייך לקמפ - כדי שיהיה מעקב מסודר אחרי מה יש, כמה, ובאיזה מצב.
+            </p>
+            {isAdmin && <div className="mb-4"><EquipmentForm onAdd={addEquipment} /></div>}
+
+            {EQUIPMENT_CATEGORIES.map((cat) => {
+              const items = campEquipment.filter((e) => e.category === cat);
+              if (items.length === 0) return null;
+              const totalQty = items.reduce((s, e) => s + (Number(e.qty) || 0), 0);
+              return (
+                <div key={cat} className="mb-4">
+                  <h3 className="text-xs font-bold mb-1.5 flex items-center justify-between" style={{ color: COLORS.textMuted }}>
+                    <span>{cat}</span>
+                    <span>{totalQty} יחידות</span>
+                  </h3>
+                  <div className="space-y-1.5">
+                    {items.map((e) => (
+                      <div key={e.id} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                        <div className="min-w-0 text-xs">
+                          <div className="font-semibold text-sm">{e.name} <span style={{ color: COLORS.accentDark }}>× {e.qty}</span></div>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap" style={{ color: COLORS.textMuted }}>
+                            <span style={{ color: e.condition === "תקין" ? COLORS.accent2Dark : COLORS.danger }}>{e.condition}</span>
+                            {e.location && <span className="flex items-center gap-1"><MapPin size={11} /> {e.location}</span>}
+                            {e.notes && <span>· {e.notes}</span>}
+                          </div>
+                        </div>
+                        {isAdmin && (
+                          <button onClick={() => removeEquipment(e.id)} style={{ color: COLORS.textMuted }} className="shrink-0"><Trash2 size={14} /></button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {campEquipment.length === 0 && (
+              <p className="text-xs text-center py-10" style={{ color: COLORS.textMuted }}>עדיין לא נוסף ציוד לרשימה.</p>
+            )}
           </div>
         )}
 
