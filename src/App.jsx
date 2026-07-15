@@ -1441,6 +1441,7 @@ export default function App() {
   const [campEquipment, setCampEquipment] = useState([]);
   const [extraBudgetCategories, setExtraBudgetCategories] = useState([]);
   const [showBudgetSection, setShowBudgetSection] = useState(null);
+  const [financesView, setFinancesView] = useState("dues");
   const [activityLog, setActivityLog] = useState([]);
   const [loginHistory, setLoginHistory] = useState([]);
   const [showActivityLog, setShowActivityLog] = useState(false);
@@ -2396,10 +2397,7 @@ export default function App() {
           { id: "shifts", label: "שיבוץ עצמי", icon: CalendarDays },
           { id: "board", label: "לוח מודעות", icon: Megaphone },
           { id: "budget", label: "הוצאות", icon: Wallet },
-          ...(canManageFinances ? [
-            { id: "dues", label: "דמי קמפ", icon: CreditCard },
-            { id: "budget-engine", label: "תקציב", icon: Wallet },
-          ] : []),
+          ...(canManageFinances ? [{ id: "finances", label: "כספים", icon: CreditCard }] : []),
           { id: "teams", label: "צוותים", icon: Tent },
           { id: "rides", label: "התניידות", icon: Car },
           { id: "contacts", label: "חברי קמפ", icon: Phone },
@@ -3298,8 +3296,27 @@ export default function App() {
           </div>
         )}
 
-        {tab === "dues" && canManageFinances && (
+        {tab === "finances" && canManageFinances && (
           <div>
+            <div className="flex gap-2 mb-5">
+              <button
+                onClick={() => setFinancesView("dues")}
+                className="px-4 py-2 rounded-full text-sm font-semibold"
+                style={{ background: financesView === "dues" ? COLORS.accent : COLORS.surface, color: financesView === "dues" ? COLORS.bg : COLORS.textMuted }}
+              >
+                דמי קמפ
+              </button>
+              <button
+                onClick={() => setFinancesView("budget")}
+                className="px-4 py-2 rounded-full text-sm font-semibold"
+                style={{ background: financesView === "budget" ? COLORS.accent : COLORS.surface, color: financesView === "budget" ? COLORS.bg : COLORS.textMuted }}
+              >
+                תקציב
+              </button>
+            </div>
+
+            {financesView === "dues" && (
+            <div>
             <div className="rounded-2xl p-4 mb-5 flex items-end gap-2 flex-wrap" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
               <div>
                 <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>דמי קמפ אחידים לכולם (₪)</label>
@@ -3389,11 +3406,11 @@ export default function App() {
                 );
               })}
             </div>
-          </div>
-        )}
+            </div>
+            )}
 
-        {tab === "budget-engine" && canManageFinances && (
-          <div>
+            {financesView === "budget" && (
+            <div>
             <div className="mb-4">
               <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <h3 className="text-sm font-bold" style={{ color: COLORS.accentDark }}>מנוע תקציב מפורט (צוות תקציב)</h3>
@@ -3736,6 +3753,8 @@ export default function App() {
                 </div>
               );
             })()}
+            </div>
+            )}
           </div>
         )}
 
@@ -3991,3 +4010,4 @@ export default function App() {
     </div>
   );
 }
+
