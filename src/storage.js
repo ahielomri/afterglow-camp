@@ -3127,7 +3127,7 @@ export default function App() {
               return (
                 <div className="mb-3">
                   <button onClick={() => setShowBudgetSection(open ? null : "global")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
-                    <span>00 · פרמטרים גלובליים</span>
+                    <span>פרמטרים גלובליים</span>
                     <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
                   </button>
                   {open && (
@@ -3152,7 +3152,7 @@ export default function App() {
               return (
                 <div className="mb-3">
                   <button onClick={() => setShowBudgetSection(open ? null : "camp")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
-                    <span>02 · מחנה - תשתית כללית (כולל הסלון) · ₪{Math.round(engine.campTotal).toLocaleString()}</span>
+                    <span>מחנה - תשתית כללית (כולל הסלון) · ₪{Math.round(engine.campTotal).toLocaleString()}</span>
                     <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
                   </button>
                   {open && (
@@ -3195,7 +3195,7 @@ export default function App() {
               return (
                 <div className="mb-3">
                   <button onClick={() => setShowBudgetSection(open ? null : "water")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
-                    <span>03 · מים ומקלחות · ₪{Math.round(engine.waterTotal).toLocaleString()}</span>
+                    <span>מים ומקלחות · ₪{Math.round(engine.waterTotal).toLocaleString()}</span>
                     <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
                   </button>
                   {open && (
@@ -3227,7 +3227,7 @@ export default function App() {
               return (
                 <div className="mb-3">
                   <button onClick={() => setShowBudgetSection(open ? null : "sanitation")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
-                    <span>04 · שירותים (תברואה) · ₪{Math.round(engine.sanitationTotal).toLocaleString()}</span>
+                    <span>שירותים (תברואה) · ₪{Math.round(engine.sanitationTotal).toLocaleString()}</span>
                     <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
                   </button>
                   {open && (
@@ -3257,7 +3257,7 @@ export default function App() {
               return (
                 <div className="mb-3">
                   <button onClick={() => setShowBudgetSection(open ? null : "food")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
-                    <span>05 · אוכל · ₪{Math.round(engine.foodTotal).toLocaleString()}</span>
+                    <span>אוכל · ₪{Math.round(engine.foodTotal).toLocaleString()}</span>
                     <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
                   </button>
                   {open && (
@@ -3285,7 +3285,7 @@ export default function App() {
               return (
                 <div className="mb-3">
                   <button onClick={() => setShowBudgetSection(open ? null : "alcohol")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
-                    <span>06 · אלכוהול · ₪{Math.round(engine.alcoholTotal).toLocaleString()}</span>
+                    <span>אלכוהול · ₪{Math.round(engine.alcoholTotal).toLocaleString()}</span>
                     <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
                   </button>
                   {open && (
@@ -3307,7 +3307,7 @@ export default function App() {
               return (
                 <div className="mb-3">
                   <button onClick={() => setShowBudgetSection(open ? null : "general")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
-                    <span>07 · כללי - עלויות משותפות · ₪{Math.round(engine.generalShare).toLocaleString()}</span>
+                    <span>כללי - עלויות משותפות · ₪{Math.round(engine.generalShare).toLocaleString()}</span>
                     <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
                   </button>
                   {open && (
@@ -3329,7 +3329,7 @@ export default function App() {
               return (
                 <div className="mb-3">
                   <button onClick={() => setShowBudgetSection(open ? null : "income")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
-                    <span>09 · הכנסות · ₪{Math.round(engine.totalIncome).toLocaleString()}</span>
+                    <span>הכנסות · ₪{Math.round(engine.totalIncome).toLocaleString()}</span>
                     <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
                   </button>
                   {open && (
@@ -3356,7 +3356,7 @@ export default function App() {
               return (
                 <div className="mb-3">
                   <button onClick={() => setShowBudgetSection(open ? null : "cashflow")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
-                    <span>11 · תזרים מזומנים</span>
+                    <span>תזרים מזומנים</span>
                     <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
                   </button>
                   {open && (
@@ -3384,7 +3384,7 @@ export default function App() {
               return (
                 <div className="mb-3">
                   <button onClick={() => setShowBudgetSection(open ? null : "expenses")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
-                    <span>10 · רישום הוצאות בפועל ({budgetExpenses.length})</span>
+                    <span>רישום הוצאות בפועל ({budgetExpenses.length})</span>
                     <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
                   </button>
                   {open && (
