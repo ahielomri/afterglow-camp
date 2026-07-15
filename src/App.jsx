@@ -444,8 +444,30 @@ function LoginScreen({ members, passwords, onVerified, onSetPassword }) {
   );
 }
 
-function CategoryBudgetForm({ onSet }) {
-  const [cat, setCat] = useState(BUDGET_CATEGORIES[0]);
+function NewCategoryForm({ onAdd }) {
+  const [name, setName] = useState("");
+  return (
+    <div className="flex items-center gap-2 mb-4">
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder='קטגוריית הוצאה חדשה (למשל: "אבטחה")'
+        className="flex-1 px-3 py-2 rounded-xl text-sm outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      />
+      <button
+        onClick={() => { onAdd(name); setName(""); }}
+        className="px-4 py-2 rounded-full text-sm font-semibold shrink-0"
+        style={{ background: COLORS.accent2, color: COLORS.bg }}
+      >
+        פתיחת קטגוריה
+      </button>
+    </div>
+  );
+}
+
+function CategoryBudgetForm({ onSet, categories }) {
+  const [cat, setCat] = useState(categories[0]);
   const [amount, setAmount] = useState("");
 
   return (
@@ -458,7 +480,7 @@ function CategoryBudgetForm({ onSet }) {
             className="w-full appearance-none pl-9 pr-3 py-2.5 rounded-xl text-sm outline-none"
             style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
           >
-            {BUDGET_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
           <ChevronDown size={15} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: COLORS.text }} />
         </div>
@@ -483,9 +505,9 @@ function CategoryBudgetForm({ onSet }) {
   );
 }
 
-function BudgetForm({ onAdd, onCancel, lockedCategory }) {
+function BudgetForm({ onAdd, onCancel, lockedCategory, categories }) {
   const [name, setName] = useState("");
-  const [category, setCategory] = useState(lockedCategory || BUDGET_CATEGORIES[0]);
+  const [category, setCategory] = useState(lockedCategory || categories[0]);
   const [committed, setCommitted] = useState("");
   const [paid, setPaid] = useState("");
   const [notes, setNotes] = useState("");
@@ -505,7 +527,7 @@ function BudgetForm({ onAdd, onCancel, lockedCategory }) {
           className="px-3 py-2 rounded-xl text-sm outline-none"
           style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}`, opacity: lockedCategory ? 0.7 : 1 }}
         >
-          {(lockedCategory ? [lockedCategory] : BUDGET_CATEGORIES).map((c) => <option key={c} value={c}>{c}</option>)}
+          {(lockedCategory ? [lockedCategory] : categories).map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         <input
           value={notes} onChange={(e) => setNotes(e.target.value)}
@@ -1417,6 +1439,7 @@ export default function App() {
   });
   const [budgetExpenses, setBudgetExpenses] = useState([]);
   const [campEquipment, setCampEquipment] = useState([]);
+  const [extraBudgetCategories, setExtraBudgetCategories] = useState([]);
   const [showBudgetSection, setShowBudgetSection] = useState(null);
   const [activityLog, setActivityLog] = useState([]);
   const [loginHistory, setLoginHistory] = useState([]);
@@ -1459,7 +1482,7 @@ export default function App() {
         rawAssignments, rawBudget, rawCatBudget, rawTeardown, rawPayments, rawFee,
         rawLeads, rawPhones, rawRides, rawFeeOv, rawEmails, rawChecklists,
         rawManualTeam, rawLog, rawLogins, rawExtra, rawRemoved, rawPasswords,
-        rawAnn, rawEmg, rawPolls, rawMe, rawBudgetParams, rawBudgetExpenses, rawEquipment,
+        rawAnn, rawEmg, rawPolls, rawMe, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories,
       ] = await Promise.all([
         safeGet("shift-assignments", true),
         safeGet("budget-items", true),
@@ -1486,6 +1509,7 @@ export default function App() {
         safeGet("budget-params", true),
         safeGet("budget-expenses", true),
         safeGet("camp-equipment", true),
+        safeGet("extra-budget-categories", true),
       ]);
 
       setAssignments(rawAssignments ? JSON.parse(rawAssignments) : {});
@@ -1531,6 +1555,7 @@ export default function App() {
       }
       setBudgetExpenses(rawBudgetExpenses ? JSON.parse(rawBudgetExpenses) : []);
       setCampEquipment(rawEquipment ? JSON.parse(rawEquipment) : []);
+      setExtraBudgetCategories(rawExtraCategories ? JSON.parse(rawExtraCategories) : []);
 
       setLoading(false);
     })();
@@ -1682,6 +1707,23 @@ export default function App() {
     setCampEquipment(next);
     try {
       await window.storage.set("camp-equipment", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function addBudgetCategory(name) {
+    const trimmed = (name || "").trim();
+    if (!trimmed) return;
+    if (BUDGET_CATEGORIES.includes(trimmed) || extraBudgetCategories.includes(trimmed)) {
+      return showToast("הקטגוריה כבר קיימת", "error");
+    }
+    const next = [...extraBudgetCategories, trimmed];
+    setExtraBudgetCategories(next);
+    try {
+      await window.storage.set("extra-budget-categories", JSON.stringify(next), true);
+      showToast(`הקטגוריה "${trimmed}" נוספה`, "ok");
+      logActivity("הוספת קטגוריית הוצאה חדשה", trimmed);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -2112,6 +2154,11 @@ export default function App() {
     [extraMembers, removedMembers]
   );
 
+  const allBudgetCategories = useMemo(
+    () => [...BUDGET_CATEGORIES, ...extraBudgetCategories],
+    [extraBudgetCategories]
+  );
+
   const currentMember = allMembers.find((m) => m.name === identity);
   const isAdmin = currentMember?.role === "admin";
   const isOmri = identity === "עומרי אחיאל";
@@ -2136,12 +2183,12 @@ export default function App() {
     [assignments, allMembers]
   );
   const overBudgetCategories = useMemo(() => {
-    return BUDGET_CATEGORIES.filter((cat) => {
+    return allBudgetCategories.filter((cat) => {
       const planned = Number(categoryBudgets[cat]) || 0;
       const paid = budgetItems.filter((b) => b.category === cat).reduce((s, b) => s + (Number(b.paid) || 0), 0);
       return planned > 0 && paid > planned;
     });
-  }, [categoryBudgets, budgetItems]);
+  }, [categoryBudgets, budgetItems, allBudgetCategories]);
 
   const budgetTotals = useMemo(() => {
     const planned = Object.values(categoryBudgets).reduce((sum, v) => sum + (Number(v) || 0), 0);
@@ -2348,8 +2395,11 @@ export default function App() {
           ...dashboardTabs,
           { id: "shifts", label: "שיבוץ עצמי", icon: CalendarDays },
           { id: "board", label: "לוח מודעות", icon: Megaphone },
-          { id: "budget", label: "תקציב", icon: Wallet },
-          ...(canManageFinances ? [{ id: "finances", label: "כספים", icon: CreditCard }] : []),
+          { id: "budget", label: "הוצאות", icon: Wallet },
+          ...(canManageFinances ? [
+            { id: "dues", label: "דמי קמפ", icon: CreditCard },
+            { id: "budget-engine", label: "תקציב", icon: Wallet },
+          ] : []),
           { id: "teams", label: "צוותים", icon: Tent },
           { id: "rides", label: "התניידות", icon: Car },
           { id: "contacts", label: "חברי קמפ", icon: Phone },
@@ -3133,7 +3183,7 @@ export default function App() {
 
             {canEditBudget && (
               showBudgetForm ? (
-                <BudgetForm onAdd={addBudgetItem} onCancel={() => setShowBudgetForm(false)} lockedCategory={isAdmin ? null : myLeadTeam} />
+                <BudgetForm onAdd={addBudgetItem} onCancel={() => setShowBudgetForm(false)} lockedCategory={isAdmin ? null : myLeadTeam} categories={allBudgetCategories} />
               ) : (
                 <button
                   onClick={() => setShowBudgetForm(true)}
@@ -3146,15 +3196,14 @@ export default function App() {
             )}
 
             {isAdmin && (
-              <>
-                <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.textMuted }}>הגדרת תקציב למחלקה</h3>
-                <CategoryBudgetForm onSet={setCategoryBudget} />
-              </>
+              <div className="mb-4 text-xs" style={{ color: COLORS.textMuted }}>
+                הגדרת תקציב מתוכנן לכל מחלקה עברה לטאב "תקציב".
+              </div>
             )}
 
             <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.textMuted }}>תקציב לפי קטגוריה</h3>
             <div className="space-y-2 mb-6">
-              {BUDGET_CATEGORIES.map((cat) => {
+              {allBudgetCategories.map((cat) => {
                 const items = budgetItems.filter((b) => b.category === cat);
                 const planned = Number(categoryBudgets[cat]) || 0;
                 const paid = items.reduce((s, b) => s + (Number(b.paid) || 0), 0);
@@ -3249,7 +3298,7 @@ export default function App() {
           </div>
         )}
 
-        {tab === "finances" && canManageFinances && (
+        {tab === "dues" && canManageFinances && (
           <div>
             <div className="rounded-2xl p-4 mb-5 flex items-end gap-2 flex-wrap" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
               <div>
@@ -3340,8 +3389,12 @@ export default function App() {
                 );
               })}
             </div>
+          </div>
+        )}
 
-            <div className="pt-6 mt-6 border-t" style={{ borderColor: COLORS.divider }}>
+        {tab === "budget-engine" && canManageFinances && (
+          <div>
+            <div className="mb-4">
               <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <h3 className="text-sm font-bold" style={{ color: COLORS.accentDark }}>מנוע תקציב מפורט (צוות תקציב)</h3>
                 <button
@@ -3353,8 +3406,16 @@ export default function App() {
                 </button>
               </div>
               <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>
-                מעדכן אוטומטית את הסכומים המתוכננים בטאב "תקציב" עבור: מים, שירותים ומקלחות, מטבח ומזון, קרח, חשמל, עיצוב ותפאורה וציוד. שאר הקטגוריות (הובלות, בנייה והקמות, תוכן וגיפט, דלק, חשל"ש, ביטוח, שונות) נשארות למילוי ידני.
+                מעדכן אוטומטית את הסכומים המתוכננים בטאב "הוצאות" עבור: מים, שירותים ומקלחות, מטבח ומזון, קרח, חשמל, עיצוב ותפאורה וציוד. שאר הקטגוריות (הובלות, בנייה והקמות, תוכן וגיפט, דלק, חשל"ש, ביטוח, שונות) נשארות למילוי ידני.
               </p>
+              <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.textMuted }}>פתיחת קטגוריית הוצאה חדשה</h3>
+              <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
+                אם יש הוצאה שלא שייכת לשום צוות קיים - אפשר לפתוח קטגוריה חדשה שתופיע גם בטאב "הוצאות". רק צוות תקציב/מנהלים יכולים לפתוח קטגוריה חדשה.
+              </p>
+              <NewCategoryForm onAdd={addBudgetCategory} />
+              <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.textMuted }}>הגדרת תקציב למחלקה</h3>
+              <CategoryBudgetForm onSet={setCategoryBudget} categories={allBudgetCategories} />
+            </div>
             {/* 12 - נוסחת האיחוד הסופית */}
             <div className="rounded-2xl p-4 mb-6" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
               <div className="text-xs font-bold mb-2" style={{ color: COLORS.accentDark }}>נוסחת האיחוד הסופית</div>
@@ -3675,7 +3736,6 @@ export default function App() {
                 </div>
               );
             })()}
-            </div>
           </div>
         )}
 
