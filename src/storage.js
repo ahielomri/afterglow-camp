@@ -60,3 +60,18 @@ window.storage = {
     return { keys: (data || []).map((r) => r.key), prefix, shared };
   },
 };
+
+// Real file storage (receipts, future attachments) via a Supabase Storage bucket.
+// Requires a public bucket named "receipts" to be created once in the Supabase
+// dashboard (Storage -> New bucket -> name "receipts" -> Public bucket: on).
+export async function uploadFile(file, folder = "receipts") {
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+  const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const { error } = await supabase.storage.from("receipts").upload(path, file, {
+    cacheControl: "3600",
+    upsert: false,
+  });
+  if (error) throw error;
+  const { data } = supabase.storage.from("receipts").getPublicUrl(path);
+  return data.publicUrl;
+}
