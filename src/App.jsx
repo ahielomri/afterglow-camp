@@ -190,9 +190,7 @@ const BUDGET_CATEGORIES = [
   "עיצוב ותפאורה", "תוכן וגיפט", "חשמל", "דלק", "קרח", "חשל\"ש", "ביטוח", "שונות",
 ];
 
-const EQUIPMENT_CATEGORIES = [
-  "מטבח", "מים", "חשמל וגז", "שירותים ומקלחות", "הקמות ומבנה", "עיצוב ותפאורה", "כלי עבודה", "אחר",
-];
+const EQUIPMENT_CATEGORIES = TEAMS.map((t) => t.name);
 const EQUIPMENT_CONDITIONS = ["תקין", "דורש תיקון", "חסר / אבד"];
 
 const TEAM_FILTERS = [...new Set(SHIFTS.map((s) => s.team))];
@@ -543,9 +541,9 @@ function BudgetForm({ onAdd, onCancel, lockedCategory }) {
   );
 }
 
-function EquipmentForm({ onAdd }) {
+function EquipmentForm({ onAdd, lockedCategory }) {
   const [name, setName] = useState("");
-  const [category, setCategory] = useState(EQUIPMENT_CATEGORIES[0]);
+  const [category, setCategory] = useState(lockedCategory || EQUIPMENT_CATEGORIES[0]);
   const [qty, setQty] = useState("");
   const [condition, setCondition] = useState(EQUIPMENT_CONDITIONS[0]);
   const [location, setLocation] = useState("");
@@ -568,10 +566,11 @@ function EquipmentForm({ onAdd }) {
         />
         <select
           value={category} onChange={(e) => setCategory(e.target.value)}
+          disabled={!!lockedCategory}
           className="px-3 py-2 rounded-xl text-sm outline-none"
-          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}`, opacity: lockedCategory ? 0.7 : 1 }}
         >
-          {EQUIPMENT_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          {(lockedCategory ? [lockedCategory] : EQUIPMENT_CATEGORIES).map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         <input
           type="number" value={qty} onChange={(e) => setQty(e.target.value)}
@@ -969,23 +968,65 @@ function RideWizard({ data, onChange }) {
 // ---------------------------------------------------------------------------
 function AnnouncementForm({ onPost }) {
   const [text, setText] = useState("");
+  const [isEvent, setIsEvent] = useState(false);
+  const [eventDate, setEventDate] = useState("");
+  const [eventTime, setEventTime] = useState("");
+
+  function submit() {
+    if (!text.trim()) return;
+    onPost(text, isEvent ? { eventDate, eventTime } : null);
+    setText(""); setEventDate(""); setEventTime(""); setIsEvent(false);
+  }
+
   return (
-    <div className="flex gap-2 items-end mb-5">
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="מה תרצה לפרסם ללוח המודעות?"
-        rows={2}
-        className="flex-1 px-3 py-2 rounded-xl text-sm outline-none resize-none"
-        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-      />
-      <button
-        onClick={() => { onPost(text); setText(""); }}
-        className="px-4 py-2.5 rounded-xl text-sm font-semibold shrink-0"
-        style={{ background: COLORS.accent, color: COLORS.bg }}
-      >
-        פרסום
-      </button>
+    <div className="mb-5 space-y-2">
+      <div className="flex gap-2">
+        <button
+          onClick={() => setIsEvent(false)}
+          className="px-3 py-1.5 rounded-full text-xs font-semibold"
+          style={{ background: !isEvent ? COLORS.accent : COLORS.surface, color: !isEvent ? COLORS.bg : COLORS.textMuted }}
+        >
+          פתק
+        </button>
+        <button
+          onClick={() => setIsEvent(true)}
+          className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold"
+          style={{ background: isEvent ? COLORS.accent : COLORS.surface, color: isEvent ? COLORS.bg : COLORS.textMuted }}
+        >
+          <CalendarDays size={12} /> אירוע
+        </button>
+      </div>
+      <div className="flex gap-2 items-end">
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={isEvent ? "מה שם/פרטי האירוע?" : "מה תרצה לפרסם ללוח המודעות?"}
+          rows={2}
+          className="flex-1 px-3 py-2 rounded-xl text-sm outline-none resize-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        <button
+          onClick={submit}
+          className="px-4 py-2.5 rounded-xl text-sm font-semibold shrink-0"
+          style={{ background: COLORS.accent, color: COLORS.bg }}
+        >
+          פרסום
+        </button>
+      </div>
+      {isEvent && (
+        <div className="flex gap-2">
+          <input
+            type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)}
+            className="px-2 py-1.5 rounded-lg text-sm outline-none"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          />
+          <input
+            type="time" value={eventTime} onChange={(e) => setEventTime(e.target.value)}
+            className="px-2 py-1.5 rounded-lg text-sm outline-none"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -1867,9 +1908,12 @@ export default function App() {
     }
   }
 
-  async function addAnnouncement(text) {
+  async function addAnnouncement(text, eventInfo) {
     if (!text.trim()) return;
-    const next = [{ id: Date.now().toString(), author: identity, text: text.trim(), ts: Date.now(), replies: [] }, ...announcements];
+    const next = [{
+      id: Date.now().toString(), author: identity, text: text.trim(), ts: Date.now(), replies: [],
+      isEvent: !!eventInfo, eventDate: eventInfo?.eventDate || "", eventTime: eventInfo?.eventTime || "",
+    }, ...announcements];
     setAnnouncements(next);
     try {
       await window.storage.set("announcements", JSON.stringify(next), true);
@@ -2644,6 +2688,11 @@ export default function App() {
                   {announcements.slice(0, 3).map((a) => (
                     <div key={a.id} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                       <b style={{ color: COLORS.accentDark }}>{a.author}:</b> {a.text}
+                      {a.isEvent && (a.eventDate || a.eventTime) && (
+                        <div className="mt-1 font-bold" style={{ color: COLORS.accentDark }}>
+                          📅 {a.eventDate ? formatDate(a.eventDate) : ""}{a.eventTime ? ` · ${a.eventTime}` : ""}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -2957,6 +3006,13 @@ export default function App() {
                         </div>
                       </div>
                       <p className="text-sm whitespace-pre-wrap" style={{ fontFamily: FONT_HEADING, lineHeight: 1.5 }}>{a.text}</p>
+
+                      {a.isEvent && (a.eventDate || a.eventTime) && (
+                        <div className="flex items-center gap-1.5 mt-2 text-xs font-bold px-2 py-1 rounded-lg w-fit" style={{ background: "rgba(255,255,255,0.55)", color: COLORS.accentDark }}>
+                          <CalendarDays size={13} />
+                          {a.eventDate ? formatDate(a.eventDate) : ""}{a.eventTime ? ` · ${a.eventTime}` : ""}
+                        </div>
+                      )}
 
                       {(a.replies || []).length > 0 && (
                         <div className="mt-3 space-y-1.5">
@@ -3310,7 +3366,11 @@ export default function App() {
             <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>
               רשימת הציוד ששייך לקמפ - כדי שיהיה מעקב מסודר אחרי מה יש, כמה, ובאיזה מצב.
             </p>
-            {isAdmin && <div className="mb-4"><EquipmentForm onAdd={addEquipment} /></div>}
+            {(isAdmin || myLeadTeam) && (
+              <div className="mb-4">
+                <EquipmentForm onAdd={addEquipment} lockedCategory={isAdmin ? null : myLeadTeam} />
+              </div>
+            )}
 
             {EQUIPMENT_CATEGORIES.map((cat) => {
               const items = campEquipment.filter((e) => e.category === cat);
@@ -3333,7 +3393,7 @@ export default function App() {
                             {e.notes && <span>· {e.notes}</span>}
                           </div>
                         </div>
-                        {isAdmin && (
+                        {(isAdmin || myLeadTeam === cat) && (
                           <button onClick={() => removeEquipment(e.id)} style={{ color: COLORS.textMuted }} className="shrink-0"><Trash2 size={14} /></button>
                         )}
                       </div>
