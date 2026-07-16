@@ -127,7 +127,7 @@ export async function setMemberPasswordAndSignIn(name, id, newPassword) {
     }
     throw new Error(message);
   }
-  if (data?.error) throw new Error(data.error);
+  if (data?.error) throw new Error(data.detail ? `${data.error}: ${data.detail}` : data.error);
   return signInMember(name, newPassword);
 }
 
