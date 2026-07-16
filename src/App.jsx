@@ -1,7 +1,15 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Users, CalendarDays, Clock, Flame, Tent, Sparkles, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle } from "lucide-react";
 import { pushSupported, pushPermission, enablePush, disablePush } from "./push.js";
-import { uploadFile } from "./storage.js";
+import {
+  uploadFile,
+  signInMember,
+  setMemberPasswordAndSignIn,
+  signOutMember,
+  getSignedInMemberName,
+  getAllMemberRoles,
+  addMemberRow,
+} from "./storage.js";
 
 // ---------------------------------------------------------------------------
 // Design tokens - "Organic" palette (matches the shared design-system folder)
@@ -39,36 +47,36 @@ const FONT_NUM = `"Figtree", "Assistant", sans-serif`;
 // Admins can add more members at runtime (stored separately, merged in-app).
 // ---------------------------------------------------------------------------
 const MEMBERS = [
-  { name: "אורנה חזוט צורים", id: "40180390", role: "admin" },
-  { name: "עומרי אחיאל", id: "200450633", role: "admin" },
-  { name: "שרון אור", id: "16447070", role: "member" },
-  { name: "ליאת ציטרון", id: "31688716", role: "member" },
-  { name: "איתי כהן", id: "043019223", role: "member" },
-  { name: "מירי אביהו", id: "307802926", role: "member" },
-  { name: "גיא יצחקי", id: "052325815", role: "member" },
-  { name: "מתיאס זיפיליבן", id: "328893292", role: "member" },
-  { name: "גלעד אהרוני", id: "032214579", role: "member" },
-  { name: "רוני דאיה", id: "033640640", role: "member" },
-  { name: "נטע קישיניאבסקי שני", id: "033178419", role: "admin" },
-  { name: "נעם אלמוג", id: "034201764", role: "member" },
-  { name: "נירי כהן", id: "201603594", role: "member" },
-  { name: "אסי כהן", id: "038399556", role: "member" },
-  { name: "אן קליוט", id: null, role: "member" },
-  { name: "טליה הבר", id: "0506982095", role: "member" },
-  { name: "תמיר צמח", id: "024059131", role: "member" },
-  { name: "דן דורות", id: "301592549", role: "member" },
-  { name: "אלירם לגזיאל", id: "062840160", role: "member" },
-  { name: "ליאת בן סעדון", id: "036536068", role: "member" },
-  { name: "אבישי גרינגרד", id: "0526808009", role: "member" },
-  { name: "טלי שגב", id: "038704920", role: "member" },
-  { name: "רווה מדר", id: "062836291", role: "member" },
-  { name: "עידן טחן", id: "212976294", role: "member" },
-  { name: "אנה קנטרוביץ", id: "014445746", role: "member" },
-  { name: "בתאל בר גיורא", id: "036236602", role: "member" },
-  { name: "רותם פלש", id: "037728409", role: "member" },
-  { name: "גילי דגן", id: null, role: "member" },
-  { name: "יעל נאש", id: null, role: "member" },
-  { name: "שלומי קוך", id: null, role: "member" },
+  { name: "אורנה חזוט צורים", idOnFile: true, role: "admin" },
+  { name: "עומרי אחיאל", idOnFile: true, role: "admin" },
+  { name: "שרון אור", idOnFile: true, role: "member" },
+  { name: "ליאת ציטרון", idOnFile: true, role: "member" },
+  { name: "איתי כהן", idOnFile: true, role: "member" },
+  { name: "מירי אביהו", idOnFile: true, role: "member" },
+  { name: "גיא יצחקי", idOnFile: true, role: "member" },
+  { name: "מתיאס זיפיליבן", idOnFile: true, role: "member" },
+  { name: "גלעד אהרוני", idOnFile: true, role: "member" },
+  { name: "רוני דאיה", idOnFile: true, role: "member" },
+  { name: "נטע קישיניאבסקי שני", idOnFile: true, role: "admin" },
+  { name: "נעם אלמוג", idOnFile: true, role: "member" },
+  { name: "נירי כהן", idOnFile: true, role: "member" },
+  { name: "אסי כהן", idOnFile: true, role: "member" },
+  { name: "אן קליוט", idOnFile: false, role: "member" },
+  { name: "טליה הבר", idOnFile: true, role: "member" },
+  { name: "תמיר צמח", idOnFile: true, role: "member" },
+  { name: "דן דורות", idOnFile: true, role: "member" },
+  { name: "אלירם לגזיאל", idOnFile: true, role: "member" },
+  { name: "ליאת בן סעדון", idOnFile: true, role: "member" },
+  { name: "אבישי גרינגרד", idOnFile: true, role: "member" },
+  { name: "טלי שגב", idOnFile: true, role: "member" },
+  { name: "רווה מדר", idOnFile: true, role: "member" },
+  { name: "עידן טחן", idOnFile: true, role: "member" },
+  { name: "אנה קנטרוביץ", idOnFile: true, role: "member" },
+  { name: "בתאל בר גיורא", idOnFile: true, role: "member" },
+  { name: "רותם פלש", idOnFile: true, role: "member" },
+  { name: "גילי דגן", idOnFile: false, role: "member" },
+  { name: "יעל נאש", idOnFile: false, role: "member" },
+  { name: "שלומי קוך", idOnFile: false, role: "member" },
 ];
 
 const DEFAULT_TEAM_LEADS = {
@@ -213,10 +221,6 @@ function daysUntil() {
   return Math.ceil((EVENT_START - new Date()) / (1000 * 60 * 60 * 24));
 }
 
-function normalizeId(str) {
-  return (str || "").replace(/\D/g, "").replace(/^0+/, "");
-}
-
 function buildWhatsAppLink(phone, text) {
   const digits = (phone || "").replace(/\D/g, "");
   if (!digits) return null;
@@ -282,20 +286,20 @@ function FillRing({ filled, total, size = 34 }) {
 // ---------------------------------------------------------------------------
 // Login gate - verifies name + ID against the roster
 // ---------------------------------------------------------------------------
-function LoginScreen({ members, passwords, onVerified, onSetPassword }) {
+function LoginScreen({ members, onLogin, onSetup }) {
   const [name, setName] = useState("");
   const [query, setQuery] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [mode, setMode] = useState("login"); // "login" | "setup"
   const [idVal, setIdVal] = useState("");
   const [password, setPasswordVal] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [forgotMode, setForgotMode] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const selected = members.find((m) => m.name === name);
-  const needsId = selected && selected.id !== null;
-  const hasPassword = selected && !!passwords[selected.name];
-  const resetting = hasPassword && forgotMode;
+  const needsId = selected && selected.idOnFile;
 
   const filtered = query.trim()
     ? members.filter((m) => m.name.includes(query.trim()))
@@ -307,34 +311,41 @@ function LoginScreen({ members, passwords, onVerified, onSetPassword }) {
     setShowSuggestions(false);
     setError("");
     setPasswordVal("");
+    setNewPassword("");
     setConfirmPassword("");
     setIdVal("");
-    setForgotMode(false);
+    setMode("login");
   }
 
-  function submit() {
+  async function submitLogin() {
     if (!selected) return setError("בחר/י שם מהרשימה");
+    if (!password) return setError("הזן/י סיסמה");
+    setLoading(true);
+    setError("");
+    try {
+      await onLogin(selected.name, password);
+    } catch {
+      setError('סיסמה שגויה - או שזו הכניסה הראשונה שלך. לחץ/י על "כניסה ראשונה / שכחת סיסמה" למטה');
+    } finally {
+      setLoading(false);
+    }
+  }
 
-    if (hasPassword && !forgotMode) {
-      if (password !== passwords[selected.name]) {
-        return setError("סיסמה שגויה");
-      }
-      onVerified(selected.name);
-      return;
+  async function submitSetup() {
+    if (!selected) return setError("בחר/י שם מהרשימה");
+    if (needsId && !idVal.trim()) return setError("הזן/י ת.ז");
+    if (!newPassword || newPassword.length < 4) return setError("בחר/י סיסמה של לפחות 4 תווים");
+    if (newPassword !== confirmPassword) return setError("הסיסמאות לא תואמות");
+    setLoading(true);
+    setError("");
+    try {
+      await onSetup(selected.name, idVal, newPassword);
+    } catch (err) {
+      if (err.message === "id_mismatch") setError("תעודת הזהות לא תואמת לשם שנבחר");
+      else setError("משהו השתבש, נסה/י שוב");
+    } finally {
+      setLoading(false);
     }
-
-    // first-time setup OR password-reset flow: both require re-verifying identity then choosing a new password
-    if (needsId && normalizeId(idVal) !== normalizeId(selected.id)) {
-      return setError("תעודת הזהות לא תואמת לשם שנבחר");
-    }
-    if (!password || password.length < 4) {
-      return setError("בחר/י סיסמה של לפחות 4 תווים");
-    }
-    if (password !== confirmPassword) {
-      return setError("הסיסמאות לא תואמות");
-    }
-    onSetPassword(selected.name, password);
-    onVerified(selected.name);
   }
 
   return (
@@ -343,7 +354,7 @@ function LoginScreen({ members, passwords, onVerified, onSetPassword }) {
         <SunsetMark size={48} />
         <h2 style={{ fontFamily: FONT_HEADING }} className="text-xl mt-4 mb-1">כניסה למחנה</h2>
         <p className="text-xs mb-5" style={{ color: COLORS.textMuted }}>
-          {resetting ? "איפוס סיסמה - נזהה אותך שוב לפי ת.ז ותבחר/י סיסמה חדשה" : hasPassword ? "מזהים אותך לפי שם וסיסמה" : "כניסה ראשונה - נזהה אותך ותבחר/י סיסמה לפעם הבאה"}
+          {mode === "setup" ? "כניסה ראשונה או איפוס סיסמה - נזהה אותך ותבחר/י סיסמה" : "מזהים אותך לפי שם וסיסמה"}
         </p>
 
         <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>שם</label>
@@ -353,7 +364,7 @@ function LoginScreen({ members, passwords, onVerified, onSetPassword }) {
             onChange={(e) => {
               setQuery(e.target.value);
               setShowSuggestions(true);
-              if (name) { setName(""); setError(""); setPasswordVal(""); setConfirmPassword(""); setIdVal(""); setForgotMode(false); }
+              if (name) { setName(""); setError(""); setPasswordVal(""); setNewPassword(""); setConfirmPassword(""); setIdVal(""); setMode("login"); }
             }}
             onFocus={() => setShowSuggestions(true)}
             onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
@@ -381,26 +392,7 @@ function LoginScreen({ members, passwords, onVerified, onSetPassword }) {
           )}
         </div>
 
-        {selected && (!hasPassword || forgotMode) && needsId && (
-          <>
-            <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>תעודת זהות (לאימות זהות)</label>
-            <input
-              value={idVal}
-              onChange={(e) => { setIdVal(e.target.value); setError(""); }}
-              placeholder="הזן/י ת.ז"
-              className="w-full px-3 py-2.5 rounded-xl text-sm outline-none mb-3"
-              style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-            />
-          </>
-        )}
-        {selected && !hasPassword && !needsId && (
-          <p className="text-xs mb-3" style={{ color: COLORS.textMuted }}>אין ת.ז רשומה עבורך במערכת - בחר/י סיסמה כדי להמשיך</p>
-        )}
-        {selected && forgotMode && !needsId && (
-          <p className="text-xs mb-3" style={{ color: COLORS.danger }}>אין ת.ז רשומה עבורך במערכת - פנה/י למנהל הקמפ כדי לאפס את הסיסמה</p>
-        )}
-
-        {selected && hasPassword && !forgotMode && (
+        {selected && mode === "login" && (
           <>
             <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>סיסמה</label>
             <input
@@ -411,19 +403,33 @@ function LoginScreen({ members, passwords, onVerified, onSetPassword }) {
               className="w-full px-3 py-2.5 rounded-xl text-sm outline-none mb-1.5"
               style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
             />
-            <button onClick={() => setForgotMode(true)} className="text-xs mb-3" style={{ color: COLORS.accentDark }}>
-              שכחת סיסמה?
+            <button onClick={() => { setMode("setup"); setError(""); }} className="text-xs mb-3" style={{ color: COLORS.accentDark }}>
+              כניסה ראשונה / שכחת סיסמה?
             </button>
           </>
         )}
 
-        {selected && (!hasPassword || (forgotMode && needsId)) && (
+        {selected && mode === "setup" && (
           <>
-            <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>{forgotMode ? "סיסמה חדשה" : "בחר/י סיסמה"}</label>
+            {needsId ? (
+              <>
+                <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>תעודת זהות (לאימות זהות)</label>
+                <input
+                  value={idVal}
+                  onChange={(e) => { setIdVal(e.target.value); setError(""); }}
+                  placeholder="הזן/י ת.ז"
+                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none mb-3"
+                  style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                />
+              </>
+            ) : (
+              <p className="text-xs mb-3" style={{ color: COLORS.textMuted }}>אין ת.ז רשומה עבורך במערכת - בחר/י סיסמה כדי להמשיך</p>
+            )}
+            <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>סיסמה חדשה</label>
             <input
               type="password"
-              value={password}
-              onChange={(e) => { setPasswordVal(e.target.value); setError(""); }}
+              value={newPassword}
+              onChange={(e) => { setNewPassword(e.target.value); setError(""); }}
               placeholder="לפחות 4 תווים"
               className="w-full px-3 py-2.5 rounded-xl text-sm outline-none mb-3"
               style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
@@ -437,18 +443,21 @@ function LoginScreen({ members, passwords, onVerified, onSetPassword }) {
               className="w-full px-3 py-2.5 rounded-xl text-sm outline-none mb-3"
               style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
             />
+            <button onClick={() => { setMode("login"); setError(""); }} className="text-xs mb-3" style={{ color: COLORS.accentDark }}>
+              יש לי כבר סיסמה - חזרה לכניסה רגילה
+            </button>
           </>
         )}
 
         {error && <p className="text-xs mb-3" style={{ color: COLORS.danger }}>{error}</p>}
 
         <button
-          onClick={submit}
-          disabled={selected && forgotMode && !needsId}
+          onClick={mode === "setup" ? submitSetup : submitLogin}
+          disabled={!selected || loading}
           className="w-full py-2.5 rounded-xl text-sm font-bold"
-          style={{ background: COLORS.accent, color: COLORS.bg, fontFamily: FONT_HEADING, opacity: selected && forgotMode && !needsId ? 0.5 : 1 }}
+          style={{ background: COLORS.accent, color: COLORS.bg, fontFamily: FONT_HEADING, opacity: (!selected || loading) ? 0.5 : 1 }}
         >
-          כניסה
+          {loading ? "רגע..." : "כניסה"}
         </button>
       </div>
     </div>
@@ -833,7 +842,6 @@ function TeamLeadPicker({ team, current, members, onSet }) {
 
 function AddMemberForm({ onAdd }) {
   const [name, setName] = useState("");
-  const [id, setId] = useState("");
   return (
     <div className="rounded-2xl p-4 flex items-end gap-2 flex-wrap" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
       <div className="flex-1 min-w-[140px]">
@@ -845,17 +853,8 @@ function AddMemberForm({ onAdd }) {
           style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
         />
       </div>
-      <div className="flex-1 min-w-[120px]">
-        <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>ת.ז (אופציונלי)</label>
-        <input
-          value={id} onChange={(e) => setId(e.target.value)}
-          placeholder="תעודת זהות"
-          className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-        />
-      </div>
       <button
-        onClick={() => { if (name.trim()) { onAdd(name.trim(), id.trim() || null); setName(""); setId(""); } }}
+        onClick={() => { if (name.trim()) { onAdd(name.trim()); setName(""); } }}
         className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold"
         style={{ background: COLORS.accent, color: COLORS.bg }}
       >
@@ -1658,7 +1657,7 @@ export default function App() {
   const [extraMembers, setExtraMembers] = useState([]);
   const [removedMembers, setRemovedMembers] = useState([]);
   const [idOverrides, setIdOverrides] = useState({});
-  const [memberPasswords, setMemberPasswords] = useState({});
+  const [dbRoles, setDbRoles] = useState({});
   const [announcements, setAnnouncements] = useState([]);
   const [emergencyInfo, setEmergencyInfo] = useState({});
   const [polls, setPolls] = useState([]);
@@ -1679,6 +1678,7 @@ export default function App() {
   const [contactingRideMember, setContactingRideMember] = useState(null);
   const [toast, setToast] = useState(null);
   const [pushStatus, setPushStatus] = useState("unsupported");
+  const loadSharedDataRef = useRef(null);
 
   useEffect(() => {
     async function safeGet(key, shared) {
@@ -1690,12 +1690,12 @@ export default function App() {
       }
     }
 
-    (async () => {
+    async function loadSharedData() {
       const [
         rawAssignments, rawBudget, rawCatBudget, rawTeardown, rawPayments, rawFee,
         rawLeads, rawPhones, rawRides, rawFeeOv, rawEmails, rawChecklists,
-        rawManualTeam, rawLog, rawLogins, rawExtra, rawRemoved, rawPasswords,
-        rawAnn, rawEmg, rawPolls, rawMe, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories,
+        rawManualTeam, rawLog, rawLogins, rawExtra, rawRemoved,
+        rawAnn, rawEmg, rawPolls, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories,
         rawAllocation, rawPrivateMessages,
       ] = await Promise.all([
         safeGet("shift-assignments", true),
@@ -1715,11 +1715,9 @@ export default function App() {
         safeGet("login-history", true),
         safeGet("extra-members", true),
         safeGet("removed-members", true),
-        safeGet("member-passwords", true),
         safeGet("announcements", true),
         safeGet("emergency-info", true),
         safeGet("polls", true),
-        safeGet("my-identity", false),
         safeGet("budget-params", true),
         safeGet("budget-expenses", true),
         safeGet("camp-equipment", true),
@@ -1760,12 +1758,10 @@ export default function App() {
       setLoginHistory(rawLogins ? JSON.parse(rawLogins) : []);
       setExtraMembers(rawExtra ? JSON.parse(rawExtra) : []);
       setRemovedMembers(rawRemoved ? JSON.parse(rawRemoved) : []);
-      setMemberPasswords(rawPasswords ? JSON.parse(rawPasswords) : {});
       setAnnouncements(rawAnn ? JSON.parse(rawAnn) : []);
       setEmergencyInfo(rawEmg ? JSON.parse(rawEmg) : {});
       setPolls(rawPolls ? JSON.parse(rawPolls) : []);
       setPrivateMessages(rawPrivateMessages ? JSON.parse(rawPrivateMessages) : []);
-      if (rawMe) setIdentity(rawMe);
       if (rawBudgetParams) {
         try {
           setBudgetParams((prev) => ({ ...prev, ...JSON.parse(rawBudgetParams) }));
@@ -1774,7 +1770,20 @@ export default function App() {
       setBudgetExpenses(rawBudgetExpenses ? JSON.parse(rawBudgetExpenses) : []);
       setCampEquipment(rawEquipment ? JSON.parse(rawEquipment) : []);
       setExtraBudgetCategories(rawExtraCategories ? JSON.parse(rawExtraCategories) : []);
+    }
+    loadSharedDataRef.current = loadSharedData;
 
+    (async () => {
+      // kv_store now requires a logged-in session (see the security
+      // migration) - loadSharedData() only returns real data once
+      // there's an active Supabase Auth session. If someone already has
+      // one (returning visit), pick it back up here; otherwise this
+      // just loads harmless empty defaults and the login screen shows.
+      const restoredName = await getSignedInMemberName().catch(() => null);
+      await loadSharedData();
+      if (restoredName) {
+        await applyIdentity(restoredName, false);
+      }
       setLoading(false);
     })();
   }, []);
@@ -1947,23 +1956,40 @@ export default function App() {
     }
   }
 
-  async function handleVerified(name) {
+  async function applyIdentity(name, logHistory = true) {
     setIdentity(name);
     try {
-      await window.storage.set("my-identity", name, false);
+      const roles = await getAllMemberRoles();
+      setDbRoles(roles);
     } catch {}
-    const entry = { name, ts: Date.now() };
-    const next = [entry, ...loginHistory].slice(0, 300);
-    setLoginHistory(next);
-    try {
-      await window.storage.set("login-history", JSON.stringify(next), true);
-    } catch {}
+    if (logHistory) {
+      try {
+        const fresh = await window.storage.get("login-history", true);
+        const current = fresh && fresh.value ? JSON.parse(fresh.value) : [];
+        const entry = { name, ts: Date.now() };
+        const next = [entry, ...current].slice(0, 300);
+        setLoginHistory(next);
+        await window.storage.set("login-history", JSON.stringify(next), true);
+      } catch {}
+    }
+  }
+
+  async function handleLogin(name, password) {
+    await signInMember(name, password);
+    if (loadSharedDataRef.current) await loadSharedDataRef.current();
+    await applyIdentity(name, true);
+  }
+
+  async function handleSetup(name, id, password) {
+    await setMemberPasswordAndSignIn(name, id, password);
+    if (loadSharedDataRef.current) await loadSharedDataRef.current();
+    await applyIdentity(name, true);
   }
 
   async function logout() {
     setIdentity(null);
     try {
-      await window.storage.delete("my-identity", false);
+      await signOutMember();
     } catch {}
   }
 
@@ -2180,11 +2206,12 @@ export default function App() {
     }
   }
 
-  async function addMember(name, id) {
-    const next = [...extraMembers, { name, id: id || null, role: "member" }];
+  async function addMember(name) {
+    const next = [...extraMembers, { name, idOnFile: false, role: "member" }];
     setExtraMembers(next);
     try {
       await window.storage.set("extra-members", JSON.stringify(next), true);
+      await addMemberRow(name, "member");
       showToast(`${name} נוסף/ה לקמפ`, "ok");
       logActivity("הוספת חבר קמפ", name);
     } catch {
@@ -2211,29 +2238,6 @@ export default function App() {
       await window.storage.set("removed-members", JSON.stringify(next), true);
       showToast(`${name} שוחזר/ה`, "ok");
       logActivity("שחזור חבר קמפ", name);
-    } catch {
-      showToast("שמירה נכשלה", "error");
-    }
-  }
-
-  async function setMemberPassword(name, password) {
-    const next = { ...memberPasswords, [name]: password };
-    setMemberPasswords(next);
-    try {
-      await window.storage.set("member-passwords", JSON.stringify(next), true);
-    } catch {
-      showToast("שמירה נכשלה", "error");
-    }
-  }
-
-  async function clearMemberPassword(name) {
-    const next = { ...memberPasswords };
-    delete next[name];
-    setMemberPasswords(next);
-    try {
-      await window.storage.set("member-passwords", JSON.stringify(next), true);
-      showToast(`הסיסמה של ${name} אופסה`, "ok");
-      logActivity("איפוס סיסמה", name);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -2401,8 +2405,11 @@ export default function App() {
   }
 
   const allMembers = useMemo(
-    () => [...MEMBERS, ...extraMembers].filter((m) => !removedMembers.includes(m.name)).sort((a, b) => a.name.localeCompare(b.name, "he")),
-    [extraMembers, removedMembers]
+    () => [...MEMBERS, ...extraMembers]
+      .filter((m) => !removedMembers.includes(m.name))
+      .map((m) => ({ ...m, role: dbRoles[m.name] || m.role }))
+      .sort((a, b) => a.name.localeCompare(b.name, "he")),
+    [extraMembers, removedMembers, dbRoles]
   );
 
   const allBudgetCategories = useMemo(
@@ -2615,7 +2622,7 @@ export default function App() {
     return (
       <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 700, fontWeight: 700 }}>
         <style>{FONT_IMPORT}</style>
-        <LoginScreen members={allMembers} passwords={memberPasswords} onVerified={handleVerified} onSetPassword={setMemberPassword} />
+        <LoginScreen members={allMembers} onLogin={handleLogin} onSetup={handleSetup} />
       </div>
     );
   }
@@ -2753,20 +2760,14 @@ export default function App() {
             </button>
             {showMemberList && (
               <div>
+                <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
+                  איפוס סיסמה כבר לא נעשה על ידי מנהל - כל חבר/ה עושה זאת בעצמו/ה במסך הכניסה, דרך "כניסה ראשונה / שכחת סיסמה", בעזרת תעודת הזהות שלו/ה.
+                </p>
                 <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
                   {allMembers.map((m) => (
                     <div key={m.name} className="flex items-center justify-between text-sm rounded-lg px-3 py-1.5" style={{ background: COLORS.surface }}>
                       <span>{m.name}{m.role === "admin" && <span className="text-xs" style={{ color: COLORS.accentDark }}> (מנהל)</span>}</span>
                       <div className="flex items-center gap-1">
-                        {memberPasswords[m.name] && (
-                          <button
-                            onClick={() => { if (window.confirm(`לאפס את הסיסמה של ${m.name}? הוא/היא יצטרך/תצטרך לבחור סיסמה חדשה בכניסה הבאה.`)) clearMemberPassword(m.name); }}
-                            className="text-xs px-2 py-1 rounded-lg"
-                            style={{ color: COLORS.textMuted }}
-                          >
-                            איפוס סיסמה
-                          </button>
-                        )}
                         <button
                           onClick={() => { if (window.confirm(`להסיר את ${m.name} מהקמפ?`)) removeMember(m.name); }}
                           className="text-xs px-2 py-1 rounded-lg"
