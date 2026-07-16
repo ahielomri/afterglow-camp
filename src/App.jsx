@@ -342,7 +342,7 @@ function LoginScreen({ members, onLogin, onSetup }) {
       await onSetup(selected.name, idVal, newPassword);
     } catch (err) {
       if (err.message === "id_mismatch") setError("תעודת הזהות לא תואמת לשם שנבחר");
-      else setError("משהו השתבש, נסה/י שוב");
+      else setError(`משהו השתבש: ${err.message || err}`);
     } finally {
       setLoading(false);
     }
