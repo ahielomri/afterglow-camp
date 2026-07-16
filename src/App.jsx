@@ -16,6 +16,9 @@ import {
   setMyEmergencyInfo,
   listAllocationInfo,
   setMyAllocationInfo,
+  addTeamMemberRow,
+  removeTeamMemberRow,
+  adminSetMemberId,
 } from "./storage.js";
 
 // ---------------------------------------------------------------------------
@@ -55,7 +58,7 @@ const FONT_NUM = `"Figtree", "Assistant", sans-serif`;
 // ---------------------------------------------------------------------------
 const MEMBERS = [
   { name: "אורנה חזוט צורים", idOnFile: true, role: "admin" },
-  { name: "עומרי אחיאל", idOnFile: true, role: "admin" },
+  { name: "עומרי אחיאל", idOnFile: true, role: "owner" },
   { name: "שרון אור", idOnFile: true, role: "member" },
   { name: "ליאת ציטרון", idOnFile: true, role: "member" },
   { name: "איתי כהן", idOnFile: true, role: "member" },
@@ -849,6 +852,7 @@ function TeamLeadPicker({ team, current, members, onSet }) {
 
 function AddMemberForm({ onAdd }) {
   const [name, setName] = useState("");
+  const [id, setId] = useState("");
   return (
     <div className="rounded-2xl p-4 flex items-end gap-2 flex-wrap" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
       <div className="flex-1 min-w-[140px]">
@@ -860,8 +864,17 @@ function AddMemberForm({ onAdd }) {
           style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
         />
       </div>
+      <div className="flex-1 min-w-[120px]">
+        <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>ת.ז (אופציונלי, לאימות זהות)</label>
+        <input
+          value={id} onChange={(e) => setId(e.target.value)}
+          placeholder="תעודת זהות"
+          className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+      </div>
       <button
-        onClick={() => { if (name.trim()) { onAdd(name.trim()); setName(""); } }}
+        onClick={() => { if (name.trim()) { onAdd(name.trim(), id.trim() || null); setName(""); setId(""); } }}
         className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold"
         style={{ background: COLORS.accent, color: COLORS.bg }}
       >
@@ -2222,13 +2235,16 @@ export default function App() {
     }
   }
 
-  async function addMember(name) {
-    const next = [...extraMembers, { name, idOnFile: false, role: "member" }];
+  async function addMember(name, id) {
+    const next = [...extraMembers, { name, idOnFile: !!id, role: "member" }];
     setExtraMembers(next);
     try {
       await window.storage.set("extra-members", JSON.stringify(next), true);
       await addMemberRow(name, "member");
-      showToast(`${name} נוסף/ה לקמפ`, "ok");
+      if (id) {
+        await adminSetMemberId(name, id);
+      }
+      showToast(`${name} נוסף/ה לקמפ${id ? " עם ת.ז" : ""}`, "ok");
       logActivity("הוספת חבר קמפ", name);
     } catch {
       showToast("שמירה נכשלה", "error");
@@ -2387,6 +2403,7 @@ export default function App() {
     setManualTeamMembers(next);
     try {
       await window.storage.set("manual-team-members", JSON.stringify(next), true);
+      await addTeamMemberRow(teamName, name);
       logActivity("שיוך ידני לצוות", `${name} → ${teamName}`);
     } catch {
       showToast("שמירה נכשלה", "error");
@@ -2398,6 +2415,7 @@ export default function App() {
     setManualTeamMembers(next);
     try {
       await window.storage.set("manual-team-members", JSON.stringify(next), true);
+      await removeTeamMemberRow(teamName, name);
       logActivity("הסרת שיוך ידני לצוות", `${name} ← ${teamName}`);
     } catch {
       showToast("שמירה נכשלה", "error");
@@ -2434,8 +2452,8 @@ export default function App() {
   );
 
   const currentMember = allMembers.find((m) => m.name === identity);
-  const isAdmin = currentMember?.role === "admin";
-  const isOmri = identity === "עומרי אחיאל";
+  const isOwner = currentMember?.role === "owner";
+  const isAdmin = currentMember?.role === "admin" || isOwner;
   const myLeadTeam = !isAdmin ? Object.keys(teamLeads).find((t) => teamLeads[t] === identity) : null;
   const canEditBudget = isAdmin || !!myLeadTeam;
   const canManageFinances = isAdmin || isInTeam("צוות תקציב");
@@ -2782,7 +2800,7 @@ export default function App() {
                 <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
                   {allMembers.map((m) => (
                     <div key={m.name} className="flex items-center justify-between text-sm rounded-lg px-3 py-1.5" style={{ background: COLORS.surface }}>
-                      <span>{m.name}{m.role === "admin" && <span className="text-xs" style={{ color: COLORS.accentDark }}> (מנהל)</span>}</span>
+                      <span>{m.name}{m.role === "owner" && <span className="text-xs" style={{ color: COLORS.accentDark }}> (אדריכל)</span>}{m.role === "admin" && <span className="text-xs" style={{ color: COLORS.accentDark }}> (מנהל)</span>}</span>
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => { if (window.confirm(`להסיר את ${m.name} מהקמפ?`)) removeMember(m.name); }}
@@ -2815,7 +2833,7 @@ export default function App() {
               </div>
             )}
 
-            {isOmri && (
+            {isOwner && (
               <>
                 <button
                   onClick={() => setShowActivityLog(!showActivityLog)}
