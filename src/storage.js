@@ -120,7 +120,7 @@ export async function setMemberPasswordAndSignIn(name, id, newPassword) {
       const ctx = error.context;
       if (ctx && typeof ctx.json === "function") {
         const parsed = await ctx.json();
-        message = parsed.error || message;
+        message = parsed.detail ? `${parsed.error}: ${parsed.detail}` : (parsed.error || message);
       }
     } catch {
       // ignore - fall back to generic message
