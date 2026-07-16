@@ -9,6 +9,13 @@ import {
   getSignedInMemberName,
   getAllMemberRoles,
   addMemberRow,
+  listMyPrivateMessages,
+  sendPrivateMessageRow,
+  deletePrivateMessageRow,
+  listEmergencyInfo,
+  setMyEmergencyInfo,
+  listAllocationInfo,
+  setMyAllocationInfo,
 } from "./storage.js";
 
 // ---------------------------------------------------------------------------
@@ -1695,8 +1702,7 @@ export default function App() {
         rawAssignments, rawBudget, rawCatBudget, rawTeardown, rawPayments, rawFee,
         rawLeads, rawPhones, rawRides, rawFeeOv, rawEmails, rawChecklists,
         rawManualTeam, rawLog, rawLogins, rawExtra, rawRemoved,
-        rawAnn, rawEmg, rawPolls, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories,
-        rawAllocation, rawPrivateMessages,
+        rawAnn, rawPolls, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories,
       ] = await Promise.all([
         safeGet("shift-assignments", true),
         safeGet("budget-items", true),
@@ -1716,14 +1722,24 @@ export default function App() {
         safeGet("extra-members", true),
         safeGet("removed-members", true),
         safeGet("announcements", true),
-        safeGet("emergency-info", true),
         safeGet("polls", true),
         safeGet("budget-params", true),
         safeGet("budget-expenses", true),
         safeGet("camp-equipment", true),
         safeGet("extra-budget-categories", true),
-        safeGet("allocation-info", true),
-        safeGet("private-messages", true),
+      ]);
+
+      async function safeCall(fn, fallback) {
+        try {
+          return await fn();
+        } catch {
+          return fallback;
+        }
+      }
+      const [emergencyMap, allocationMap, myMessages] = await Promise.all([
+        safeCall(() => listEmergencyInfo(), {}),
+        safeCall(() => listAllocationInfo(), {}),
+        safeCall(() => listMyPrivateMessages(), []),
       ]);
 
       setAssignments(rawAssignments ? JSON.parse(rawAssignments) : {});
@@ -1749,7 +1765,6 @@ export default function App() {
 
       setMemberPhones(rawPhones ? JSON.parse(rawPhones) : {});
       setRideInfo(rawRides ? JSON.parse(rawRides) : {});
-      setAllocationInfo(rawAllocation ? JSON.parse(rawAllocation) : {});
       setFeeOverrides(rawFeeOv ? JSON.parse(rawFeeOv) : {});
       setMemberEmails(rawEmails ? JSON.parse(rawEmails) : {});
       setChecklistState(rawChecklists ? JSON.parse(rawChecklists) : {});
@@ -1759,9 +1774,10 @@ export default function App() {
       setExtraMembers(rawExtra ? JSON.parse(rawExtra) : []);
       setRemovedMembers(rawRemoved ? JSON.parse(rawRemoved) : []);
       setAnnouncements(rawAnn ? JSON.parse(rawAnn) : []);
-      setEmergencyInfo(rawEmg ? JSON.parse(rawEmg) : {});
+      setEmergencyInfo(emergencyMap);
       setPolls(rawPolls ? JSON.parse(rawPolls) : []);
-      setPrivateMessages(rawPrivateMessages ? JSON.parse(rawPrivateMessages) : []);
+      setPrivateMessages(myMessages);
+      setAllocationInfo(allocationMap);
       if (rawBudgetParams) {
         try {
           setBudgetParams((prev) => ({ ...prev, ...JSON.parse(rawBudgetParams) }));
@@ -2164,7 +2180,7 @@ export default function App() {
     const next = { ...allocationInfo, [name]: data };
     setAllocationInfo(next);
     try {
-      await window.storage.set("allocation-info", JSON.stringify(next), true);
+      await setMyAllocationInfo(name, data);
       logActivity("עדכון הקצאה", name);
     } catch {
       showToast("שמירה נכשלה", "error");
@@ -2287,7 +2303,7 @@ export default function App() {
     const next = { ...emergencyInfo, [name]: data };
     setEmergencyInfo(next);
     try {
-      await window.storage.set("emergency-info", JSON.stringify(next), true);
+      await setMyEmergencyInfo(name, data);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -2331,10 +2347,10 @@ export default function App() {
 
   async function sendPrivateMessage(to, text) {
     if (!to || !text.trim()) return;
-    const next = [{ id: Date.now().toString(), from: identity, to, text: text.trim(), ts: Date.now() }, ...privateMessages];
-    setPrivateMessages(next);
     try {
-      await window.storage.set("private-messages", JSON.stringify(next), true);
+      await sendPrivateMessageRow(identity, to, text.trim());
+      const fresh = await listMyPrivateMessages();
+      setPrivateMessages(fresh);
       showToast(`ההודעה נשלחה ל-${to}`, "ok");
     } catch {
       showToast("שמירה נכשלה", "error");
@@ -2342,10 +2358,10 @@ export default function App() {
   }
 
   async function removePrivateMessage(id) {
-    const next = privateMessages.filter((m) => m.id !== id);
-    setPrivateMessages(next);
     try {
-      await window.storage.set("private-messages", JSON.stringify(next), true);
+      await deletePrivateMessageRow(id);
+      const fresh = await listMyPrivateMessages();
+      setPrivateMessages(fresh);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
