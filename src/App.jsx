@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Users, CalendarDays, Clock, Flame, Tent, Sparkles, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket } from "lucide-react";
+import { Users, CalendarDays, Clock, Flame, Tent, Sparkles, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle } from "lucide-react";
 import { pushSupported, pushPermission, enablePush, disablePush } from "./push.js";
 import { uploadFile } from "./storage.js";
 
@@ -215,6 +215,17 @@ function daysUntil() {
 
 function normalizeId(str) {
   return (str || "").replace(/\D/g, "").replace(/^0+/, "");
+}
+
+function buildWhatsAppLink(phone, text) {
+  const digits = (phone || "").replace(/\D/g, "");
+  if (!digits) return null;
+  const intl = digits.startsWith("0") ? `972${digits.slice(1)}` : digits;
+  return `https://wa.me/${intl}?text=${encodeURIComponent(text)}`;
+}
+
+function duesReminderMessage(name, remaining) {
+  return `היי ${name} 🌅\nמה שלומך?\nרק תזכורת קטנה - נשארו לך ₪${remaining.toLocaleString()} לתשלום עבור דמי הקמפ ל-Sunset Afterglow.\nאפשר להסדיר מתי שנוח לך 🙏\nתודה!`;
 }
 
 // ---------------------------------------------------------------------------
@@ -875,6 +886,92 @@ function YesNoButtons({ value, onChange }) {
   );
 }
 
+function MemberSearchPicker({ members, value, onSelect, placeholder }) {
+  const [query, setQuery] = useState(value || "");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const filtered = query.trim()
+    ? members.filter((m) => m.name.includes(query.trim()))
+    : members;
+
+  function pick(name) {
+    setQuery(name);
+    setShowSuggestions(false);
+    onSelect(name);
+  }
+
+  return (
+    <div className="relative">
+      <input
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setShowSuggestions(true);
+          onSelect("");
+        }}
+        onFocus={() => setShowSuggestions(true)}
+        onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+        placeholder={placeholder || "הקלד/י או בחר/י שם..."}
+        autoComplete="off"
+        className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      />
+      {showSuggestions && filtered.length > 0 && (
+        <div
+          className="absolute z-10 w-full mt-1 rounded-xl overflow-hidden max-h-48 overflow-y-auto"
+          style={{ background: COLORS.input, border: `1px solid ${COLORS.divider}`, boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}
+        >
+          {filtered.map((m) => (
+            <button
+              key={m.name}
+              onMouseDown={() => pick(m.name)}
+              className="w-full text-right px-3 py-2 text-sm"
+              style={{ color: COLORS.text, background: value === m.name ? COLORS.accentLight : "transparent" }}
+            >
+              {m.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PrivateMessageForm({ members, onSend }) {
+  const [to, setTo] = useState("");
+  const [text, setText] = useState("");
+
+  function submit() {
+    if (!to || !text.trim()) return;
+    onSend(to, text);
+    setTo("");
+    setText("");
+  }
+
+  return (
+    <div className="rounded-2xl p-4 mb-4 space-y-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>אל</label>
+      <MemberSearchPicker members={members} value={to} onSelect={setTo} placeholder="הקלד/י או בחר/י שם..." />
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="ההודעה שלך..."
+        rows={2}
+        className="w-full px-3 py-2 rounded-xl text-sm outline-none resize-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      />
+      <button
+        onClick={submit}
+        disabled={!to || !text.trim()}
+        className="px-4 py-2 rounded-full text-sm font-semibold"
+        style={{ background: COLORS.accent, color: COLORS.bg, opacity: (!to || !text.trim()) ? 0.5 : 1 }}
+      >
+        שליחה
+      </button>
+    </div>
+  );
+}
+
 function AllocationWizard({ data, onChange }) {
   const d = data || {};
   const [local, setLocal] = useState({
@@ -1497,6 +1594,8 @@ export default function App() {
   const [announcements, setAnnouncements] = useState([]);
   const [emergencyInfo, setEmergencyInfo] = useState({});
   const [polls, setPolls] = useState([]);
+  const [privateMessages, setPrivateMessages] = useState([]);
+  const [showPrivateMsgForm, setShowPrivateMsgForm] = useState(false);
   const [expandedEmergency, setExpandedEmergency] = useState(null);
   const [showEmergencyList, setShowEmergencyList] = useState(false);
   const [showMemberList, setShowMemberList] = useState(false);
@@ -1528,7 +1627,7 @@ export default function App() {
         rawLeads, rawPhones, rawRides, rawFeeOv, rawEmails, rawChecklists,
         rawManualTeam, rawLog, rawLogins, rawExtra, rawRemoved, rawPasswords,
         rawAnn, rawEmg, rawPolls, rawMe, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories,
-        rawAllocation,
+        rawAllocation, rawPrivateMessages,
       ] = await Promise.all([
         safeGet("shift-assignments", true),
         safeGet("budget-items", true),
@@ -1557,6 +1656,7 @@ export default function App() {
         safeGet("camp-equipment", true),
         safeGet("extra-budget-categories", true),
         safeGet("allocation-info", true),
+        safeGet("private-messages", true),
       ]);
 
       setAssignments(rawAssignments ? JSON.parse(rawAssignments) : {});
@@ -1595,6 +1695,7 @@ export default function App() {
       setAnnouncements(rawAnn ? JSON.parse(rawAnn) : []);
       setEmergencyInfo(rawEmg ? JSON.parse(rawEmg) : {});
       setPolls(rawPolls ? JSON.parse(rawPolls) : []);
+      setPrivateMessages(rawPrivateMessages ? JSON.parse(rawPrivateMessages) : []);
       if (rawMe) setIdentity(rawMe);
       if (rawBudgetParams) {
         try {
@@ -2155,6 +2256,28 @@ export default function App() {
     }
   }
 
+  async function sendPrivateMessage(to, text) {
+    if (!to || !text.trim()) return;
+    const next = [{ id: Date.now().toString(), from: identity, to, text: text.trim(), ts: Date.now() }, ...privateMessages];
+    setPrivateMessages(next);
+    try {
+      await window.storage.set("private-messages", JSON.stringify(next), true);
+      showToast(`ההודעה נשלחה ל-${to}`, "ok");
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function removePrivateMessage(id) {
+    const next = privateMessages.filter((m) => m.id !== id);
+    setPrivateMessages(next);
+    try {
+      await window.storage.set("private-messages", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
   function teamMembers(teamName) {
     const teamShiftIds = SHIFTS.filter((s) => s.team === teamName).map((s) => s.id);
     const names = new Set();
@@ -2387,6 +2510,10 @@ export default function App() {
   const membersPendingAllocation = membersWithAllocation.filter((m) => allocationInfo[m.name]?.used !== "yes");
   const membersWithExtraAllocation = allMembers.filter((m) => allocationInfo[m.name]?.hasExtra === "yes");
   const membersWithoutAllocationInfo = allMembers.filter((m) => !allocationInfo[m.name]);
+
+  const myPrivateMessages = privateMessages
+    .filter((m) => m.to === identity || m.from === identity)
+    .sort((a, b) => b.ts - a.ts);
 
   const dashboardTabs = useMemo(() => {
     if (isAdmin) {
@@ -3239,6 +3366,52 @@ export default function App() {
                 })}
               </div>
             )}
+
+            <div className="mt-8 pt-6 border-t" style={{ borderColor: COLORS.divider }}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
+                  <MessageCircle size={15} /> הודעות אישיות
+                </h3>
+                {!showPrivateMsgForm && (
+                  <button
+                    onClick={() => setShowPrivateMsgForm(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
+                    style={{ background: COLORS.accent, color: COLORS.bg }}
+                  >
+                    <Plus size={13} /> הודעה חדשה
+                  </button>
+                )}
+              </div>
+              {showPrivateMsgForm && (
+                <PrivateMessageForm
+                  members={allMembers.filter((m) => m.name !== identity)}
+                  onSend={(to, text) => { sendPrivateMessage(to, text); setShowPrivateMsgForm(false); }}
+                />
+              )}
+              {myPrivateMessages.length === 0 ? (
+                <p className="text-xs" style={{ color: COLORS.textMuted }}>אין עדיין הודעות אישיות.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {myPrivateMessages.map((m) => {
+                    const incoming = m.to === identity;
+                    return (
+                      <div key={m.id} className="rounded-xl px-3 py-2 text-xs flex items-start justify-between gap-2" style={{ background: incoming ? COLORS.accentLight : COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                        <div className="min-w-0">
+                          <div className="font-semibold mb-0.5" style={{ color: COLORS.accentDark }}>
+                            {incoming ? `מאת ${m.from}` : `אל ${m.to}`}
+                          </div>
+                          <div className="whitespace-pre-wrap">{m.text}</div>
+                          <div className="mt-1" style={{ color: COLORS.textMuted }}>{new Date(m.ts).toLocaleString("he-IL")}</div>
+                        </div>
+                        {(m.from === identity || isAdmin) && (
+                          <button onClick={() => removePrivateMessage(m.id)} style={{ color: COLORS.textMuted }} className="shrink-0"><Trash2 size={13} /></button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -3468,6 +3641,21 @@ export default function App() {
                             style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
                           />
                         </div>
+                        {remaining > 0 && (
+                          memberPhones[m.name] ? (
+                            <a
+                              href={buildWhatsAppLink(memberPhones[m.name], duesReminderMessage(m.name, remaining))}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold"
+                              style={{ background: "#25D366", color: "white" }}
+                            >
+                              <MessageCircle size={13} /> שליחת תזכורת בוואטסאפ
+                            </a>
+                          ) : (
+                            <div className="text-xs" style={{ color: COLORS.textMuted }}>אין מספר טלפון רשום ל-{m.name} - אי אפשר לשלוח תזכורת (אפשר להוסיף בטאב "חברי קמפ")</div>
+                          )
+                        )}
                         {list.length > 0 && (
                           <div className="space-y-1">
                             {list.map((p) => (
