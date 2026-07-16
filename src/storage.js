@@ -178,6 +178,31 @@ export async function addMemberRow(name, role = "member") {
   if (error) throw error;
 }
 
+// Admin-only: registers a real ID number (hashed server-side) for a
+// member, giving them real ID verification instead of the weaker
+// "no ID on file" path. Only succeeds if the caller is actually an
+// admin/owner - checked inside the Edge Function itself.
+export async function adminSetMemberId(name, idNumber) {
+  const { data, error } = await supabase.functions.invoke("admin-set-member-id", {
+    body: { name, id: idNumber },
+  });
+  if (error) {
+    let message = "set_id_failed";
+    try {
+      const ctx = error.context;
+      if (ctx && typeof ctx.json === "function") {
+        const parsed = await ctx.json();
+        message = parsed.detail ? `${parsed.error}: ${parsed.detail}` : (parsed.error || message);
+      }
+    } catch {
+      // ignore - fall back to generic message
+    }
+    throw new Error(message);
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
 // ---------------------------------------------------------------------------
 // Per-row tables (added by security migration part 2). RLS on each of
 // these enforces "only the owner (and admins where noted) can read this
@@ -262,5 +287,22 @@ export async function setMyAllocationInfo(name, info) {
     has_extra: info.hasExtra || null,
     updated_at: new Date().toISOString(),
   });
+  if (error) throw error;
+}
+
+// Keeps the real team_members table (used to gate finance permissions
+// for the budget team) in sync whenever an admin manually assigns or
+// removes someone from a team.
+export async function addTeamMemberRow(teamName, memberName) {
+  const { error } = await supabase.from("team_members").insert({ team_name: teamName, member_name: memberName });
+  if (error) throw error;
+}
+
+export async function removeTeamMemberRow(teamName, memberName) {
+  const { error } = await supabase
+    .from("team_members")
+    .delete()
+    .eq("team_name", teamName)
+    .eq("member_name", memberName);
   if (error) throw error;
 }
