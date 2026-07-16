@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Users, CalendarDays, Clock, Flame, Tent, Sparkles, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin } from "lucide-react";
+import { Users, CalendarDays, Clock, Flame, Tent, Sparkles, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket } from "lucide-react";
 import { pushSupported, pushPermission, enablePush, disablePush } from "./push.js";
 import { uploadFile } from "./storage.js";
 
@@ -875,6 +875,49 @@ function YesNoButtons({ value, onChange }) {
   );
 }
 
+function AllocationWizard({ data, onChange }) {
+  const d = data || {};
+  const [local, setLocal] = useState({
+    hasAllocation: d.hasAllocation,
+    used: d.used,
+    hasExtra: d.hasExtra,
+  });
+  const [saved, setSaved] = useState(false);
+  const set = (patch) => { setLocal({ ...local, ...patch }); setSaved(false); };
+
+  return (
+    <div className="rounded-2xl p-4 space-y-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <div>
+        <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>יש לך הקצאה למידברן?</label>
+        <YesNoButtons value={local.hasAllocation} onChange={(v) => set({ hasAllocation: v })} />
+      </div>
+
+      {local.hasAllocation === "yes" && (
+        <div>
+          <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>נוצלה ההקצאה (לאחר שעברה המכירה)?</label>
+          <YesNoButtons value={local.used} onChange={(v) => set({ used: v })} />
+        </div>
+      )}
+
+      <div>
+        <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>יש לך הקצאה נוספת?</label>
+        <YesNoButtons value={local.hasExtra} onChange={(v) => set({ hasExtra: v })} />
+      </div>
+
+      <div className="flex items-center gap-3 pt-1">
+        <button
+          onClick={() => { onChange(local); setSaved(true); }}
+          className="px-4 py-2 rounded-full text-sm font-semibold"
+          style={{ background: COLORS.accent, color: COLORS.bg }}
+        >
+          שמירה
+        </button>
+        {saved && <span className="text-xs" style={{ color: COLORS.accent2Dark }}>✓ נשמר</span>}
+      </div>
+    </div>
+  );
+}
+
 function RideWizard({ data, onChange }) {
   const d = data || {};
   const [local, setLocal] = useState({
@@ -1421,6 +1464,7 @@ export default function App() {
   const [teamLeads, setTeamLeadsState] = useState({});
   const [memberPhones, setMemberPhones] = useState({});
   const [rideInfo, setRideInfo] = useState({});
+  const [allocationInfo, setAllocationInfo] = useState({});
   const [feeOverrides, setFeeOverrides] = useState({});
   const [memberEmails, setMemberEmails] = useState({});
   const [checklistState, setChecklistState] = useState({});
@@ -1484,6 +1528,7 @@ export default function App() {
         rawLeads, rawPhones, rawRides, rawFeeOv, rawEmails, rawChecklists,
         rawManualTeam, rawLog, rawLogins, rawExtra, rawRemoved, rawPasswords,
         rawAnn, rawEmg, rawPolls, rawMe, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories,
+        rawAllocation,
       ] = await Promise.all([
         safeGet("shift-assignments", true),
         safeGet("budget-items", true),
@@ -1511,6 +1556,7 @@ export default function App() {
         safeGet("budget-expenses", true),
         safeGet("camp-equipment", true),
         safeGet("extra-budget-categories", true),
+        safeGet("allocation-info", true),
       ]);
 
       setAssignments(rawAssignments ? JSON.parse(rawAssignments) : {});
@@ -1536,6 +1582,7 @@ export default function App() {
 
       setMemberPhones(rawPhones ? JSON.parse(rawPhones) : {});
       setRideInfo(rawRides ? JSON.parse(rawRides) : {});
+      setAllocationInfo(rawAllocation ? JSON.parse(rawAllocation) : {});
       setFeeOverrides(rawFeeOv ? JSON.parse(rawFeeOv) : {});
       setMemberEmails(rawEmails ? JSON.parse(rawEmails) : {});
       setChecklistState(rawChecklists ? JSON.parse(rawChecklists) : {});
@@ -1912,6 +1959,17 @@ export default function App() {
     setRideInfo(next);
     try {
       await window.storage.set("ride-info", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function setAllocationData(name, data) {
+    const next = { ...allocationInfo, [name]: data };
+    setAllocationInfo(next);
+    try {
+      await window.storage.set("allocation-info", JSON.stringify(next), true);
+      logActivity("עדכון הקצאה", name);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -2324,6 +2382,12 @@ export default function App() {
     [allMembers, rideInfo]
   );
 
+  const membersWithAllocation = allMembers.filter((m) => allocationInfo[m.name]?.hasAllocation === "yes");
+  const membersUsedAllocation = membersWithAllocation.filter((m) => allocationInfo[m.name]?.used === "yes");
+  const membersPendingAllocation = membersWithAllocation.filter((m) => allocationInfo[m.name]?.used !== "yes");
+  const membersWithExtraAllocation = allMembers.filter((m) => allocationInfo[m.name]?.hasExtra === "yes");
+  const membersWithoutAllocationInfo = allMembers.filter((m) => !allocationInfo[m.name]);
+
   const dashboardTabs = useMemo(() => {
     if (isAdmin) {
       return [
@@ -2398,6 +2462,7 @@ export default function App() {
           { id: "board", label: "לוח מודעות", icon: Megaphone },
           { id: "budget", label: "הוצאות", icon: Wallet },
           ...(canManageFinances ? [{ id: "finances", label: "כספים", icon: CreditCard }] : []),
+          ...(isAdmin ? [{ id: "allocations", label: "לוח הקצאות", icon: Ticket }] : []),
           { id: "teams", label: "צוותים", icon: Tent },
           { id: "rides", label: "התניידות", icon: Car },
           { id: "contacts", label: "חברי קמפ", icon: Phone },
@@ -2854,6 +2919,22 @@ export default function App() {
               {openPersonalSection === "ride" && (
                 <div className="mt-3">
                   <RideWizard data={rideInfo[identity]} onChange={(d) => setRideData(identity, d)} />
+                </div>
+              )}
+            </div>
+
+            <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
+              <button
+                onClick={() => setOpenPersonalSection(openPersonalSection === "allocation" ? null : "allocation")}
+                className="w-full flex items-center justify-between text-sm font-bold"
+                style={{ color: COLORS.accentDark }}
+              >
+                <span className="flex items-center gap-2"><Ticket size={15} /> הקצאה למידברן</span>
+                <ChevronDown size={15} style={{ transform: openPersonalSection === "allocation" ? "rotate(180deg)" : "none" }} />
+              </button>
+              {openPersonalSection === "allocation" && (
+                <div className="mt-3">
+                  <AllocationWizard data={allocationInfo[identity]} onChange={(d) => setAllocationData(identity, d)} />
                 </div>
               )}
             </div>
@@ -3758,6 +3839,61 @@ export default function App() {
           </div>
         )}
 
+        {tab === "allocations" && isAdmin && (
+          <div>
+            <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>
+              כל חבר/ה מעדכן/ת בטאב "לוח בקרה אישי" האם יש לו/ה הקצאה למידברן, האם נוצלה לאחר שעברה המכירה, והאם יש הקצאה נוספת. הטאב הזה מוצג רק למנהלים.
+            </p>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+              {[
+                { label: "יש הקצאה", value: membersWithAllocation.length },
+                { label: "נוצלה", value: membersUsedAllocation.length },
+                { label: "טרם נוצלה", value: membersPendingAllocation.length },
+                { label: "הקצאה נוספת", value: membersWithExtraAllocation.length },
+              ].map((c) => (
+                <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                  <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
+                  <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {membersWithoutAllocationInfo.length > 0 && (
+              <div className="rounded-2xl p-3 mb-5 text-xs" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>
+                {membersWithoutAllocationInfo.length} חברים עדיין לא מילאו פרטי הקצאה
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              {allMembers.map((m) => {
+                const d = allocationInfo[m.name];
+                if (!d) return null;
+                return (
+                  <div key={m.name} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2 flex-wrap text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                    <span className="font-semibold text-sm">{m.name}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {d.hasAllocation === "yes" ? (
+                        <span className="px-2 py-0.5 rounded-full font-semibold" style={{ background: COLORS.accent2Light, color: COLORS.accent2Dark }}>
+                          יש הקצאה{d.used === "yes" ? " · נוצלה" : " · טרם נוצלה"}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full" style={{ background: COLORS.input, color: COLORS.textMuted }}>אין הקצאה</span>
+                      )}
+                      {d.hasExtra === "yes" && (
+                        <span className="px-2 py-0.5 rounded-full font-semibold" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>הקצאה נוספת</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {allMembers.every((m) => !allocationInfo[m.name]) && (
+              <p className="text-xs text-center py-10" style={{ color: COLORS.textMuted }}>עדיין אין נתוני הקצאות.</p>
+            )}
+          </div>
+        )}
 
         {tab === "teams" && (
           <div className="grid sm:grid-cols-2 gap-3">
@@ -4010,4 +4146,3 @@ export default function App() {
     </div>
   );
 }
-
