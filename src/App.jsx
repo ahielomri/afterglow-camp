@@ -1550,6 +1550,74 @@ function AlcoholRowsEditor({ rows, onChange }) {
   );
 }
 
+function QuickMessageBox({ onSend, onCancel }) {
+  const [text, setText] = useState("");
+  return (
+    <div className="mt-2 flex items-center gap-1.5">
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="כתוב/י הודעה..."
+        autoFocus
+        className="flex-1 px-2 py-1.5 rounded-lg text-xs outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      />
+      <button
+        onClick={() => { if (text.trim()) onSend(text); }}
+        className="text-xs px-2.5 py-1.5 rounded-lg font-semibold shrink-0"
+        style={{ background: COLORS.accent, color: COLORS.bg }}
+      >
+        שליחה
+      </button>
+      <button onClick={onCancel} className="shrink-0 p-1" style={{ color: COLORS.textMuted }}><X size={14} /></button>
+    </div>
+  );
+}
+
+// A single stop on the "route" - a person, their relevant detail, and a way to reach out.
+function RouteRow({ name, detail, dotColor, isLast, canContact, contacting, onToggleContact, onSend }) {
+  return (
+    <div className="flex gap-3">
+      <div className="w-3 flex flex-col items-center pt-1">
+        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: dotColor }} />
+        {!isLast && <div className="w-px flex-1 mt-1" style={{ background: COLORS.divider }} />}
+      </div>
+      <div className="flex-1 min-w-0 pb-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold truncate">{name}</div>
+            {detail && <div className="text-xs mt-0.5" style={{ color: dotColor }}>{detail}</div>}
+          </div>
+          {canContact && (
+            <button onClick={onToggleContact} className="shrink-0 p-1.5 rounded-full" style={{ background: COLORS.input, color: dotColor }}>
+              <MessageCircle size={13} />
+            </button>
+          )}
+        </div>
+        {contacting && <QuickMessageBox onSend={onSend} onCancel={onToggleContact} />}
+      </div>
+    </div>
+  );
+}
+
+// A category "stop" on the rides board - colored header badge + a route of member rows.
+function RideCategoryCard({ icon: Icon, title, count, headerColor, emptyText, children }) {
+  return (
+    <div className="rounded-3xl overflow-hidden" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <div className="flex items-center gap-2 px-4 py-3" style={{ background: headerColor }}>
+        <Icon size={16} color="white" />
+        <span className="text-sm font-bold" style={{ color: "white" }}>{title}</span>
+        <span className="mr-auto text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.28)", color: "white" }}>
+          {count}
+        </span>
+      </div>
+      <div className="p-4">
+        {count === 0 ? <p className="text-xs" style={{ color: COLORS.textMuted }}>{emptyText}</p> : children}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [identity, setIdentity] = useState(null);
   const [assignments, setAssignments] = useState({});
@@ -1608,6 +1676,7 @@ export default function App() {
   const [teamFilter, setTeamFilter] = useState("הכל");
   const [shiftsView, setShiftsView] = useState("calendar");
   const [expandedTeam, setExpandedTeam] = useState(null);
+  const [contactingRideMember, setContactingRideMember] = useState(null);
   const [toast, setToast] = useState(null);
   const [pushStatus, setPushStatus] = useState("unsupported");
 
@@ -3239,6 +3308,52 @@ export default function App() {
 
         {tab === "board" && (
           <div>
+            <div className="rounded-2xl p-4 mb-6" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
+                  <MessageCircle size={15} /> הודעות אישיות
+                </h3>
+                {!showPrivateMsgForm && (
+                  <button
+                    onClick={() => setShowPrivateMsgForm(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
+                    style={{ background: COLORS.accent, color: COLORS.bg }}
+                  >
+                    <Plus size={13} /> הודעה חדשה
+                  </button>
+                )}
+              </div>
+              {showPrivateMsgForm && (
+                <PrivateMessageForm
+                  members={allMembers.filter((m) => m.name !== identity)}
+                  onSend={(to, text) => { sendPrivateMessage(to, text); setShowPrivateMsgForm(false); }}
+                />
+              )}
+              {myPrivateMessages.length === 0 ? (
+                <p className="text-xs" style={{ color: COLORS.textMuted }}>אין עדיין הודעות אישיות - שולחים דרך "הודעה חדשה" למעלה.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {myPrivateMessages.map((m) => {
+                    const incoming = m.to === identity;
+                    return (
+                      <div key={m.id} className="rounded-xl px-3 py-2 text-xs flex items-start justify-between gap-2" style={{ background: incoming ? COLORS.accentLight : COLORS.input, border: `1px solid ${COLORS.divider}` }}>
+                        <div className="min-w-0">
+                          <div className="font-semibold mb-0.5" style={{ color: COLORS.accentDark }}>
+                            {incoming ? `מאת ${m.from}` : `אל ${m.to}`}
+                          </div>
+                          <div className="whitespace-pre-wrap">{m.text}</div>
+                          <div className="mt-1" style={{ color: COLORS.textMuted }}>{new Date(m.ts).toLocaleString("he-IL")}</div>
+                        </div>
+                        {(m.from === identity || isAdmin) && (
+                          <button onClick={() => removePrivateMessage(m.id)} style={{ color: COLORS.textMuted }} className="shrink-0"><Trash2 size={13} /></button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-bold" style={{ color: COLORS.accentDark }}>סקרים</h3>
               {showPollForm ? null : (
@@ -3366,52 +3481,6 @@ export default function App() {
                 })}
               </div>
             )}
-
-            <div className="mt-8 pt-6 border-t" style={{ borderColor: COLORS.divider }}>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-bold flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
-                  <MessageCircle size={15} /> הודעות אישיות
-                </h3>
-                {!showPrivateMsgForm && (
-                  <button
-                    onClick={() => setShowPrivateMsgForm(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
-                    style={{ background: COLORS.accent, color: COLORS.bg }}
-                  >
-                    <Plus size={13} /> הודעה חדשה
-                  </button>
-                )}
-              </div>
-              {showPrivateMsgForm && (
-                <PrivateMessageForm
-                  members={allMembers.filter((m) => m.name !== identity)}
-                  onSend={(to, text) => { sendPrivateMessage(to, text); setShowPrivateMsgForm(false); }}
-                />
-              )}
-              {myPrivateMessages.length === 0 ? (
-                <p className="text-xs" style={{ color: COLORS.textMuted }}>אין עדיין הודעות אישיות.</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {myPrivateMessages.map((m) => {
-                    const incoming = m.to === identity;
-                    return (
-                      <div key={m.id} className="rounded-xl px-3 py-2 text-xs flex items-start justify-between gap-2" style={{ background: incoming ? COLORS.accentLight : COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                        <div className="min-w-0">
-                          <div className="font-semibold mb-0.5" style={{ color: COLORS.accentDark }}>
-                            {incoming ? `מאת ${m.from}` : `אל ${m.to}`}
-                          </div>
-                          <div className="whitespace-pre-wrap">{m.text}</div>
-                          <div className="mt-1" style={{ color: COLORS.textMuted }}>{new Date(m.ts).toLocaleString("he-IL")}</div>
-                        </div>
-                        {(m.from === identity || isAdmin) && (
-                          <button onClick={() => removePrivateMessage(m.id)} style={{ color: COLORS.textMuted }} className="shrink-0"><Trash2 size={13} /></button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
           </div>
         )}
 
@@ -4168,100 +4237,118 @@ export default function App() {
         {tab === "rides" && (
           <div>
             <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>
-              את הפרטים שלך (עיר, יום הגעה, רכב, טרמפים, מקום לציוד) ממלאים בטאב "לוח בקרה אישי". כאן רואים את התוצאה המשותפת של כולם.
+              את הפרטים שלך (עיר, יום הגעה, רכב, טרמפים, מקום לציוד) ממלאים בטאב "לוח בקרה אישי". כאן רואים את התוצאה המשותפת של כולם - ואפשר לפנות ישירות למי שיכול/ה לעזור.
             </p>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+              {[
+                { label: "מציעים טרמפ", value: offeringRides.length },
+                { label: "מחפשים טרמפ", value: lookingForRide.length },
+                { label: "מקום לציוד", value: offeringCargoSpace.length },
+                { label: "יכולת גרירה", value: towingCapable.length },
+              ].map((c) => (
+                <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                  <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
+                  <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                </div>
+              ))}
+            </div>
+
             <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <h3 className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: COLORS.accent2Dark }}>
-                  <Car size={15} /> מציעים טרמפ ({offeringRides.length})
-                </h3>
-                {offeringRides.length === 0 ? (
-                  <p className="text-xs" style={{ color: COLORS.textMuted }}>אף אחד עדיין לא הציע טרמפ</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {offeringRides.map((m) => {
-                      const d = rideInfo[m.name];
-                      return (
-                        <div key={m.name} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.accent2Light }}>
-                          <div className="font-semibold">{m.name}{d.city ? ` · ${d.city}` : ""}</div>
-                          <div style={{ color: COLORS.accent2Dark }}>
-                            {d.arrivalDay ? formatDate(d.arrivalDay) : "יום לא צוין"}{d.seats ? ` · ${d.seats} מקומות פנויים` : ""}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              <RideCategoryCard icon={Car} title="מציעים טרמפ" count={offeringRides.length} headerColor={COLORS.accent2} emptyText="אף אחד עדיין לא הציע טרמפ">
+                {offeringRides.map((m, i) => {
+                  const d = rideInfo[m.name];
+                  const detail = [
+                    d.arrivalDay ? formatDate(d.arrivalDay) : "יום לא צוין",
+                    d.seats ? `${d.seats} מקומות פנויים` : null,
+                    d.city || null,
+                  ].filter(Boolean).join(" · ");
+                  return (
+                    <RouteRow
+                      key={m.name}
+                      name={m.name}
+                      detail={detail}
+                      dotColor={COLORS.accent2Dark}
+                      isLast={i === offeringRides.length - 1}
+                      canContact={m.name !== identity}
+                      contacting={contactingRideMember === m.name}
+                      onToggleContact={() => setContactingRideMember(contactingRideMember === m.name ? null : m.name)}
+                      onSend={(text) => { sendPrivateMessage(m.name, text); setContactingRideMember(null); }}
+                    />
+                  );
+                })}
+              </RideCategoryCard>
 
-              <div>
-                <h3 className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
-                  <Users size={15} /> מחפשים טרמפ ({lookingForRide.length})
-                </h3>
-                {lookingForRide.length === 0 ? (
-                  <p className="text-xs" style={{ color: COLORS.textMuted }}>אף אחד עדיין לא מחפש טרמפ</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {lookingForRide.map((m) => {
-                      const d = rideInfo[m.name];
-                      return (
-                        <div key={m.name} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.accentLight }}>
-                          <div className="font-semibold">{m.name}{d.city ? ` · ${d.city}` : ""}</div>
-                          {d.arrivalDay && <div style={{ color: COLORS.accentDark }}>מתכנן/ת להגיע {formatDate(d.arrivalDay)}</div>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              <RideCategoryCard icon={Users} title="מחפשים טרמפ" count={lookingForRide.length} headerColor={COLORS.accent} emptyText="אף אחד עדיין לא מחפש טרמפ">
+                {lookingForRide.map((m, i) => {
+                  const d = rideInfo[m.name];
+                  const detail = [
+                    d.arrivalDay ? `מתכנן/ת להגיע ${formatDate(d.arrivalDay)}` : null,
+                    d.city || null,
+                  ].filter(Boolean).join(" · ");
+                  return (
+                    <RouteRow
+                      key={m.name}
+                      name={m.name}
+                      detail={detail || null}
+                      dotColor={COLORS.accentDark}
+                      isLast={i === lookingForRide.length - 1}
+                      canContact={m.name !== identity}
+                      contacting={contactingRideMember === m.name}
+                      onToggleContact={() => setContactingRideMember(contactingRideMember === m.name ? null : m.name)}
+                      onSend={(text) => { sendPrivateMessage(m.name, text); setContactingRideMember(null); }}
+                    />
+                  );
+                })}
+              </RideCategoryCard>
 
-              <div className="sm:col-span-2">
-                <h3 className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: COLORS.accent2Dark }}>
-                  <UserPlus size={15} /> יש להם מקום לציוד/קניות של הקמפ ({offeringCargoSpace.length})
-                </h3>
-                {offeringCargoSpace.length === 0 ? (
-                  <p className="text-xs" style={{ color: COLORS.textMuted }}>אף אחד עדיין לא סימן מקום פנוי לציוד</p>
-                ) : (
-                  <div className="grid sm:grid-cols-2 gap-1.5">
-                    {offeringCargoSpace.map((m) => {
-                      const d = rideInfo[m.name];
-                      return (
-                        <div key={m.name} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.accent2Light }}>
-                          <div className="font-semibold">{m.name}{d.city ? ` · ${d.city}` : ""}</div>
-                          <div style={{ color: COLORS.accent2Dark }}>
-                            {d.arrivalDay ? formatDate(d.arrivalDay) : "יום לא צוין"}{d.cargoNote ? ` · ${d.cargoNote}` : ""}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              <RideCategoryCard icon={UserPlus} title="מקום לציוד/קניות" count={offeringCargoSpace.length} headerColor={COLORS.accent2} emptyText="אף אחד עדיין לא סימן מקום פנוי לציוד">
+                {offeringCargoSpace.map((m, i) => {
+                  const d = rideInfo[m.name];
+                  const detail = [
+                    d.arrivalDay ? formatDate(d.arrivalDay) : "יום לא צוין",
+                    d.cargoNote || null,
+                    d.city || null,
+                  ].filter(Boolean).join(" · ");
+                  return (
+                    <RouteRow
+                      key={m.name}
+                      name={m.name}
+                      detail={detail}
+                      dotColor={COLORS.accent2Dark}
+                      isLast={i === offeringCargoSpace.length - 1}
+                      canContact={m.name !== identity}
+                      contacting={contactingRideMember === m.name}
+                      onToggleContact={() => setContactingRideMember(contactingRideMember === m.name ? null : m.name)}
+                      onSend={(text) => { sendPrivateMessage(m.name, text); setContactingRideMember(null); }}
+                    />
+                  );
+                })}
+              </RideCategoryCard>
 
-              <div className="sm:col-span-2">
-                <h3 className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
-                  <Car size={15} /> יכולת גרירה - וו/עגלה נגררת ({towingCapable.length})
-                </h3>
-                {towingCapable.length === 0 ? (
-                  <p className="text-xs" style={{ color: COLORS.textMuted }}>אף אחד עדיין לא סימן יכולת גרירה</p>
-                ) : (
-                  <div className="grid sm:grid-cols-2 gap-1.5">
-                    {towingCapable.map((m) => {
-                      const d = rideInfo[m.name];
-                      const bits = [];
-                      if (d.vehicleType) bits.push(d.vehicleType);
-                      if (d.hasTowHitch === "yes") bits.push("וו גרירה");
-                      if (d.hasTrailer === "yes") bits.push("עגלה נגררת");
-                      return (
-                        <div key={m.name} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.accentLight }}>
-                          <div className="font-semibold">{m.name}{d.city ? ` · ${d.city}` : ""}</div>
-                          <div style={{ color: COLORS.accentDark }}>{bits.join(" · ") || "—"}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              <RideCategoryCard icon={Car} title="יכולת גרירה - וו/עגלה" count={towingCapable.length} headerColor={COLORS.accent} emptyText="אף אחד עדיין לא סימן יכולת גרירה">
+                {towingCapable.map((m, i) => {
+                  const d = rideInfo[m.name];
+                  const bits = [];
+                  if (d.vehicleType) bits.push(d.vehicleType);
+                  if (d.hasTowHitch === "yes") bits.push("וו גרירה");
+                  if (d.hasTrailer === "yes") bits.push("עגלה נגררת");
+                  const detail = [bits.join(" · ") || "—", d.city || null].filter(Boolean).join(" · ");
+                  return (
+                    <RouteRow
+                      key={m.name}
+                      name={m.name}
+                      detail={detail}
+                      dotColor={COLORS.accentDark}
+                      isLast={i === towingCapable.length - 1}
+                      canContact={m.name !== identity}
+                      contacting={contactingRideMember === m.name}
+                      onToggleContact={() => setContactingRideMember(contactingRideMember === m.name ? null : m.name)}
+                      onSend={(text) => { sendPrivateMessage(m.name, text); setContactingRideMember(null); }}
+                    />
+                  );
+                })}
+              </RideCategoryCard>
             </div>
           </div>
         )}
