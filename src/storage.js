@@ -177,3 +177,90 @@ export async function addMemberRow(name, role = "member") {
   const { error } = await supabase.from("members").insert({ name, role });
   if (error) throw error;
 }
+
+// ---------------------------------------------------------------------------
+// Per-row tables (added by security migration part 2). RLS on each of
+// these enforces "only the owner (and admins where noted) can read this
+// row" at the database level - not just in the app's UI.
+// ---------------------------------------------------------------------------
+
+// Private messages: RLS only returns rows where the caller is the
+// sender or recipient, so this naturally returns "my messages".
+export async function listMyPrivateMessages() {
+  const { data, error } = await supabase
+    .from("private_messages")
+    .select("id, from_name, to_name, body, ts")
+    .order("ts", { ascending: false });
+  if (error) throw error;
+  return (data || []).map((r) => ({ id: r.id, from: r.from_name, to: r.to_name, text: r.body, ts: Number(r.ts) }));
+}
+
+export async function sendPrivateMessageRow(fromName, toName, text) {
+  const { error } = await supabase.from("private_messages").insert({
+    from_name: fromName,
+    to_name: toName,
+    body: text,
+    ts: Date.now(),
+  });
+  if (error) throw error;
+}
+
+export async function deletePrivateMessageRow(id) {
+  const { error } = await supabase.from("private_messages").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// Emergency info: RLS returns only the caller's own row unless they're
+// an admin, in which case it returns everyone's - so this one query
+// serves both the personal dashboard and the admin view correctly.
+export async function listEmergencyInfo() {
+  const { data, error } = await supabase.from("emergency_info").select("*");
+  if (error) throw error;
+  const map = {};
+  (data || []).forEach((r) => {
+    map[r.name] = {
+      contactName: r.contact_name || "",
+      contactPhone: r.contact_phone || "",
+      allergies: r.allergies || "",
+      medical: r.medical || "",
+      dietary: r.dietary || "",
+    };
+  });
+  return map;
+}
+
+export async function setMyEmergencyInfo(name, info) {
+  const { error } = await supabase.from("emergency_info").upsert({
+    name,
+    contact_name: info.contactName || null,
+    contact_phone: info.contactPhone || null,
+    allergies: info.allergies || null,
+    medical: info.medical || null,
+    dietary: info.dietary || null,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw error;
+}
+
+// Allocation info: same "own row, or everyone if admin" RLS shape as
+// emergency_info above.
+export async function listAllocationInfo() {
+  const { data, error } = await supabase.from("allocation_info").select("*");
+  if (error) throw error;
+  const map = {};
+  (data || []).forEach((r) => {
+    map[r.name] = { hasAllocation: r.has_allocation, used: r.used, hasExtra: r.has_extra };
+  });
+  return map;
+}
+
+export async function setMyAllocationInfo(name, info) {
+  const { error } = await supabase.from("allocation_info").upsert({
+    name,
+    has_allocation: info.hasAllocation || null,
+    used: info.used || null,
+    has_extra: info.hasExtra || null,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw error;
+}
