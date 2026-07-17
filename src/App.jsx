@@ -186,16 +186,24 @@ function buildShifts() {
 
   const eventDays = ["2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06", "2026-11-07"];
   const lastDay = "2026-11-07";
+  const firstDay = eventDays[0];
   eventDays.forEach((d) => {
-    shifts.push({ id: `kitchen-am-${d}`, phase: "ימי האירוע", title: "משמרת בישול - בוקר", team: "צוות המטבח", date: d, start: "06:30", end: "09:00", spots: 3, desc: "הכנה והגשה של ארוחת בוקר" });
+    // Arrival day (first event day): people are still arriving through the
+    // morning, so there's no one there yet for breakfast, morning cleaning,
+    // or LNT/trash duty - only lunch, dinner, and ice.
+    if (d !== firstDay) {
+      shifts.push({ id: `kitchen-am-${d}`, phase: "ימי האירוע", title: "משמרת בישול - בוקר", team: "צוות המטבח", date: d, start: "06:30", end: "09:00", spots: 3, desc: "הכנה והגשה של ארוחת בוקר" });
+    }
     if (d !== lastDay) {
       shifts.push({ id: `kitchen-noon-${d}`, phase: "ימי האירוע", title: "משמרת בישול - צהריים", team: "צוות המטבח", date: d, start: "11:30", end: "14:00", spots: 3, desc: "הכנה והגשה של ארוחת צהריים" });
       shifts.push({ id: `kitchen-eve-${d}`, phase: "ימי האירוע", title: "משמרת בישול - ערב", team: "צוות המטבח", date: d, start: "17:30", end: "20:00", spots: 3, desc: "הכנה והגשה של ארוחת ערב" });
     }
     if (d === lastDay) return;
     shifts.push({ id: `ice-${d}`, phase: "ימי האירוע", title: "הבאת קרח", team: "אחראי קרח", date: d, start: "10:00", end: "11:00", spots: 1, desc: "רכישת קרח יומי מנקודת המכירה הרשמית" });
-    shifts.push({ id: `clean-${d}`, phase: "ימי האירוע", title: "ניקיון שירותים ומקלחות", team: "שירותים ומקלחות", date: d, start: "09:00", end: "10:00", spots: 2, desc: "ניקיון ותחזוקה יומית" });
-    shifts.push({ id: `moop-${d}`, phase: "ימי האירוע", title: "חשל\"ש ופינוי פסולת", team: "צוות חשל\"ש", date: d, start: "16:00", end: "17:00", spots: 2, desc: "מיחזור, פינוי פחים ובדיקת MOOP" });
+    if (d !== firstDay) {
+      shifts.push({ id: `clean-${d}`, phase: "ימי האירוע", title: "ניקיון שירותים ומקלחות", team: "שירותים ומקלחות", date: d, start: "09:00", end: "10:00", spots: 2, desc: "ניקיון ותחזוקה יומית" });
+      shifts.push({ id: `moop-${d}`, phase: "ימי האירוע", title: "חשל\"ש ופינוי פסולת", team: "צוות חשל\"ש", date: d, start: "16:00", end: "17:00", spots: 2, desc: "מיחזור, פינוי פחים ובדיקת MOOP" });
+    }
   });
 
   shifts.push({ id: "teardown-2026-11-07", phase: "פירוקים", title: "יום פירוק", team: "פירוקים", date: "2026-11-07", start: "08:00", end: "22:00", spots: MEMBERS.length, desc: "פירוק תשתיות, בדיקת MOOP סופית וניקיון השטח - כולם משתתפים" });
@@ -4070,7 +4078,10 @@ export default function App() {
 
             {canEditBudget && (
               <button
-                onClick={() => setShowBudgetSection("expenses")}
+                onClick={() => {
+                  setShowBudgetSection("expenses");
+                  setTimeout(() => document.getElementById("budget-expenses-section")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                }}
                 className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold mb-6"
                 style={{ background: COLORS.accent, color: COLORS.bg }}
               >
@@ -4685,7 +4696,7 @@ export default function App() {
             {(() => {
               const open = showBudgetSection === "expenses";
               return (
-                <div className="mb-3">
+                <div className="mb-3" id="budget-expenses-section">
                   <button onClick={() => setShowBudgetSection(open ? null : "expenses")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
                     <span>רישום הוצאות בפועל ({budgetExpenses.length})</span>
                     <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />

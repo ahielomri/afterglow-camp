@@ -1,7 +1,12 @@
 import { supabase } from "./storage.js";
 
-// Public VAPID key (safe to expose in client code - it's the public half of the pair)
-const VAPID_PUBLIC_KEY = "BPLqeRQu_1F-xLH38HpEr74mtgW8Q3_KugaV12lvW9pWbBXkfzDJp5PRjzt0OO22zqHTJRkZLty4UnkNV_g9zkc";
+// Public VAPID key (safe to expose in client code - it's the public half of the pair).
+// Regenerated to guarantee it matches VAPID_PRIVATE_KEY on the server - see
+// the "BadJwtToken" push-service error this was fixing. Must exactly match
+// the VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY secrets configured for the Edge
+// Functions (notify-new-content, send-event-reminder) or every push send
+// will fail the same way again.
+const VAPID_PUBLIC_KEY = "BNXPpnS089VQX9-zK53vxIgZ6_Nm4iZV4ClBqSlAipKfAYOzAZS_WuZVrjs_3uNSUD_pyZTnL0zSGPaGTw4yIPM";
 
 function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
