@@ -3973,12 +3973,6 @@ export default function App() {
               )
             )}
 
-            {isAdmin && (
-              <div className="mb-4 text-xs" style={{ color: COLORS.textMuted }}>
-                הגדרת תקציב מתוכנן לכל מחלקה עברה לטאב "תקציב".
-              </div>
-            )}
-
             <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.textMuted }}>תקציב לפי קטגוריה</h3>
             <div className="space-y-2 mb-6">
               {allBudgetCategories.map((cat) => {
