@@ -1855,6 +1855,7 @@ export default function App() {
   const [loginHistory, setLoginHistory] = useState([]);
   const [showActivityLog, setShowActivityLog] = useState(false);
   const [showLoginHistory, setShowLoginHistory] = useState(false);
+  const [showFirstLoginStatus, setShowFirstLoginStatus] = useState(false);
   const [extraMembers, setExtraMembers] = useState([]);
   const [removedMembers, setRemovedMembers] = useState([]);
   const [idOverrides, setIdOverrides] = useState({});
@@ -2857,6 +2858,15 @@ export default function App() {
     [extraBudgetCategories]
   );
 
+  // A name showing up in login-history (any entry) means they've completed
+  // at least one login - which for someone who never had an account can only
+  // happen via "כניסה ראשונה". Everyone else in the roster hasn't onboarded yet.
+  const membersEverLoggedIn = useMemo(() => new Set(loginHistory.map((l) => l.name)), [loginHistory]);
+  const membersNotYetLoggedIn = useMemo(
+    () => allMembers.filter((m) => !membersEverLoggedIn.has(m.name)),
+    [allMembers, membersEverLoggedIn]
+  );
+
   const currentMember = allMembers.find((m) => m.name === identity);
   const isOwner = currentMember?.role === "owner";
   const isAdmin = currentMember?.role === "admin" || isOwner;
@@ -3357,6 +3367,44 @@ export default function App() {
                         </div>
                       ))
                     )}
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setShowFirstLoginStatus(!showFirstLoginStatus)}
+                  className="w-full flex items-center justify-between mt-4 mb-2 text-sm font-bold"
+                  style={{ color: COLORS.textMuted }}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <UserPlus size={14} /> מי נכנס לאפליקציה (רק אתה רואה) - {membersNotYetLoggedIn.length} עדיין לא
+                  </span>
+                  <ChevronDown size={15} style={{ transform: showFirstLoginStatus ? "rotate(180deg)" : "none" }} />
+                </button>
+                {showFirstLoginStatus && (
+                  <div className="space-y-1 max-h-72 overflow-y-auto pr-1 mb-2">
+                    <p className="text-xs mb-1.5" style={{ color: COLORS.textMuted }}>
+                      עדיין לא נכנסו ({membersNotYetLoggedIn.length}):
+                    </p>
+                    {membersNotYetLoggedIn.length === 0 ? (
+                      <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>כולם כבר נכנסו לפחות פעם אחת 🎉</p>
+                    ) : (
+                      membersNotYetLoggedIn.map((m) => (
+                        <div key={m.name} className="text-xs rounded-lg px-3 py-1.5 flex items-center justify-between" style={{ background: COLORS.surface }}>
+                          <b>{m.name}</b>
+                          <span style={{ color: m.idOnFile ? COLORS.textMuted : COLORS.danger }}>
+                            {m.idOnFile ? "יש ת.ז - יכול/ה להיכנס" : "אין ת.ז רשומה"}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                    <p className="text-xs mt-3 mb-1.5" style={{ color: COLORS.textMuted }}>
+                      כבר נכנסו ({allMembers.length - membersNotYetLoggedIn.length}):
+                    </p>
+                    {allMembers.filter((m) => membersEverLoggedIn.has(m.name)).map((m) => (
+                      <div key={m.name} className="text-xs rounded-lg px-3 py-1.5" style={{ background: COLORS.surface, color: COLORS.textMuted }}>
+                        {m.name}
+                      </div>
+                    ))}
                   </div>
                 )}
 
