@@ -630,18 +630,20 @@ function CategoryBudgetForm({ onSet, categories }) {
   );
 }
 
-function EquipmentForm({ onAdd, lockedCategory }) {
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState(lockedCategory || EQUIPMENT_CATEGORIES[0]);
-  const [qty, setQty] = useState("");
-  const [condition, setCondition] = useState(EQUIPMENT_CONDITIONS[0]);
-  const [location, setLocation] = useState("");
-  const [notes, setNotes] = useState("");
+function EquipmentForm({ onAdd, lockedCategory, initial, onCancel }) {
+  const [name, setName] = useState(initial?.name || "");
+  const [category, setCategory] = useState(initial?.category || lockedCategory || EQUIPMENT_CATEGORIES[0]);
+  const [qty, setQty] = useState(initial?.qty ?? "");
+  const [condition, setCondition] = useState(initial?.condition || EQUIPMENT_CONDITIONS[0]);
+  const [location, setLocation] = useState(initial?.location || "");
+  const [notes, setNotes] = useState(initial?.notes || "");
 
   function submit() {
     if (!name.trim() || !qty) return;
     onAdd({ name: name.trim(), category, qty, condition, location, notes });
-    setName(""); setQty(""); setLocation(""); setNotes(""); setCondition(EQUIPMENT_CONDITIONS[0]);
+    if (!initial) {
+      setName(""); setQty(""); setLocation(""); setNotes(""); setCondition(EQUIPMENT_CONDITIONS[0]);
+    }
   }
 
   return (
@@ -687,13 +689,24 @@ function EquipmentForm({ onAdd, lockedCategory }) {
           style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
         />
       </div>
-      <button
-        onClick={submit}
-        className="px-4 py-2 rounded-full text-sm font-semibold"
-        style={{ background: COLORS.accent, color: COLORS.bg }}
-      >
-        הוספת ציוד
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={submit}
+          className="px-4 py-2 rounded-full text-sm font-semibold"
+          style={{ background: COLORS.accent, color: COLORS.bg }}
+        >
+          {initial ? "שמירת שינויים" : "הוספת ציוד"}
+        </button>
+        {onCancel && (
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 rounded-full text-sm font-semibold"
+            style={{ background: COLORS.surface2, color: COLORS.textMuted }}
+          >
+            ביטול
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -1847,6 +1860,7 @@ export default function App() {
   });
   const [budgetExpenses, setBudgetExpenses] = useState([]);
   const [campEquipment, setCampEquipment] = useState([]);
+  const [editingEquipmentId, setEditingEquipmentId] = useState(null);
   const [extraBudgetCategories, setExtraBudgetCategories] = useState([]);
   const [showBudgetSection, setShowBudgetSection] = useState(null);
   const [showQuickAddExpense, setShowQuickAddExpense] = useState(false);
@@ -4262,21 +4276,37 @@ export default function App() {
                     <span>{totalQty} יחידות</span>
                   </h3>
                   <div className="space-y-1.5">
-                    {items.map((e) => (
-                      <div key={e.id} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                        <div className="min-w-0 text-xs">
-                          <div className="font-semibold text-sm">{e.name} <span style={{ color: COLORS.accentDark }}>× {e.qty}</span></div>
-                          <div className="flex items-center gap-2 mt-0.5 flex-wrap" style={{ color: COLORS.textMuted }}>
-                            <span style={{ color: e.condition === "תקין" ? COLORS.accent2Dark : COLORS.danger }}>{e.condition}</span>
-                            {e.location && <span className="flex items-center gap-1"><MapPin size={11} /> {e.location}</span>}
-                            {e.notes && <span>· {e.notes}</span>}
+                    {items.map((e) =>
+                      editingEquipmentId === e.id ? (
+                        <EquipmentForm
+                          key={e.id}
+                          initial={e}
+                          lockedCategory={isAdmin ? null : myLeadTeam}
+                          onCancel={() => setEditingEquipmentId(null)}
+                          onAdd={(patch) => {
+                            updateEquipmentField(e.id, patch);
+                            setEditingEquipmentId(null);
+                          }}
+                        />
+                      ) : (
+                        <div key={e.id} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                          <div className="min-w-0 text-xs">
+                            <div className="font-semibold text-sm">{e.name} <span style={{ color: COLORS.accentDark }}>× {e.qty}</span></div>
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap" style={{ color: COLORS.textMuted }}>
+                              <span style={{ color: e.condition === "תקין" ? COLORS.accent2Dark : COLORS.danger }}>{e.condition}</span>
+                              {e.location && <span className="flex items-center gap-1"><MapPin size={11} /> {e.location}</span>}
+                              {e.notes && <span>· {e.notes}</span>}
+                            </div>
                           </div>
+                          {(isAdmin || myLeadTeam === cat) && (
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button onClick={() => setEditingEquipmentId(e.id)} style={{ color: COLORS.textMuted }}><Pencil size={14} /></button>
+                              <button onClick={() => removeEquipment(e.id)} style={{ color: COLORS.textMuted }}><Trash2 size={14} /></button>
+                            </div>
+                          )}
                         </div>
-                        {(isAdmin || myLeadTeam === cat) && (
-                          <button onClick={() => removeEquipment(e.id)} style={{ color: COLORS.textMuted }} className="shrink-0"><Trash2 size={14} /></button>
-                        )}
-                      </div>
-                    ))}
+                      )
+                    )}
                   </div>
                 </div>
               );
