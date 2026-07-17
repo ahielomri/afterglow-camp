@@ -436,7 +436,7 @@ function LoginScreen({ members, onLogin, onSetup }) {
   async function submitSetup() {
     if (!selected) return setError("בחר/י שם מהרשימה");
     if (needsId && !idVal.trim()) return setError("הזן/י ת.ז");
-    if (!newPassword || newPassword.length < 4) return setError("בחר/י סיסמה של לפחות 4 תווים");
+    if (!newPassword || newPassword.length < 6) return setError("בחר/י סיסמה של לפחות 6 תווים");
     if (newPassword !== confirmPassword) return setError("הסיסמאות לא תואמות");
     setLoading(true);
     setError("");
@@ -445,6 +445,7 @@ function LoginScreen({ members, onLogin, onSetup }) {
     } catch (err) {
       if (err.message === "id_mismatch") setError("תעודת הזהות לא תואמת לשם שנבחר");
       else if (err.message === "id_required") setError('אין תעודת זהות מאומתת רשומה עבורך במערכת - יש לפנות למנהל/ת הקמפ כדי שיוסיפו אותה לפני הכניסה הראשונה');
+      else if (err.message.startsWith("too_many_attempts")) setError("יותר מדי ניסיונות שגויים - נחסם זמנית. נסה/י שוב בעוד כרבע שעה, או פנה/י למנהל/ת הקמפ");
       else setError(`משהו השתבש: ${err.message || err}`);
     } finally {
       setLoading(false);
@@ -535,7 +536,7 @@ function LoginScreen({ members, onLogin, onSetup }) {
               type="password"
               value={newPassword}
               onChange={(e) => { setNewPassword(e.target.value); setError(""); }}
-              placeholder="לפחות 4 תווים"
+              placeholder="לפחות 6 תווים"
               className="w-full px-3 py-2.5 rounded-xl text-sm outline-none mb-3"
               style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
             />
