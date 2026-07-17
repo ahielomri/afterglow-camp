@@ -230,6 +230,32 @@ export async function adminSetMemberRole(name, role) {
   return data;
 }
 
+// Owner-only: renames a member everywhere - the members table (and
+// everything FK-linked to it), every kv_store blob that stores their
+// name, and (if they already have an account) their login email, which
+// is derived from their name. Checked server-side against the caller's
+// own role.
+export async function adminRenameMember(oldName, newName) {
+  const { data, error } = await supabase.functions.invoke("admin-rename-member", {
+    body: { oldName, newName },
+  });
+  if (error) {
+    let message = "rename_failed";
+    try {
+      const ctx = error.context;
+      if (ctx && typeof ctx.json === "function") {
+        const parsed = await ctx.json();
+        message = parsed.detail ? `${parsed.error}: ${parsed.detail}` : (parsed.error || message);
+      }
+    } catch {
+      // ignore - fall back to generic message
+    }
+    throw new Error(message);
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
 // Which members currently have a verified ID hash on file - names only,
 // never the hash itself. Used to keep the login screen's "ID required"
 // prompt in sync with DB truth instead of a static/optimistic client flag.
@@ -237,6 +263,37 @@ export async function listMembersWithIdOnFile() {
   const { data, error } = await supabase.rpc("members_with_id_on_file");
   if (error) throw error;
   return new Set((data || []).map((r) => r.name));
+}
+
+// Admin dashboard: who currently has push notifications enabled.
+export async function listMembersWithPushEnabled() {
+  const { data, error } = await supabase.rpc("members_with_push_enabled");
+  if (error) throw error;
+  return new Set((data || []).map((r) => r.name));
+}
+
+// Admin/owner-only: sends an ad-hoc push notification (e.g. an event
+// reminder) to every subscribed device right now, separate from the
+// automatic push that fires when a new announcement/poll is posted.
+export async function sendEventReminderPush(title, message) {
+  const { data, error } = await supabase.functions.invoke("send-event-reminder", {
+    body: { title, message },
+  });
+  if (error) {
+    let msg = "send_failed";
+    try {
+      const ctx = error.context;
+      if (ctx && typeof ctx.json === "function") {
+        const parsed = await ctx.json();
+        msg = parsed.detail ? `${parsed.error}: ${parsed.detail}` : (parsed.error || msg);
+      }
+    } catch {
+      // ignore - fall back to generic message
+    }
+    throw new Error(msg);
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
 }
 
 // ---------------------------------------------------------------------------

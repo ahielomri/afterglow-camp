@@ -19,6 +19,18 @@ export function pushPermission() {
   return Notification.permission; // "default" | "granted" | "denied"
 }
 
+// Notification.permission is a one-way, browser/OS-level grant that JS can
+// never revoke - "denying" push in-app can only remove the subscription
+// itself, so that's what actually reflects "am I currently receiving
+// notifications", not the (permanently "granted") permission value.
+export async function isPushSubscribed() {
+  if (!pushSupported()) return false;
+  const reg = await navigator.serviceWorker.getRegistration();
+  if (!reg) return false;
+  const sub = await reg.pushManager.getSubscription();
+  return !!sub;
+}
+
 export async function enablePush(memberName) {
   if (!pushSupported()) throw new Error("Push not supported on this device/browser");
 

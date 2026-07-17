@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Users, CalendarDays, Clock, Flame, Tent, Sparkles, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff } from "lucide-react";
-import { pushSupported, pushPermission, enablePush, disablePush } from "./push.js";
+import { pushSupported, pushPermission, enablePush, disablePush, isPushSubscribed } from "./push.js";
 import {
   uploadFile,
   signInMember,
@@ -21,6 +21,9 @@ import {
   adminSetMemberId,
   adminSetMemberRole,
   listMembersWithIdOnFile,
+  adminRenameMember,
+  listMembersWithPushEnabled,
+  sendEventReminderPush,
 } from "./storage.js";
 
 // ---------------------------------------------------------------------------
@@ -252,6 +255,11 @@ function buildWhatsAppLink(phone, text) {
 
 function duesReminderMessage(name, remaining) {
   return `היי ${name} 🌅\nמה שלומך?\nרק תזכורת קטנה - נשארו לך ₪${remaining.toLocaleString()} לתשלום עבור דמי הקמפ ל-Sunset Afterglow.\nאפשר להסדיר מתי שנוח לך 🙏\nתודה!`;
+}
+
+function eventReminderMessage(name) {
+  const days = daysUntil();
+  return `היי ${name} 🌅\nתזכורת ידידותית - נשארו ${days} ימים עד לפתיחת השערים של Sunset Afterglow!\nמוזמן/ת להיכנס לאפליקציה ולוודא שהפרטים שלך מעודכנים (משמרת, הגעה, תשלום).\nמתרגשים לראות אותך שם 🌇`;
 }
 
 // ---------------------------------------------------------------------------
@@ -679,16 +687,20 @@ function EquipmentForm({ onAdd, lockedCategory }) {
 
 function BudgetExpenseForm({ onAdd, lockedAllocation }) {
   const [allocation, setAllocation] = useState(lockedAllocation || "");
-  const [subcategory, setSubcategory] = useState("");
+  const [description, setDescription] = useState("");
   const [vendor, setVendor] = useState("");
   const [amount, setAmount] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState("paid"); // "paid" | "partial"
+  const [paidAmount, setPaidAmount] = useState("");
+  const [dueDate, setDueDate] = useState("");
   const [vatIncluded, setVatIncluded] = useState(true);
-  const [paidBy, setPaidBy] = useState("");
-  const [method, setMethod] = useState("");
   const [isRefund, setIsRefund] = useState(false);
   const [receiptFile, setReceiptFile] = useState(null);
   const [receiptPreview, setReceiptPreview] = useState("");
   const [uploading, setUploading] = useState(false);
+
+  const remaining = Math.max((Number(amount) || 0) - (Number(paidAmount) || 0), 0);
 
   function pickReceipt(e) {
     const file = e.target.files?.[0];
@@ -709,8 +721,16 @@ function BudgetExpenseForm({ onAdd, lockedAllocation }) {
       }
       setUploading(false);
     }
-    onAdd({ allocation, subcategory, vendor, amount, vatIncluded, paidBy, method, isRefund, receiptUrl });
-    setSubcategory(""); setVendor(""); setAmount(""); setPaidBy(""); setMethod(""); setIsRefund(false);
+    onAdd({
+      allocation, description, vendor, amount, purchaseDate,
+      paymentStatus,
+      paidAmount: paymentStatus === "partial" ? paidAmount : amount,
+      remainingAmount: paymentStatus === "partial" ? remaining : 0,
+      dueDate: paymentStatus === "partial" ? dueDate : "",
+      vatIncluded, isRefund, receiptUrl,
+    });
+    setDescription(""); setVendor(""); setAmount(""); setPurchaseDate("");
+    setPaymentStatus("paid"); setPaidAmount(""); setDueDate(""); setIsRefund(false);
     setReceiptFile(null); setReceiptPreview("");
   }
 
@@ -725,14 +745,14 @@ function BudgetExpenseForm({ onAdd, lockedAllocation }) {
           style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}`, opacity: lockedAllocation ? 0.7 : 1 }}
         />
         <input
-          value={subcategory} onChange={(e) => setSubcategory(e.target.value)}
-          placeholder="סעיף (תת-קטגוריה, למשל: קרח)"
+          value={description} onChange={(e) => setDescription(e.target.value)}
+          placeholder="מהות ההוצאה"
           className="px-3 py-2 rounded-xl text-sm outline-none"
           style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
         />
         <input
           value={vendor} onChange={(e) => setVendor(e.target.value)}
-          placeholder="ספק"
+          placeholder="שם העסק"
           className="px-3 py-2 rounded-xl text-sm outline-none"
           style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
         />
@@ -742,25 +762,59 @@ function BudgetExpenseForm({ onAdd, lockedAllocation }) {
           className="px-3 py-2 rounded-xl text-sm outline-none"
           style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
         />
-        <input
-          value={paidBy} onChange={(e) => setPaidBy(e.target.value)}
-          placeholder={'שולם ע"י (מי בפועל שילם)'}
-          className="px-3 py-2 rounded-xl text-sm outline-none"
-          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-        />
-        <select
-          value={method} onChange={(e) => setMethod(e.target.value)}
-          className="px-3 py-2 rounded-xl text-sm outline-none"
-          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-        >
-          <option value="">אופן תשלום</option>
-          <option value="מזומן">מזומן</option>
-          <option value="העברה">העברה</option>
-          <option value="ביט">ביט</option>
-          <option value="פייבוקס">פייבוקס</option>
-          <option value="כרטיס">כרטיס</option>
-        </select>
+        <div>
+          <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>תאריך קניה</label>
+          <input
+            type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          />
+        </div>
       </div>
+
+      <div>
+        <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>סטטוס תשלום</label>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setPaymentStatus("paid")}
+            className="px-3 py-1.5 rounded-full text-xs font-semibold"
+            style={{ background: paymentStatus === "paid" ? COLORS.accent : COLORS.input, color: paymentStatus === "paid" ? COLORS.bg : COLORS.textMuted }}
+          >
+            שולם במלואו
+          </button>
+          <button
+            type="button"
+            onClick={() => setPaymentStatus("partial")}
+            className="px-3 py-1.5 rounded-full text-xs font-semibold"
+            style={{ background: paymentStatus === "partial" ? COLORS.accent : COLORS.input, color: paymentStatus === "partial" ? COLORS.bg : COLORS.textMuted }}
+          >
+            שולם חלק
+          </button>
+        </div>
+        {paymentStatus === "partial" && (
+          <div className="grid sm:grid-cols-2 gap-2 mt-2">
+            <input
+              type="number" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)}
+              placeholder="כמה שולם עד כה"
+              className="px-3 py-2 rounded-xl text-sm outline-none"
+              style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+            />
+            <div className="px-3 py-2 rounded-xl text-sm flex items-center" style={{ background: COLORS.input, color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}>
+              נשאר לשלם: ₪{remaining.toLocaleString()}
+            </div>
+            <div className="sm:col-span-2">
+              <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>תאריך תשלום (ליתרה)</label>
+              <input
+                type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="flex items-center gap-4">
         <label className="flex items-center gap-1.5 text-xs" style={{ color: COLORS.textMuted }}>
           <input type="checkbox" checked={vatIncluded} onChange={(e) => setVatIncluded(e.target.checked)} />
@@ -1790,8 +1844,15 @@ export default function App() {
   const [idOverrides, setIdOverrides] = useState({});
   const [dbRoles, setDbRoles] = useState({});
   const [idOnFileNames, setIdOnFileNames] = useState(null);
+  const [pushEnabledNames, setPushEnabledNames] = useState(null);
+  const [showPushStatusList, setShowPushStatusList] = useState(false);
+  const [showReminderForm, setShowReminderForm] = useState(false);
+  const [reminderTitle, setReminderTitle] = useState("");
+  const [reminderMessage, setReminderMessage] = useState("");
+  const [sendingReminder, setSendingReminder] = useState(false);
   const [editingMemberId, setEditingMemberId] = useState(null);
   const [editIdValue, setEditIdValue] = useState("");
+  const [editNameValue, setEditNameValue] = useState("");
   const [announcements, setAnnouncements] = useState([]);
   const [emergencyInfo, setEmergencyInfo] = useState({});
   const [polls, setPolls] = useState([]);
@@ -1812,6 +1873,7 @@ export default function App() {
   const [contactingRideMember, setContactingRideMember] = useState(null);
   const [toast, setToast] = useState(null);
   const [pushStatus, setPushStatus] = useState("unsupported");
+  const [pushSubscribed, setPushSubscribed] = useState(false);
   const loadSharedDataRef = useRef(null);
 
   useEffect(() => {
@@ -2130,6 +2192,10 @@ export default function App() {
       const idSet = await listMembersWithIdOnFile();
       setIdOnFileNames(idSet);
     } catch {}
+    try {
+      const pushSet = await listMembersWithPushEnabled();
+      setPushEnabledNames(pushSet);
+    } catch {}
     if (logHistory) {
       try {
         const fresh = await window.storage.get("login-history", true);
@@ -2168,12 +2234,14 @@ export default function App() {
 
   useEffect(() => {
     setPushStatus(pushPermission());
+    isPushSubscribed().then(setPushSubscribed);
   }, [identity]);
 
   async function handleEnablePush() {
     try {
       await enablePush(identity);
       setPushStatus("granted");
+      setPushSubscribed(true);
       showToast("התראות פעילות! תקבל/י הודעה על מודעות וסקרים חדשים", "ok");
     } catch (err) {
       if (err.message === "permission-denied") {
@@ -2188,6 +2256,7 @@ export default function App() {
   async function handleDisablePush() {
     try {
       await disablePush(identity);
+      setPushSubscribed(false);
       showToast("התראות בוטלו", "ok");
     } catch {
       showToast("שמירה נכשלה", "error");
@@ -2466,6 +2535,49 @@ export default function App() {
       logActivity(role === "admin" ? "מינוי מנהל/ת" : "הסרת מנהל/ת", name);
     } catch (err) {
       showToast(`השינוי נכשל: ${err?.message || "שגיאה לא ידועה"}`, "error");
+    }
+  }
+
+  // Owner-only: renames a member everywhere (members table + every FK-linked
+  // table + every kv_store blob that stores their name, and their login
+  // email if they already have an account - all handled server-side).
+  // Reloads shared data afterward instead of patching local state piecemeal,
+  // since a rename touches too many independent pieces of state to track by hand.
+  async function renameMember(oldName, newName) {
+    try {
+      await adminRenameMember(oldName, newName);
+      if (loadSharedDataRef.current) await loadSharedDataRef.current();
+      const [idSet, pushSet] = await Promise.all([
+        listMembersWithIdOnFile().catch(() => idOnFileNames),
+        listMembersWithPushEnabled().catch(() => pushEnabledNames),
+      ]);
+      setIdOnFileNames(idSet);
+      setPushEnabledNames(pushSet);
+      showToast(`${oldName} שונה ל-${newName}`, "ok");
+      logActivity("שינוי שם חבר קמפ", `${oldName} → ${newName}`);
+    } catch (err) {
+      const msg = err?.message === "name_taken" ? "השם החדש כבר תפוס" : (err?.message || "שגיאה לא ידועה");
+      showToast(`שינוי השם נכשל: ${msg}`, "error");
+    }
+  }
+
+  // Admin/owner-only: fires an ad-hoc push notification right now (e.g. an
+  // event reminder), independent of the automatic push that goes out when
+  // a new announcement/poll is posted.
+  async function sendReminder() {
+    if (!reminderTitle.trim() || !reminderMessage.trim()) return;
+    setSendingReminder(true);
+    try {
+      const result = await sendEventReminderPush(reminderTitle.trim(), reminderMessage.trim());
+      showToast(`התראה נשלחה ל-${result?.sent ?? 0} מכשירים`, "ok");
+      logActivity("שליחת תזכורת התראה", reminderTitle.trim());
+      setReminderTitle("");
+      setReminderMessage("");
+      setShowReminderForm(false);
+    } catch (err) {
+      showToast(`שליחת ההתראה נכשלה: ${err?.message || "שגיאה לא ידועה"}`, "error");
+    } finally {
+      setSendingReminder(false);
     }
   }
 
@@ -2896,6 +3008,77 @@ export default function App() {
               ))}
             </div>
 
+            <button
+              onClick={() => setShowPushStatusList(!showPushStatusList)}
+              className="w-full flex items-center justify-between mt-5 mb-2 text-sm font-bold"
+              style={{ color: COLORS.textMuted }}
+            >
+              <span className="flex items-center gap-1.5">
+                <Bell size={14} /> אישור התראות ({pushEnabledNames ? allMembers.filter((m) => pushEnabledNames.has(m.name)).length : 0}/{allMembers.length})
+              </span>
+              <ChevronDown size={15} style={{ transform: showPushStatusList ? "rotate(180deg)" : "none" }} />
+            </button>
+            {showPushStatusList && (
+              <div className="space-y-1 max-h-72 overflow-y-auto pr-1 mb-2">
+                {allMembers.map((m) => {
+                  const enabled = !!pushEnabledNames?.has(m.name);
+                  return (
+                    <div key={m.name} className="flex items-center justify-between text-sm rounded-lg px-3 py-1.5" style={{ background: COLORS.surface }}>
+                      <span>{m.name}</span>
+                      {enabled ? (
+                        <span className="flex items-center gap-1 text-xs font-semibold" style={{ color: COLORS.accent2Dark }}>
+                          <Bell size={12} /> אישר/ה
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-xs" style={{ color: COLORS.textMuted }}>
+                          <BellOff size={12} /> לא אישר/ה
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowReminderForm(!showReminderForm)}
+              className="w-full flex items-center justify-between mb-2 text-sm font-bold"
+              style={{ color: COLORS.textMuted }}
+            >
+              <span className="flex items-center gap-1.5"><Bell size={14} /> שליחת תזכורת/התראה עכשיו</span>
+              <ChevronDown size={15} style={{ transform: showReminderForm ? "rotate(180deg)" : "none" }} />
+            </button>
+            {showReminderForm && (
+              <div className="rounded-2xl p-4 space-y-2 mb-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                <p className="text-xs" style={{ color: COLORS.textMuted }}>
+                  שולח התראת דחיפה מיידית לכל מי שאישר התראות ({pushEnabledNames ? pushEnabledNames.size : 0} מכשירים) - למשל תזכורת על אירוע קרוב. זה נפרד מההתראה האוטומטית שנשלחת כשמפרסמים מודעה/סקר.
+                </p>
+                <input
+                  value={reminderTitle}
+                  onChange={(e) => setReminderTitle(e.target.value)}
+                  placeholder="כותרת (למשל: תזכורת - מפגש הכנה ביום ג')"
+                  className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                  style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                />
+                <textarea
+                  value={reminderMessage}
+                  onChange={(e) => setReminderMessage(e.target.value)}
+                  placeholder="תוכן ההודעה"
+                  rows={2}
+                  className="w-full px-3 py-2 rounded-xl text-sm outline-none resize-none"
+                  style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                />
+                <button
+                  onClick={sendReminder}
+                  disabled={sendingReminder || !reminderTitle.trim() || !reminderMessage.trim()}
+                  className="px-4 py-2 rounded-full text-sm font-semibold"
+                  style={{ background: COLORS.accent, color: COLORS.bg, opacity: (sendingReminder || !reminderTitle.trim() || !reminderMessage.trim()) ? 0.5 : 1 }}
+                >
+                  {sendingReminder ? "שולח..." : "שליחה עכשיו"}
+                </button>
+              </div>
+            )}
+
             {(paymentTotals.remaining > 0 || unfilledShiftsCount > 0 || membersWithoutShift > 0 || overBudgetCategories.length > 0 || lookingForRide.length > 0) && (
               <div className="mt-4 rounded-2xl p-4 space-y-2" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
                 <div className="text-xs font-bold mb-1" style={{ color: COLORS.accentDark }}>התרעות חשובות</div>
@@ -2937,7 +3120,7 @@ export default function App() {
                               : <span className="text-xs" style={{ color: COLORS.accentDark }}> (מנהל)</span>
                           )}
                           {m.role === "admin" && <span className="text-xs" style={{ color: COLORS.accentDark }}> (מנהל)</span>}
-                          {Object.values(teamLeads).includes(m.name) && <span className="text-xs" style={{ color: COLORS.accent2Dark }}> (מנהל צוות)</span>}
+                          {m.role === "member" && Object.values(teamLeads).includes(m.name) && <span className="text-xs" style={{ color: COLORS.accent2Dark }}> (מנהל צוות)</span>}
                           {m.idOnFile && <span className="text-xs" style={{ color: COLORS.textMuted }}> · ת.ז מאומתת</span>}
                         </span>
                         <div className="flex items-center gap-1">
@@ -2946,6 +3129,7 @@ export default function App() {
                               onClick={() => {
                                 setEditingMemberId(editingMemberId === m.name ? null : m.name);
                                 setEditIdValue("");
+                                setEditNameValue("");
                               }}
                               className="text-xs px-2 py-1 rounded-lg flex items-center gap-1"
                               style={{ color: COLORS.textMuted }}
@@ -2975,26 +3159,49 @@ export default function App() {
                         </div>
                       </div>
                       {editingMemberId === m.name && (
-                        <div className="flex items-center gap-1.5 mt-1.5 pt-1.5 border-t" style={{ borderColor: COLORS.divider }} onClick={(e) => e.stopPropagation()}>
-                          <input
-                            value={editIdValue}
-                            onChange={(e) => setEditIdValue(e.target.value)}
-                            placeholder="תעודת זהות חדשה/מעודכנת"
-                            className="flex-1 px-2 py-1 rounded-lg text-xs outline-none"
-                            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-                          />
-                          <button
-                            onClick={async () => {
-                              if (!editIdValue.trim()) return;
-                              await editMemberId(m.name, editIdValue.trim());
-                              setEditingMemberId(null);
-                              setEditIdValue("");
-                            }}
-                            className="text-xs px-2 py-1 rounded-lg font-semibold"
-                            style={{ background: COLORS.accent, color: COLORS.bg }}
-                          >
-                            שמירה
-                          </button>
+                        <div className="mt-1.5 pt-1.5 border-t space-y-1.5" style={{ borderColor: COLORS.divider }} onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              value={editNameValue}
+                              onChange={(e) => setEditNameValue(e.target.value)}
+                              placeholder={`שינוי שם (כרגע: ${m.name})`}
+                              className="flex-1 px-2 py-1 rounded-lg text-xs outline-none"
+                              style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                            />
+                            <button
+                              onClick={async () => {
+                                if (!editNameValue.trim() || editNameValue.trim() === m.name) return;
+                                await renameMember(m.name, editNameValue.trim());
+                                setEditingMemberId(null);
+                                setEditNameValue("");
+                              }}
+                              className="text-xs px-2 py-1 rounded-lg font-semibold"
+                              style={{ background: COLORS.accent, color: COLORS.bg }}
+                            >
+                              שינוי שם
+                            </button>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              value={editIdValue}
+                              onChange={(e) => setEditIdValue(e.target.value)}
+                              placeholder="תעודת זהות חדשה/מעודכנת"
+                              className="flex-1 px-2 py-1 rounded-lg text-xs outline-none"
+                              style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                            />
+                            <button
+                              onClick={async () => {
+                                if (!editIdValue.trim()) return;
+                                await editMemberId(m.name, editIdValue.trim());
+                                setEditingMemberId(null);
+                                setEditIdValue("");
+                              }}
+                              className="text-xs px-2 py-1 rounded-lg font-semibold"
+                              style={{ background: COLORS.accent, color: COLORS.bg }}
+                            >
+                              שמירה
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -4363,9 +4570,15 @@ export default function App() {
                                 </a>
                               )}
                               <div className="min-w-0">
-                                <div className="font-semibold">{e.allocation}{e.subcategory ? ` · ${e.subcategory}` : ""}{e.vendor ? ` · ${e.vendor}` : ""}</div>
+                                <div className="font-semibold">{e.allocation}{(e.description || e.subcategory) ? ` · ${e.description || e.subcategory}` : ""}{e.vendor ? ` · ${e.vendor}` : ""}</div>
                                 <div style={{ color: COLORS.textMuted }}>
-                                  {e.isRefund ? "זיכוי: " : ""}₪{Number(e.amount).toLocaleString()} · {e.vatIncluded ? "כולל מע\"מ" : "לא כולל מע\"מ"} · {e.paidBy ? `שולם ע"י ${e.paidBy}` : ""} {e.method ? `· ${e.method}` : ""}
+                                  {e.isRefund ? "זיכוי: " : ""}₪{Number(e.amount).toLocaleString()} · {e.vatIncluded ? "כולל מע\"מ" : "לא כולל מע\"מ"}
+                                  {e.purchaseDate ? ` · נקנה ${formatDateShort(e.purchaseDate)}` : ""}
+                                </div>
+                                <div style={{ color: e.paymentStatus === "partial" ? COLORS.danger : COLORS.accent2Dark }}>
+                                  {e.paymentStatus === "partial"
+                                    ? `שולם ₪${Number(e.paidAmount || 0).toLocaleString()} · נותר ₪${Number(e.remainingAmount || 0).toLocaleString()}${e.dueDate ? ` עד ${formatDateShort(e.dueDate)}` : ""}`
+                                    : (e.paymentStatus ? "שולם במלואו" : "")}
                                 </div>
                               </div>
                             </div>
@@ -4682,7 +4895,7 @@ export default function App() {
                   </div>
                   {m.name === identity && pushStatus !== "unsupported" && (
                     <div className="mt-2">
-                      {pushStatus === "granted" ? (
+                      {pushSubscribed ? (
                         <button onClick={handleDisablePush} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold" style={{ background: COLORS.accent2Light, color: COLORS.accent2Dark }}>
                           <Bell size={12} /> התראות דחיפה פעילות - לחץ/י לביטול
                         </button>
@@ -4691,6 +4904,19 @@ export default function App() {
                           <BellOff size={12} /> הפעלת התראות דחיפה למודעות וסקרים
                         </button>
                       )}
+                    </div>
+                  )}
+                  {isAdmin && memberPhones[m.name] && (
+                    <div className="mt-2">
+                      <a
+                        href={buildWhatsAppLink(memberPhones[m.name], eventReminderMessage(m.name))}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold"
+                        style={{ background: "#25D366", color: "white" }}
+                      >
+                        <MessageCircle size={13} /> תזכורת אירוע בוואטסאפ
+                      </a>
                     </div>
                   )}
                 </div>
