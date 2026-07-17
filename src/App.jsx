@@ -236,6 +236,58 @@ function daysUntil() {
   return Math.ceil((EVENT_START - new Date()) / (1000 * 60 * 60 * 24));
 }
 
+// ---------------------------------------------------------------------------
+// "היומן שלי" phone-calendar sync - exports shifts + calendar events as a
+// standard .ics file. No server involved: every phone/desktop calendar app
+// (Google Calendar, Apple Calendar, Outlook) can import this directly.
+// ---------------------------------------------------------------------------
+function icsEscape(text) {
+  return String(text || "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+}
+function icsDateTime(dateStr, timeStr) {
+  const [y, m, d] = dateStr.split("-");
+  const [hh, mm] = (timeStr || "00:00").split(":");
+  return `${y}${m}${d}T${hh}${mm}00`;
+}
+function buildMyCalendarIcs(shifts, events) {
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Afterglow Camp//he", "CALSCALE:GREGORIAN"];
+  shifts.forEach((s) => {
+    lines.push(
+      "BEGIN:VEVENT",
+      `UID:shift-${s.id}@afterglow-camp`,
+      `DTSTART:${icsDateTime(s.date, s.start)}`,
+      `DTEND:${icsDateTime(s.date, s.end)}`,
+      `SUMMARY:${icsEscape(s.title)}`,
+      `DESCRIPTION:${icsEscape(s.desc || "")}`,
+      "END:VEVENT"
+    );
+  });
+  events.forEach((a) => {
+    lines.push("BEGIN:VEVENT", `UID:event-${a.id}@afterglow-camp`);
+    if (a.eventTime) {
+      const [hh, mm] = a.eventTime.split(":").map(Number);
+      const endTime = `${String((hh + 1) % 24).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+      lines.push(`DTSTART:${icsDateTime(a.eventDate, a.eventTime)}`, `DTEND:${icsDateTime(a.eventDate, endTime)}`);
+    } else {
+      lines.push(`DTSTART;VALUE=DATE:${a.eventDate.replace(/-/g, "")}`);
+    }
+    lines.push(`SUMMARY:${icsEscape(a.text.slice(0, 80))}`, "END:VEVENT");
+  });
+  lines.push("END:VCALENDAR");
+  return lines.join("\r\n");
+}
+function downloadMyCalendarIcs(shifts, events) {
+  const blob = new Blob([buildMyCalendarIcs(shifts, events)], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "afterglow-camp-calendar.ics";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // iOS only supports Web Push once the site is installed to the home screen
 // (Add to Home Screen) - a plain Safari tab can never receive them, no
 // matter what permission is granted, so this needs its own instructions.
@@ -3523,9 +3575,20 @@ export default function App() {
             </div>
 
             <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
-              <h3 className="text-sm font-bold mb-3 flex items-center gap-2" style={{ color: COLORS.accentDark }}>
-                <CalendarDays size={15} /> היומן שלי
-              </h3>
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <h3 className="text-sm font-bold flex items-center gap-2" style={{ color: COLORS.accentDark }}>
+                  <CalendarDays size={15} /> היומן שלי
+                </h3>
+                {(myShifts.length > 0 || myCalendarEvents.length > 0) && (
+                  <button
+                    onClick={() => downloadMyCalendarIcs(myShifts, myCalendarEvents)}
+                    className="text-xs px-3 py-1.5 rounded-full font-semibold"
+                    style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, color: COLORS.textMuted }}
+                  >
+                    הוספה ליומן בטלפון
+                  </button>
+                )}
+              </div>
               {myShifts.length === 0 && myCalendarEvents.length === 0 ? (
                 <p className="text-xs" style={{ color: COLORS.textMuted }}>עדיין לא שיבצת אף משמרת, ואין אירועים ביומן. עבור/י לטאב "שיבוץ עצמי" כדי להצטרף למשמרת.</p>
               ) : (
@@ -3586,43 +3649,22 @@ export default function App() {
 
               {(() => {
                 const relevantAnnouncements = announcements.filter(
-                  (a) => !a.audience || a.audience === "all" || isAdmin || isInTeam(a.audience)
+                  (a) => !a.isEvent && (!a.audience || a.audience === "all" || isAdmin || isInTeam(a.audience))
                 );
                 return relevantAnnouncements.length === 0 ? (
                   <p className="text-xs" style={{ color: COLORS.textMuted }}>אין עדכונים חדשים.</p>
                 ) : (
                   <div className="space-y-1.5">
-                    {relevantAnnouncements.slice(0, 3).map((a) => {
-                      const authorRole = allMembers.find((m) => m.name === a.author)?.role;
-                      const isAdminEvent = authorRole === "admin" || authorRole === "owner";
-                      const inMyCalendar = (personalCalendarAdds[identity] || []).includes(a.id);
-                      return (
-                        <div key={a.id} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                          <div className="flex items-center justify-between">
-                            <span><b style={{ color: COLORS.accentDark }}>{a.author}:</b> {a.text}</span>
-                            {a.audience && a.audience !== "all" && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: COLORS.accent2Light, color: COLORS.accent2Dark }}>{a.audience}</span>
-                            )}
-                          </div>
-                          {a.isEvent && (a.eventDate || a.eventTime) && (
-                            <div className="mt-1 flex items-center justify-between flex-wrap gap-1">
-                              <div className="font-bold" style={{ color: COLORS.accentDark }}>
-                                📅 {a.eventDate ? formatDate(a.eventDate) : ""}{a.eventTime ? ` · ${a.eventTime}` : ""}
-                              </div>
-                              {!isAdminEvent && (
-                                <button
-                                  onClick={() => toggleMyCalendarAdd(a.id)}
-                                  className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
-                                  style={{ background: inMyCalendar ? COLORS.accent2Light : COLORS.input, color: inMyCalendar ? COLORS.accent2Dark : COLORS.textMuted }}
-                                >
-                                  {inMyCalendar ? "✓ ביומן שלי" : "הוסף ליומן שלי"}
-                                </button>
-                              )}
-                            </div>
+                    {relevantAnnouncements.slice(0, 3).map((a) => (
+                      <div key={a.id} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                        <div className="flex items-center justify-between">
+                          <span><b style={{ color: COLORS.accentDark }}>{a.author}:</b> {a.text}</span>
+                          {a.audience && a.audience !== "all" && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: COLORS.accent2Light, color: COLORS.accent2Dark }}>{a.audience}</span>
                           )}
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                 );
               })()}
