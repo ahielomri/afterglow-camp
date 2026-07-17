@@ -2863,7 +2863,7 @@ export default function App() {
 
   function teamStats(team) {
     const teamShifts = SHIFTS.filter((s) => s.team === team && s.id !== TEARDOWN_ID);
-    const unfilled = teamShifts.filter((s) => (assignments[s.id] || []).length < s.spots).length;
+    const unfilled = teamShifts.reduce((sum, s) => sum + Math.max(s.spots - (assignments[s.id] || []).length, 0), 0);
     const planned = Number(categoryBudgets[team]) || 0;
     const paid = budgetItems.filter((b) => b.category === team).reduce((s, b) => s + (Number(b.paid) || 0), 0);
     return { totalShifts: teamShifts.length, unfilled, planned, paid };
@@ -2920,12 +2920,15 @@ export default function App() {
       })
       .sort((a, b) => (a.eventDate || "").localeCompare(b.eventDate || ""));
   }, [announcements, personalCalendarAdds, identity, allMembers]);
+  // Counts open seats, not under-staffed shifts - a shift that needs 2
+  // people and has 0 counts as 2, with 1 it counts as 1, matching how
+  // many more people are actually still needed.
   const openShiftsCount = useMemo(
-    () => SHIFTS.filter((s) => s.id !== TEARDOWN_ID && (assignments[s.id] || []).length < s.spots).length,
+    () => SHIFTS.reduce((sum, s) => (s.id === TEARDOWN_ID ? sum : sum + Math.max(s.spots - (assignments[s.id] || []).length, 0)), 0),
     [assignments]
   );
   const unfilledShiftsCount = useMemo(
-    () => SHIFTS.filter((s) => s.id !== TEARDOWN_ID && (assignments[s.id] || []).length < s.spots).length,
+    () => SHIFTS.reduce((sum, s) => (s.id === TEARDOWN_ID ? sum : sum + Math.max(s.spots - (assignments[s.id] || []).length, 0)), 0),
     [assignments]
   );
   const membersWithoutShift = useMemo(
@@ -3110,7 +3113,7 @@ export default function App() {
                 { label: "יתרה לגבייה", value: `₪${paymentTotals.remaining.toLocaleString()}` },
                 { label: "תקציב מתוכנן", value: `₪${budgetTotals.planned.toLocaleString()}` },
                 { label: "הוצאות בפועל", value: `₪${budgetTotals.paid.toLocaleString()}` },
-                { label: "משמרות לא מלאות", value: unfilledShiftsCount },
+                { label: "מקומות פנויים במשמרות", value: unfilledShiftsCount },
                 { label: "חברים ללא משמרת", value: membersWithoutShift },
                 { label: "ימים לפתיחת השערים", value: daysUntil() },
               ].map((c) => (
@@ -3150,7 +3153,7 @@ export default function App() {
               <div className="mt-4 rounded-2xl p-4 space-y-2" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
                 <div className="text-xs font-bold mb-1" style={{ color: COLORS.accentDark }}>התרעות חשובות</div>
                 {paymentTotals.remaining > 0 && <div className="text-xs">💰 עוד ₪{paymentTotals.remaining.toLocaleString()} לגבייה מחברי הקמפ</div>}
-                {unfilledShiftsCount > 0 && <div className="text-xs">📋 {unfilledShiftsCount} משמרות עדיין לא מלאות</div>}
+                {unfilledShiftsCount > 0 && <div className="text-xs">📋 עוד {unfilledShiftsCount} מקומות פנויים במשמרות</div>}
                 {membersWithoutShift > 0 && <div className="text-xs">🙋 {membersWithoutShift} חברים עדיין לא שיבצו אף משמרת</div>}
                 {lookingForRide.length > 0 && <div className="text-xs">🚗 {lookingForRide.length} חברים מחפשים טרמפ ועדיין לא שובצו</div>}
                 {overBudgetCategories.map((cat) => (
@@ -3463,7 +3466,7 @@ export default function App() {
                 const t = teamStats(myLeadTeam);
                 return [
                   { label: "משמרות הצוות", value: t.totalShifts },
-                  { label: "משמרות לא מלאות", value: t.unfilled },
+                  { label: "מקומות פנויים", value: t.unfilled },
                   { label: "תקציב הצוות", value: `₪${t.planned.toLocaleString()}` },
                   { label: "שולם בפועל", value: `₪${t.paid.toLocaleString()}` },
                 ].map((c) => (
@@ -3522,6 +3525,16 @@ export default function App() {
                 חסמת התראות בעבר - כדי לקבל עדכונים על מודעות וסקרים חדשים, אפשר להפעיל אותן מחדש דרך הגדרות הדפדפן (הרשאות אתר → התראות).
               </div>
             )}
+            {pushStatus === "granted" && !pushSubscribed && (
+              <div className="rounded-2xl p-4 mb-4" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
+                <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
+                  ההרשאה להתראות פעילה, אבל אין מנוי פעיל במכשיר הזה כרגע - כנראה בעקבות תקלה קודמת. אפשר להפעיל מחדש:
+                </p>
+                <button onClick={handleEnablePush} className="px-4 py-2 rounded-full text-sm font-semibold" style={{ background: COLORS.accent, color: COLORS.bg }}>
+                  הפעלה מחדש של התראות
+                </button>
+              </div>
+            )}
             {pushSubscribed && (
               <button
                 onClick={sendTestPush}
@@ -3547,7 +3560,7 @@ export default function App() {
             <div className="grid grid-cols-3 gap-2 sm:gap-4">
               {[
                 { label: "המשמרות שלי", value: myShifts.length },
-                { label: "משמרות עם מקום פנוי", value: openShiftsCount },
+                { label: "מקומות פנויים במשמרות", value: openShiftsCount },
                 { label: "ימים לפתיחת השערים", value: daysUntil() },
               ].map((c) => (
                 <div key={c.label} className="rounded-2xl p-2.5 sm:p-5" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
@@ -3575,20 +3588,9 @@ export default function App() {
             </div>
 
             <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
-              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                <h3 className="text-sm font-bold flex items-center gap-2" style={{ color: COLORS.accentDark }}>
-                  <CalendarDays size={15} /> היומן שלי
-                </h3>
-                {(myShifts.length > 0 || myCalendarEvents.length > 0) && (
-                  <button
-                    onClick={() => downloadMyCalendarIcs(myShifts, myCalendarEvents)}
-                    className="text-xs px-3 py-1.5 rounded-full font-semibold"
-                    style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, color: COLORS.textMuted }}
-                  >
-                    הוספה ליומן בטלפון
-                  </button>
-                )}
-              </div>
+              <h3 className="text-sm font-bold mb-3 flex items-center gap-2" style={{ color: COLORS.accentDark }}>
+                <CalendarDays size={15} /> היומן שלי
+              </h3>
               {myShifts.length === 0 && myCalendarEvents.length === 0 ? (
                 <p className="text-xs" style={{ color: COLORS.textMuted }}>עדיין לא שיבצת אף משמרת, ואין אירועים ביומן. עבור/י לטאב "שיבוץ עצמי" כדי להצטרף למשמרת.</p>
               ) : (
@@ -3598,6 +3600,13 @@ export default function App() {
                       <div className="text-xs font-bold" style={{ color: COLORS.accent2Dark }}>{a.eventDate ? formatDateShort(a.eventDate) : ""}{a.eventTime ? ` · ${a.eventTime}` : ""}</div>
                       <div className="text-sm font-semibold mt-1">{a.text}</div>
                       <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>אירוע · {a.author}</div>
+                      <button
+                        onClick={() => downloadMyCalendarIcs([], [a])}
+                        className="mt-2 text-[10px] px-2 py-1 rounded-full font-semibold"
+                        style={{ background: "rgba(255,255,255,0.6)", color: COLORS.accent2Dark }}
+                      >
+                        הוספה ליומן בטלפון
+                      </button>
                     </div>
                   ))}
                   {myShifts.map((s) => (
@@ -3607,6 +3616,13 @@ export default function App() {
                       {s.id !== TEARDOWN_ID && (
                         <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{s.start}–{s.end}</div>
                       )}
+                      <button
+                        onClick={() => downloadMyCalendarIcs([s], [])}
+                        className="mt-2 text-[10px] px-2 py-1 rounded-full font-semibold"
+                        style={{ background: COLORS.input, color: COLORS.textMuted }}
+                      >
+                        הוספה ליומן בטלפון
+                      </button>
                     </div>
                   ))}
                 </div>
