@@ -3626,110 +3626,10 @@ export default function App() {
               <div className="rounded-2xl p-4 mb-4" style={{ background: COLORS.accent2Light, border: `1px solid ${COLORS.accent2}55` }}>
                 <div className="text-sm font-bold mb-1" style={{ color: COLORS.accent2Dark }}>יש להשלים פרטים לפני שממשיכים באפליקציה</div>
                 <p className="text-xs" style={{ color: COLORS.textMuted }}>
-                  חסר: {missingProfileFields.join(", ")}. שאר טאבי האפליקציה ייפתחו אוטומטית ברגע שהכל מלא.
+                  חסר: {missingProfileFields.join(", ")}. פתח/י את "פרטים אישיים" למטה כדי למלא - שאר טאבי האפליקציה ייפתחו אוטומטית ברגע שהכל מלא.
                 </p>
               </div>
             )}
-            {pushStatus === "default" && (
-              <div className="rounded-2xl p-4 mb-4" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
-                <div className="text-sm font-bold mb-1.5 flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
-                  <Bell size={14} /> הפעילו התראות כדי לא לפספס עדכונים
-                </div>
-                {isIOSDevice() && !isStandaloneDisplay() ? (
-                  <>
-                    <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
-                      באייפון צריך קודם להוסיף את האתר למסך הבית: כפתור השיתוף בספארי ← "הוסף למסך הבית". אחר כך פותחים מהאייקון שנוסף למסך הבית, ומשם אפשר להפעיל התראות.
-                    </p>
-                    <button onClick={handleDeclinePush} className="px-4 py-2 rounded-full text-sm font-semibold" style={{ background: "transparent", color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}>
-                      לא כרגע
-                    </button>
-                  </>
-                ) : pushSupported() ? (
-                  <>
-                    <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
-                      נשלח התראה כשיש מודעה או סקר חדש בקמפ - גם כשהאפליקציה סגורה בנייד.
-                    </p>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <button onClick={handleEnablePush} className="px-4 py-2 rounded-full text-sm font-semibold" style={{ background: COLORS.accent, color: COLORS.bg }}>
-                        הפעלת התראות
-                      </button>
-                      <button onClick={handleDeclinePush} className="px-4 py-2 rounded-full text-sm font-semibold" style={{ background: "transparent", color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}>
-                        לא כרגע
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <p className="text-xs" style={{ color: COLORS.textMuted }}>המכשיר/דפדפן הזה לא תומך בהתראות דחיפה. <button onClick={handleDeclinePush} className="underline">המשך/י</button></p>
-                )}
-              </div>
-            )}
-            {pushStatus === "denied" && (
-              <div className="rounded-2xl p-3 mb-4 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, color: COLORS.textMuted }}>
-                חסמת התראות בעבר - כדי לקבל עדכונים על מודעות וסקרים חדשים, אפשר להפעיל אותן מחדש דרך הגדרות הדפדפן (הרשאות אתר → התראות).
-              </div>
-            )}
-            {pushStatus === "granted" && !pushSubscribed && (
-              <div className="rounded-2xl p-4 mb-4" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
-                <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
-                  ההרשאה להתראות פעילה, אבל אין מנוי פעיל במכשיר הזה כרגע - כנראה בעקבות תקלה קודמת. אפשר להפעיל מחדש:
-                </p>
-                <button onClick={handleEnablePush} className="px-4 py-2 rounded-full text-sm font-semibold" style={{ background: COLORS.accent, color: COLORS.bg }}>
-                  הפעלה מחדש של התראות
-                </button>
-              </div>
-            )}
-            {pushSubscribed && (
-              <button
-                onClick={sendTestPush}
-                disabled={sendingTestPush}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold mb-2"
-                style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, color: COLORS.textMuted, opacity: sendingTestPush ? 0.6 : 1 }}
-              >
-                <Bell size={12} /> {sendingTestPush ? "שולח..." : "שליחת התראת בדיקה לעצמי"}
-              </button>
-            )}
-            {pushSubscribed && (
-              <div className="mb-4">
-                <button
-                  onClick={handleResetPush}
-                  disabled={sendingTestPush}
-                  className="text-xs px-3 py-1 rounded-full"
-                  style={{ color: COLORS.textMuted, opacity: sendingTestPush ? 0.6 : 1 }}
-                >
-                  לא מקבל/ת התראות בפועל? אתחול מלא של ההתראות
-                </button>
-              </div>
-            )}
-
-            <div className="rounded-2xl p-4 mb-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-              <div className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
-                <Phone size={14} /> פרטי קשר
-              </div>
-              <div className="grid sm:grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>טלפון</label>
-                  <input
-                    defaultValue={memberPhones[identity] || ""}
-                    onBlur={(e) => setPhone(identity, e.target.value)}
-                    placeholder="050-1234567"
-                    dir="ltr"
-                    className="w-full px-3 py-2 rounded-xl text-sm outline-none text-left"
-                    style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-                  />
-                </div>
-                <div>
-                  <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>אימייל</label>
-                  <input
-                    defaultValue={memberEmails[identity] || ""}
-                    onBlur={(e) => setEmail(identity, e.target.value)}
-                    placeholder="name@example.com"
-                    dir="ltr"
-                    className="w-full px-3 py-2 rounded-xl text-sm outline-none text-left"
-                    style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-                  />
-                </div>
-              </div>
-            </div>
 
             <div className="grid grid-cols-3 gap-2 sm:gap-4">
               {[
@@ -3864,74 +3764,155 @@ export default function App() {
 
 
             {(() => {
-              const emergencyMissing = missingProfileFields.includes("פרטי חירום");
-              const rideMissing = missingProfileFields.includes("התניידות");
-              const allocationMissing = missingProfileFields.includes("הקצאה");
-              // Sections a required field is still missing from default open
-              // (until the user explicitly touches any section's toggle) so
-              // onboarding doesn't hide the very forms someone needs to fill.
-              const emergencyOpen = openPersonalSection === "emergency" || (openPersonalSection === null && emergencyMissing);
-              const rideOpen = openPersonalSection === "ride" || (openPersonalSection === null && rideMissing);
-              const allocationOpen = openPersonalSection === "allocation" || (openPersonalSection === null && allocationMissing);
+              // Open by default only while something inside is still
+              // missing (until the user explicitly touches the toggle) -
+              // once everything's filled it collapses down like any other
+              // section instead of staying pinned open.
+              const detailsOpen = openPersonalSection === "details" || (openPersonalSection === null && !profileComplete);
               return (
-                <>
-                  <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
-                    <button
-                      onClick={() => setOpenPersonalSection(emergencyOpen ? "closed" : "emergency")}
-                      className="w-full flex items-center justify-between text-sm font-bold"
-                      style={{ color: COLORS.accentDark }}
-                    >
-                      <span className="flex items-center gap-2">
-                        <HeartPulse size={15} /> כרטיס אישי - לשעת חירום
-                        {emergencyMissing && <span className="text-xs font-normal" style={{ color: COLORS.danger }}>· חובה</span>}
-                      </span>
-                      <ChevronDown size={15} style={{ transform: emergencyOpen ? "rotate(180deg)" : "none" }} />
-                    </button>
-                    {emergencyOpen && (
-                      <div className="mt-3">
+                <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
+                  <button
+                    onClick={() => setOpenPersonalSection(detailsOpen ? "closed" : "details")}
+                    className="w-full flex items-center justify-between text-sm font-bold"
+                    style={{ color: COLORS.accentDark }}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Users size={15} /> פרטים אישיים
+                      {!profileComplete && <span className="text-xs font-normal" style={{ color: COLORS.danger }}>· יש למלא</span>}
+                    </span>
+                    <ChevronDown size={15} style={{ transform: detailsOpen ? "rotate(180deg)" : "none" }} />
+                  </button>
+                  {detailsOpen && (
+                    <div className="mt-3 space-y-4">
+                      <div>
+                        <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
+                          <Bell size={13} /> התראות
+                          {missingProfileFields.includes("החלטה לגבי התראות") && <span className="font-normal" style={{ color: COLORS.danger }}>· חובה</span>}
+                        </div>
+                        {pushStatus === "default" && (
+                          <div className="rounded-2xl p-3" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
+                            {isIOSDevice() && !isStandaloneDisplay() ? (
+                              <>
+                                <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
+                                  באייפון צריך קודם להוסיף את האתר למסך הבית: כפתור השיתוף בספארי ← "הוסף למסך הבית". אחר כך פותחים מהאייקון שנוסף למסך הבית, ומשם אפשר להפעיל התראות.
+                                </p>
+                                <button onClick={handleDeclinePush} className="px-4 py-2 rounded-full text-sm font-semibold" style={{ background: "transparent", color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}>
+                                  לא כרגע
+                                </button>
+                              </>
+                            ) : pushSupported() ? (
+                              <>
+                                <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
+                                  נשלח התראה כשיש מודעה או סקר חדש בקמפ - גם כשהאפליקציה סגורה בנייד.
+                                </p>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <button onClick={handleEnablePush} className="px-4 py-2 rounded-full text-sm font-semibold" style={{ background: COLORS.accent, color: COLORS.bg }}>
+                                    הפעלת התראות
+                                  </button>
+                                  <button onClick={handleDeclinePush} className="px-4 py-2 rounded-full text-sm font-semibold" style={{ background: "transparent", color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}>
+                                    לא כרגע
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <p className="text-xs" style={{ color: COLORS.textMuted }}>המכשיר/דפדפן הזה לא תומך בהתראות דחיפה. <button onClick={handleDeclinePush} className="underline">המשך/י</button></p>
+                            )}
+                          </div>
+                        )}
+                        {pushStatus === "denied" && (
+                          <div className="rounded-2xl p-3 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, color: COLORS.textMuted }}>
+                            חסמת התראות בעבר - כדי לקבל עדכונים על מודעות וסקרים חדשים, אפשר להפעיל אותן מחדש דרך הגדרות הדפדפן (הרשאות אתר → התראות).
+                          </div>
+                        )}
+                        {pushStatus === "granted" && !pushSubscribed && (
+                          <div className="rounded-2xl p-3" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
+                            <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
+                              ההרשאה להתראות פעילה, אבל אין מנוי פעיל במכשיר הזה כרגע - כנראה בעקבות תקלה קודמת. אפשר להפעיל מחדש:
+                            </p>
+                            <button onClick={handleEnablePush} className="px-4 py-2 rounded-full text-sm font-semibold" style={{ background: COLORS.accent, color: COLORS.bg }}>
+                              הפעלה מחדש של התראות
+                            </button>
+                          </div>
+                        )}
+                        {pushSubscribed && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                              onClick={sendTestPush}
+                              disabled={sendingTestPush}
+                              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold"
+                              style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, color: COLORS.textMuted, opacity: sendingTestPush ? 0.6 : 1 }}
+                            >
+                              <Bell size={12} /> {sendingTestPush ? "שולח..." : "שליחת התראת בדיקה לעצמי"}
+                            </button>
+                            <button
+                              onClick={handleResetPush}
+                              disabled={sendingTestPush}
+                              className="text-xs px-3 py-1 rounded-full"
+                              style={{ color: COLORS.textMuted, opacity: sendingTestPush ? 0.6 : 1 }}
+                            >
+                              לא מקבל/ת התראות בפועל? אתחול מלא של ההתראות
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
+                          <Phone size={13} /> פרטי קשר
+                          {(missingProfileFields.includes("טלפון") || missingProfileFields.includes("אימייל")) && <span className="font-normal" style={{ color: COLORS.danger }}>· חובה</span>}
+                        </div>
+                        <div className="rounded-2xl p-3 grid sm:grid-cols-2 gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                          <div>
+                            <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>טלפון</label>
+                            <input
+                              defaultValue={memberPhones[identity] || ""}
+                              onBlur={(e) => setPhone(identity, e.target.value)}
+                              placeholder="050-1234567"
+                              dir="ltr"
+                              className="w-full px-3 py-2 rounded-xl text-sm outline-none text-left"
+                              style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>אימייל</label>
+                            <input
+                              defaultValue={memberEmails[identity] || ""}
+                              onBlur={(e) => setEmail(identity, e.target.value)}
+                              placeholder="name@example.com"
+                              dir="ltr"
+                              className="w-full px-3 py-2 rounded-xl text-sm outline-none text-left"
+                              style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
+                          <HeartPulse size={13} /> כרטיס אישי - לשעת חירום
+                          {missingProfileFields.includes("פרטי חירום") && <span className="font-normal" style={{ color: COLORS.danger }}>· חובה</span>}
+                        </div>
                         <EmergencyCardForm data={emergencyInfo[identity]} onChange={(d) => setEmergencyData(identity, d)} />
                       </div>
-                    )}
-                  </div>
 
-                  <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
-                    <button
-                      onClick={() => setOpenPersonalSection(rideOpen ? "closed" : "ride")}
-                      className="w-full flex items-center justify-between text-sm font-bold"
-                      style={{ color: COLORS.accentDark }}
-                    >
-                      <span className="flex items-center gap-2">
-                        <Car size={15} /> התניידות - הפרטים שלי
-                        {rideMissing && <span className="text-xs font-normal" style={{ color: COLORS.danger }}>· חובה</span>}
-                      </span>
-                      <ChevronDown size={15} style={{ transform: rideOpen ? "rotate(180deg)" : "none" }} />
-                    </button>
-                    {rideOpen && (
-                      <div className="mt-3">
+                      <div>
+                        <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
+                          <Car size={13} /> התניידות - הפרטים שלי
+                          {missingProfileFields.includes("התניידות") && <span className="font-normal" style={{ color: COLORS.danger }}>· חובה</span>}
+                        </div>
                         <RideWizard data={rideInfo[identity]} onChange={(d) => setRideData(identity, d)} />
                       </div>
-                    )}
-                  </div>
 
-                  <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
-                    <button
-                      onClick={() => setOpenPersonalSection(allocationOpen ? "closed" : "allocation")}
-                      className="w-full flex items-center justify-between text-sm font-bold"
-                      style={{ color: COLORS.accentDark }}
-                    >
-                      <span className="flex items-center gap-2">
-                        <Ticket size={15} /> הקצאה למידברן
-                        {allocationMissing && <span className="text-xs font-normal" style={{ color: COLORS.danger }}>· חובה</span>}
-                      </span>
-                      <ChevronDown size={15} style={{ transform: allocationOpen ? "rotate(180deg)" : "none" }} />
-                    </button>
-                    {allocationOpen && (
-                      <div className="mt-3">
+                      <div>
+                        <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
+                          <Ticket size={13} /> הקצאה למידברן
+                          {missingProfileFields.includes("הקצאה") && <span className="font-normal" style={{ color: COLORS.danger }}>· חובה</span>}
+                        </div>
                         <AllocationWizard data={allocationInfo[identity]} onChange={(d) => setAllocationData(identity, d)} />
                       </div>
-                    )}
-                  </div>
-                </>
+                    </div>
+                  )}
+                </div>
               );
             })()}
           </div>
