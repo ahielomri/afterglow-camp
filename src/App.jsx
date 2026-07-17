@@ -233,6 +233,16 @@ function daysUntil() {
   return Math.ceil((EVENT_START - new Date()) / (1000 * 60 * 60 * 24));
 }
 
+// iOS only supports Web Push once the site is installed to the home screen
+// (Add to Home Screen) - a plain Safari tab can never receive them, no
+// matter what permission is granted, so this needs its own instructions.
+function isIOSDevice() {
+  return typeof navigator !== "undefined" && /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+function isStandaloneDisplay() {
+  return typeof window !== "undefined" && (window.matchMedia?.("(display-mode: standalone)").matches || window.navigator?.standalone === true);
+}
+
 function buildWhatsAppLink(phone, text) {
   const digits = (phone || "").replace(/\D/g, "");
   if (!digits) return null;
@@ -2921,8 +2931,13 @@ export default function App() {
                       <div className="flex items-center justify-between text-sm">
                         <span>
                           {m.name}
-                          {m.role === "owner" && <span className="text-xs" style={{ color: COLORS.accentDark }}> (אדריכל)</span>}
+                          {m.role === "owner" && (
+                            isOwner
+                              ? <span className="text-xs" style={{ color: COLORS.accentDark }}> (אדריכל)</span>
+                              : <span className="text-xs" style={{ color: COLORS.accentDark }}> (מנהל)</span>
+                          )}
                           {m.role === "admin" && <span className="text-xs" style={{ color: COLORS.accentDark }}> (מנהל)</span>}
+                          {Object.values(teamLeads).includes(m.name) && <span className="text-xs" style={{ color: COLORS.accent2Dark }}> (מנהל צוות)</span>}
                           {m.idOnFile && <span className="text-xs" style={{ color: COLORS.textMuted }}> · ת.ז מאומתת</span>}
                         </span>
                         <div className="flex items-center gap-1">
@@ -3178,6 +3193,34 @@ export default function App() {
 
         {tab === "dashboard-personal" && (
           <div>
+            {pushStatus === "default" && (
+              <div className="rounded-2xl p-4 mb-4" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
+                <div className="text-sm font-bold mb-1.5 flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
+                  <Bell size={14} /> הפעילו התראות כדי לא לפספס עדכונים
+                </div>
+                {isIOSDevice() && !isStandaloneDisplay() ? (
+                  <p className="text-xs" style={{ color: COLORS.textMuted }}>
+                    באייפון צריך קודם להוסיף את האתר למסך הבית: כפתור השיתוף בספארי ← "הוסף למסך הבית". אחר כך פותחים מהאייקון שנוסף למסך הבית, ומשם אפשר להפעיל התראות.
+                  </p>
+                ) : pushSupported() ? (
+                  <>
+                    <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
+                      נשלח התראה כשיש מודעה או סקר חדש בקמפ - גם כשהאפליקציה סגורה בנייד.
+                    </p>
+                    <button onClick={handleEnablePush} className="px-4 py-2 rounded-full text-sm font-semibold" style={{ background: COLORS.accent, color: COLORS.bg }}>
+                      הפעלת התראות
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-xs" style={{ color: COLORS.textMuted }}>המכשיר/דפדפן הזה לא תומך בהתראות דחיפה.</p>
+                )}
+              </div>
+            )}
+            {pushStatus === "denied" && (
+              <div className="rounded-2xl p-3 mb-4 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, color: COLORS.textMuted }}>
+                חסמת התראות בעבר - כדי לקבל עדכונים על מודעות וסקרים חדשים, אפשר להפעיל אותן מחדש דרך הגדרות הדפדפן (הרשאות אתר → התראות).
+              </div>
+            )}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               {[
                 { label: "המשמרות שלי", value: myShifts.length },
