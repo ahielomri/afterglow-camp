@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Users, CalendarDays, Clock, Flame, Tent, Sparkles, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle } from "lucide-react";
+import { Users, CalendarDays, Clock, Flame, Tent, Sparkles, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff } from "lucide-react";
 import { pushSupported, pushPermission, enablePush, disablePush } from "./push.js";
 import {
   uploadFile,
@@ -19,6 +19,8 @@ import {
   addTeamMemberRow,
   removeTeamMemberRow,
   adminSetMemberId,
+  adminSetMemberRole,
+  listMembersWithIdOnFile,
 } from "./storage.js";
 
 // ---------------------------------------------------------------------------
@@ -1637,6 +1639,101 @@ function RideCategoryCard({ icon: Icon, title, count, headerColor, emptyText, ch
   );
 }
 
+// ---------------------------------------------------------------------------
+// Camp budget engine - implements the handover-doc formulas exactly.
+// Every number here is an input re-entered each planning cycle; nothing
+// is hardcoded. Section numbers in comments match the source document.
+// Pulled out to a plain function (instead of living inline in a useMemo)
+// so it can be run twice: once with the real camp-member count, and once
+// with a hypothetical "what if we had N members" count for planning.
+// ---------------------------------------------------------------------------
+function runBudgetEngine(p, N, budgetExpenses, paymentTotals) {
+  const num = (v) => Number(v) || 0;
+  const eventDays = num(p.global.eventDays);
+  const defaultPct = num(p.global.contingencyPct);
+  const pctFor = (sectionKey) => {
+    const ov = p.contingencyOverrides[sectionKey];
+    return ov !== undefined && ov !== "" ? num(ov) : defaultPct;
+  };
+  const perPerson = (total) => (N > 0 ? total / N : 0);
+
+  // 02 - מחנה (כולל הסלון)
+  const campItemsTotal = p.campInfra.items.reduce((s, r) => s + num(r.qty) * num(r.price), 0);
+  const loungeItemsTotal = p.campInfra.loungeItems.reduce((s, r) => s + num(r.qty) * num(r.price), 0);
+  const iceCost = num(p.campInfra.icePricePerKg) * num(p.campInfra.iceKgPerDay) * num(p.campInfra.iceDays);
+  const elecCost = num(p.campInfra.elecPricePerKw) * num(p.campInfra.elecKw);
+  const oneTimeIncomeTotal = p.campInfra.oneTimeIncome.reduce((s, r) => s + num(r.amount), 0);
+  const campBase = campItemsTotal + loungeItemsTotal + iceCost + elecCost;
+  const campContingency = campBase * (pctFor("camp") / 100);
+  const campTotal = campBase + campContingency;
+
+  // 03 - מים ומקלחות
+  const w = p.water;
+  const totalLiters = N * num(w.literPerPersonPerDay) * eventDays;
+  const waterBase = num(w.tankFaucetCost) + num(w.fillCost) * num(w.fillCount) + num(w.drainCost) * num(w.drainCount) + num(w.showerUnitCost) * num(w.showerUnitsCount);
+  const waterContingency = waterBase * (pctFor("water") / 100);
+  const waterTotal = waterBase + waterContingency;
+
+  // 04 - שירותים (תברואה)
+  const s = p.sanitation;
+  const pumpOutCost = N * num(s.pumpFreqPerPersonPerDay) * eventDays * num(s.pumpCost);
+  const sanitationBase = pumpOutCost + num(s.sawdustFreq) * num(s.sawdustCost) + num(s.drainCellCost) + num(s.chemicalToiletsCost);
+  const sanitationContingency = sanitationBase * (pctFor("sanitation") / 100);
+  const sanitationTotal = sanitationBase + sanitationContingency;
+
+  // 05 - אוכל
+  const f = p.food;
+  const setupFoodCost = num(f.setupPeopleCount) * num(f.setupDays) * num(f.setupCostPerDay);
+  const eventFoodCost = num(f.actualDiners) * num(f.mealsPerDay) * num(f.eventDays) * num(f.costPerMeal);
+  const foodTotal = setupFoodCost + eventFoodCost + num(f.contingencyAmount);
+
+  // 06 - אלכוהול
+  const alcoholBase = p.alcohol.categories.reduce((sum, c) => sum + num(c.units) * num(c.price), 0);
+  const alcoholTotal = alcoholBase;
+
+  // 07 - כללי
+  const g = p.general;
+  const splitRatio = g.splitRatioPct === "" ? 100 : num(g.splitRatioPct);
+  const generalShare = num(g.fixedAnnualCost) * (splitRatio / 100);
+
+  // 10 - רישום הוצאות בפועל, מקובץ לפי שיוך תקציבי
+  const actualByAllocation = {};
+  budgetExpenses.forEach((e) => {
+    const key = e.allocation || "שונות";
+    const amt = (e.isRefund ? -1 : 1) * num(e.amount);
+    actualByAllocation[key] = (actualByAllocation[key] || 0) + amt;
+  });
+  const totalActual = Object.values(actualByAllocation).reduce((s, v) => s + v, 0);
+
+  // 12 - נוסחת האיחוד הסופית
+  const totalCampCost = campTotal + waterTotal + sanitationTotal + foodTotal + alcoholTotal + generalShare;
+  const duesCollected = paymentTotals.paid;
+  const vatRefund = num(p.income.vatRefund);
+  const externalNet = num(p.income.externalNet);
+  const totalIncome = duesCollected + vatRefund + externalNet;
+  const gapToRaise = totalCampCost - totalIncome;
+
+  // 11 - תזרים מזומנים
+  const channelsTotal = p.cashflow.channels.reduce((s, c) => s + num(c.amount), 0);
+  const pendingPayments = num(p.cashflow.pendingPayments);
+  const knownCommitments = num(p.cashflow.knownCommitments);
+  const cashflowGap = totalCampCost - channelsTotal;
+  const projectedBalance = cashflowGap + vatRefund - knownCommitments;
+
+  return {
+    N, eventDays,
+    campItemsTotal, loungeItemsTotal, iceCost, elecCost, oneTimeIncomeTotal, campBase, campContingency, campTotal, campPerPerson: perPerson(campTotal),
+    totalLiters, waterBase, waterContingency, waterTotal, waterPerPerson: perPerson(waterTotal),
+    pumpOutCost, sanitationBase, sanitationContingency, sanitationTotal, sanitationPerPerson: perPerson(sanitationTotal),
+    setupFoodCost, eventFoodCost, foodTotal,
+    alcoholBase, alcoholTotal, alcoholPerPerson: perPerson(alcoholTotal),
+    generalShare, generalPerPerson: perPerson(generalShare),
+    actualByAllocation, totalActual,
+    totalCampCost, duesCollected, vatRefund, externalNet, totalIncome, gapToRaise,
+    channelsTotal, pendingPayments, knownCommitments, cashflowGap, projectedBalance,
+  };
+}
+
 export default function App() {
   const [identity, setIdentity] = useState(null);
   const [assignments, setAssignments] = useState({});
@@ -1654,7 +1751,7 @@ export default function App() {
   const [checklistState, setChecklistState] = useState({});
   const [manualTeamMembers, setManualTeamMembers] = useState({});
   const [budgetParams, setBudgetParams] = useState({
-    global: { N: "", setupDays: "", eventDays: "", contingencyPct: "", vatIncluded: false },
+    global: { N: "", setupDays: "", eventDays: "", contingencyPct: "", vatIncluded: false, whatIfEnabled: false, whatIfN: "" },
     campInfra: { items: [], loungeItems: [], oneTimeIncome: [], icePricePerKg: "", iceKgPerDay: "", iceDays: "", elecPricePerKw: "", elecKw: "" },
     water: { literPerPersonPerDay: "", tankFaucetCost: "", fillCost: "", fillCount: "", drainCost: "", drainCount: "", showerUnitCost: "", showerUnitsCount: "" },
     sanitation: { pumpFreqPerPersonPerDay: "", pumpCost: "", sawdustFreq: "", sawdustCost: "", drainCellCost: "", chemicalToiletsCost: "" },
@@ -1678,6 +1775,9 @@ export default function App() {
   const [removedMembers, setRemovedMembers] = useState([]);
   const [idOverrides, setIdOverrides] = useState({});
   const [dbRoles, setDbRoles] = useState({});
+  const [idOnFileNames, setIdOnFileNames] = useState(null);
+  const [editingMemberId, setEditingMemberId] = useState(null);
+  const [editIdValue, setEditIdValue] = useState("");
   const [announcements, setAnnouncements] = useState([]);
   const [emergencyInfo, setEmergencyInfo] = useState({});
   const [polls, setPolls] = useState([]);
@@ -2012,6 +2112,10 @@ export default function App() {
       const roles = await getAllMemberRoles();
       setDbRoles(roles);
     } catch {}
+    try {
+      const idSet = await listMembersWithIdOnFile();
+      setIdOnFileNames(idSet);
+    } catch {}
     if (logHistory) {
       try {
         const fresh = await window.storage.get("login-history", true);
@@ -2322,6 +2426,35 @@ export default function App() {
     }
   }
 
+  // Owner-only: set/replace the verified ID for a member who's already on
+  // the roster (e.g. was added without one). Re-fetches the real DB state
+  // afterward instead of guessing locally.
+  async function editMemberId(name, idNumber) {
+    try {
+      await adminSetMemberId(name, idNumber);
+      const idSet = await listMembersWithIdOnFile().catch(() => idOnFileNames);
+      setIdOnFileNames(idSet);
+      showToast(`ת.ז עודכנה עבור ${name}`, "ok");
+      logActivity("עדכון ת.ז לחבר קמפ", name);
+    } catch (err) {
+      showToast(`עדכון ת.ז נכשל: ${err?.message || "שגיאה לא ידועה"}`, "error");
+    }
+  }
+
+  // Owner-only: promote a member to admin or demote an admin back to
+  // member. Server-side checked against the caller's real role, so this
+  // is a UI convenience, not the actual security boundary.
+  async function setMemberRole(name, role) {
+    try {
+      await adminSetMemberRole(name, role);
+      setDbRoles((prev) => ({ ...prev, [name]: role }));
+      showToast(role === "admin" ? `${name} הפך/ה למנהל/ת` : `${name} הוסר/ה מהנהלה`, "ok");
+      logActivity(role === "admin" ? "מינוי מנהל/ת" : "הסרת מנהל/ת", name);
+    } catch (err) {
+      showToast(`השינוי נכשל: ${err?.message || "שגיאה לא ידועה"}`, "error");
+    }
+  }
+
   async function addAnnouncement(text, eventInfo, audience) {
     if (!text.trim()) return;
     const next = [{
@@ -2497,9 +2630,15 @@ export default function App() {
         if (!existing || (!existing.idOnFile && m.idOnFile)) byName.set(m.name, m);
       });
     return [...byName.values()]
-      .map((m) => ({ ...m, role: dbRoles[m.name] || m.role }))
+      .map((m) => ({
+        ...m,
+        role: dbRoles[m.name] || m.role,
+        // Once we've fetched real DB state, it wins over the static/optimistic
+        // flag - that flag is what went stale and caused the ID-mismatch bug.
+        idOnFile: idOnFileNames ? idOnFileNames.has(m.name) : m.idOnFile,
+      }))
       .sort((a, b) => a.name.localeCompare(b.name, "he"));
-  }, [extraMembers, removedMembers, dbRoles]);
+  }, [extraMembers, removedMembers, dbRoles, idOnFileNames]);
 
   const allBudgetCategories = useMemo(
     () => [...BUDGET_CATEGORIES, ...extraBudgetCategories],
@@ -2555,99 +2694,19 @@ export default function App() {
     return { due, paid, remaining: due - paid };
   }, [memberPayments, campFee, allMembers, feeOverrides]);
 
-  // -------------------------------------------------------------------------
-  // Camp budget engine - implements the handover-doc formulas exactly.
-  // Every number here is an input re-entered each planning cycle; nothing
-  // is hardcoded. Section numbers in comments match the source document.
-  // -------------------------------------------------------------------------
-  const engine = useMemo(() => {
-    const p = budgetParams;
-    const num = (v) => Number(v) || 0;
-    const N = num(p.global.N);
-    const eventDays = num(p.global.eventDays);
-    const defaultPct = num(p.global.contingencyPct);
-    const pctFor = (sectionKey) => {
-      const ov = p.contingencyOverrides[sectionKey];
-      return ov !== undefined && ov !== "" ? num(ov) : defaultPct;
-    };
-    const perPerson = (total) => (N > 0 ? total / N : 0);
-
-    // 02 - מחנה (כולל הסלון)
-    const campItemsTotal = p.campInfra.items.reduce((s, r) => s + num(r.qty) * num(r.price), 0);
-    const loungeItemsTotal = p.campInfra.loungeItems.reduce((s, r) => s + num(r.qty) * num(r.price), 0);
-    const iceCost = num(p.campInfra.icePricePerKg) * num(p.campInfra.iceKgPerDay) * num(p.campInfra.iceDays);
-    const elecCost = num(p.campInfra.elecPricePerKw) * num(p.campInfra.elecKw);
-    const oneTimeIncomeTotal = p.campInfra.oneTimeIncome.reduce((s, r) => s + num(r.amount), 0);
-    const campBase = campItemsTotal + loungeItemsTotal + iceCost + elecCost;
-    const campContingency = campBase * (pctFor("camp") / 100);
-    const campTotal = campBase + campContingency;
-
-    // 03 - מים ומקלחות
-    const w = p.water;
-    const totalLiters = N * num(w.literPerPersonPerDay) * eventDays;
-    const waterBase = num(w.tankFaucetCost) + num(w.fillCost) * num(w.fillCount) + num(w.drainCost) * num(w.drainCount) + num(w.showerUnitCost) * num(w.showerUnitsCount);
-    const waterContingency = waterBase * (pctFor("water") / 100);
-    const waterTotal = waterBase + waterContingency;
-
-    // 04 - שירותים (תברואה)
-    const s = p.sanitation;
-    const pumpOutCost = N * num(s.pumpFreqPerPersonPerDay) * eventDays * num(s.pumpCost);
-    const sanitationBase = pumpOutCost + num(s.sawdustFreq) * num(s.sawdustCost) + num(s.drainCellCost) + num(s.chemicalToiletsCost);
-    const sanitationContingency = sanitationBase * (pctFor("sanitation") / 100);
-    const sanitationTotal = sanitationBase + sanitationContingency;
-
-    // 05 - אוכל
-    const f = p.food;
-    const setupFoodCost = num(f.setupPeopleCount) * num(f.setupDays) * num(f.setupCostPerDay);
-    const eventFoodCost = num(f.actualDiners) * num(f.mealsPerDay) * num(f.eventDays) * num(f.costPerMeal);
-    const foodTotal = setupFoodCost + eventFoodCost + num(f.contingencyAmount);
-
-    // 06 - אלכוהול
-    const alcoholBase = p.alcohol.categories.reduce((sum, c) => sum + num(c.units) * num(c.price), 0);
-    const alcoholTotal = alcoholBase;
-
-    // 07 - כללי
-    const g = p.general;
-    const splitRatio = g.splitRatioPct === "" ? 100 : num(g.splitRatioPct);
-    const generalShare = num(g.fixedAnnualCost) * (splitRatio / 100);
-
-    // 10 - רישום הוצאות בפועל, מקובץ לפי שיוך תקציבי
-    const actualByAllocation = {};
-    budgetExpenses.forEach((e) => {
-      const key = e.allocation || "שונות";
-      const amt = (e.isRefund ? -1 : 1) * num(e.amount);
-      actualByAllocation[key] = (actualByAllocation[key] || 0) + amt;
-    });
-    const totalActual = Object.values(actualByAllocation).reduce((s, v) => s + v, 0);
-
-    // 12 - נוסחת האיחוד הסופית
-    const totalCampCost = campTotal + waterTotal + sanitationTotal + foodTotal + alcoholTotal + generalShare;
-    const duesCollected = paymentTotals.paid;
-    const vatRefund = num(p.income.vatRefund);
-    const externalNet = num(p.income.externalNet);
-    const totalIncome = duesCollected + vatRefund + externalNet;
-    const gapToRaise = totalCampCost - totalIncome;
-
-    // 11 - תזרים מזומנים
-    const channelsTotal = p.cashflow.channels.reduce((s, c) => s + num(c.amount), 0);
-    const pendingPayments = num(p.cashflow.pendingPayments);
-    const knownCommitments = num(p.cashflow.knownCommitments);
-    const cashflowGap = totalCampCost - channelsTotal;
-    const projectedBalance = cashflowGap + vatRefund - knownCommitments;
-
-    return {
-      N, eventDays,
-      campItemsTotal, loungeItemsTotal, iceCost, elecCost, oneTimeIncomeTotal, campBase, campContingency, campTotal, campPerPerson: perPerson(campTotal),
-      totalLiters, waterBase, waterContingency, waterTotal, waterPerPerson: perPerson(waterTotal),
-      pumpOutCost, sanitationBase, sanitationContingency, sanitationTotal, sanitationPerPerson: perPerson(sanitationTotal),
-      setupFoodCost, eventFoodCost, foodTotal,
-      alcoholBase, alcoholTotal, alcoholPerPerson: perPerson(alcoholTotal),
-      generalShare, generalPerPerson: perPerson(generalShare),
-      actualByAllocation, totalActual,
-      totalCampCost, duesCollected, vatRefund, externalNet, totalIncome, gapToRaise,
-      channelsTotal, pendingPayments, knownCommitments, cashflowGap, projectedBalance,
-    };
-  }, [budgetParams, budgetExpenses, paymentTotals]);
+  // N (חברי מחנה) is derived from the real roster, not typed in by hand -
+  // see runBudgetEngine above. The optional "what if" toggle below runs the
+  // exact same engine a second time with a hypothetical headcount, so admins
+  // can compare "cost now" vs. "cost at X members" without losing the real number.
+  const engine = useMemo(
+    () => runBudgetEngine(budgetParams, allMembers.length, budgetExpenses, paymentTotals),
+    [budgetParams, budgetExpenses, paymentTotals, allMembers.length]
+  );
+  const whatIfN = Number(budgetParams.global.whatIfN) || 0;
+  const whatIfEngine = useMemo(() => {
+    if (!budgetParams.global.whatIfEnabled || whatIfN <= 0) return null;
+    return runBudgetEngine(budgetParams, whatIfN, budgetExpenses, paymentTotals);
+  }, [budgetParams, budgetExpenses, paymentTotals, whatIfN]);
 
   const offeringRides = allMembers.filter((m) => {
     const d = rideInfo[m.name];
@@ -2854,17 +2913,71 @@ export default function App() {
                 </p>
                 <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
                   {allMembers.map((m) => (
-                    <div key={m.name} className="flex items-center justify-between text-sm rounded-lg px-3 py-1.5" style={{ background: COLORS.surface }}>
-                      <span>{m.name}{m.role === "owner" && <span className="text-xs" style={{ color: COLORS.accentDark }}> (אדריכל)</span>}{m.role === "admin" && <span className="text-xs" style={{ color: COLORS.accentDark }}> (מנהל)</span>}</span>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => { if (window.confirm(`להסיר את ${m.name} מהקמפ?`)) removeMember(m.name); }}
-                          className="text-xs px-2 py-1 rounded-lg"
-                          style={{ color: COLORS.danger }}
-                        >
-                          הסרה
-                        </button>
+                    <div key={m.name} className="rounded-lg px-3 py-1.5" style={{ background: COLORS.surface }}>
+                      <div className="flex items-center justify-between text-sm">
+                        <span>
+                          {m.name}
+                          {m.role === "owner" && <span className="text-xs" style={{ color: COLORS.accentDark }}> (אדריכל)</span>}
+                          {m.role === "admin" && <span className="text-xs" style={{ color: COLORS.accentDark }}> (מנהל)</span>}
+                          {m.idOnFile && <span className="text-xs" style={{ color: COLORS.textMuted }}> · ת.ז מאומתת</span>}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {isOwner && (
+                            <button
+                              onClick={() => {
+                                setEditingMemberId(editingMemberId === m.name ? null : m.name);
+                                setEditIdValue("");
+                              }}
+                              className="text-xs px-2 py-1 rounded-lg flex items-center gap-1"
+                              style={{ color: COLORS.textMuted }}
+                              title="עריכה"
+                            >
+                              <Pencil size={12} /> עריכה
+                            </button>
+                          )}
+                          {isOwner && m.role !== "owner" && (
+                            <button
+                              onClick={() => setMemberRole(m.name, m.role === "admin" ? "member" : "admin")}
+                              className="text-xs px-2 py-1 rounded-lg flex items-center gap-1"
+                              style={{ color: COLORS.accentDark }}
+                              title={m.role === "admin" ? "הסר ממנהלים" : "הפוך למנהל"}
+                            >
+                              {m.role === "admin" ? <ShieldOff size={12} /> : <ShieldCheck size={12} />}
+                              {m.role === "admin" ? "הסרת ניהול" : "הפוך למנהל"}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => { if (window.confirm(`להסיר את ${m.name} מהקמפ?`)) removeMember(m.name); }}
+                            className="text-xs px-2 py-1 rounded-lg"
+                            style={{ color: COLORS.danger }}
+                          >
+                            הסרה
+                          </button>
+                        </div>
                       </div>
+                      {editingMemberId === m.name && (
+                        <div className="flex items-center gap-1.5 mt-1.5 pt-1.5 border-t" style={{ borderColor: COLORS.divider }} onClick={(e) => e.stopPropagation()}>
+                          <input
+                            value={editIdValue}
+                            onChange={(e) => setEditIdValue(e.target.value)}
+                            placeholder="תעודת זהות חדשה/מעודכנת"
+                            className="flex-1 px-2 py-1 rounded-lg text-xs outline-none"
+                            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                          />
+                          <button
+                            onClick={async () => {
+                              if (!editIdValue.trim()) return;
+                              await editMemberId(m.name, editIdValue.trim());
+                              setEditingMemberId(null);
+                              setEditIdValue("");
+                            }}
+                            className="text-xs px-2 py-1 rounded-lg font-semibold"
+                            style={{ background: COLORS.accent, color: COLORS.bg }}
+                          >
+                            שמירה
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -3877,8 +3990,23 @@ export default function App() {
                 ))}
               </div>
               <div className="text-xs mt-2" style={{ color: COLORS.textMuted }}>
-                N = {engine.N || 0} חברים · עלות לנפש: ₪{Math.round(engine.N > 0 ? engine.totalCampCost / engine.N : 0).toLocaleString()}
+                N = {engine.N || 0} חברים (לפי רשימת חברי הקמפ בפועל) · עלות לנפש: ₪{Math.round(engine.N > 0 ? engine.totalCampCost / engine.N : 0).toLocaleString()}
               </div>
+              {whatIfEngine && (
+                <div className="mt-3 pt-3 border-t" style={{ borderColor: `${COLORS.accent}55` }}>
+                  <div className="text-xs font-bold mb-1.5" style={{ color: COLORS.accentDark }}>תרחיש היפותטי - אם יהיו {whatIfEngine.N} חברים</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-xl p-2.5" style={{ background: COLORS.input }}>
+                      <div className="text-sm font-black" style={{ fontFamily: FONT_NUM }}>₪{Math.round(whatIfEngine.totalCampCost).toLocaleString()}</div>
+                      <div className="text-xs mt-0.5" style={{ color: COLORS.textMuted }}>עלות מחנה כוללת (לעומת ₪{Math.round(engine.totalCampCost).toLocaleString()} בפועל)</div>
+                    </div>
+                    <div className="rounded-xl p-2.5" style={{ background: COLORS.input }}>
+                      <div className="text-sm font-black" style={{ fontFamily: FONT_NUM }}>₪{Math.round(whatIfEngine.N > 0 ? whatIfEngine.totalCampCost / whatIfEngine.N : 0).toLocaleString()}</div>
+                      <div className="text-xs mt-0.5" style={{ color: COLORS.textMuted }}>עלות לנפש (לעומת ₪{Math.round(engine.N > 0 ? engine.totalCampCost / engine.N : 0).toLocaleString()} בפועל)</div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {!canEditBudget && (
@@ -3896,7 +4024,12 @@ export default function App() {
                   </button>
                   {open && (
                     <div className="rounded-2xl p-4 grid sm:grid-cols-2 gap-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                      <NumField label="N - חברי מחנה" value={budgetParams.global.N} onChange={(v) => patchBudgetParams("global", { N: v })} />
+                      <div>
+                        <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>N - חברי מחנה (נגזר אוטומטית)</label>
+                        <div className="px-3 py-2 rounded-xl text-sm" style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}>
+                          {allMembers.length} חברים (לפי רשימת חברי הקמפ)
+                        </div>
+                      </div>
                       <NumField label={'אחוז בלת"מ (ברירת מחדל)'} value={budgetParams.global.contingencyPct} onChange={(v) => patchBudgetParams("global", { contingencyPct: v })} suffix="%" />
                       <NumField label="ימי הקמה" value={budgetParams.global.setupDays} onChange={(v) => patchBudgetParams("global", { setupDays: v })} />
                       <NumField label="ימי אירוע" value={budgetParams.global.eventDays} onChange={(v) => patchBudgetParams("global", { eventDays: v })} />
@@ -3904,6 +4037,25 @@ export default function App() {
                         <input type="checkbox" checked={budgetParams.global.vatIncluded} onChange={(e) => patchBudgetParams("global", { vatIncluded: e.target.checked })} />
                         הסכומים כוללים מע"מ
                       </label>
+                      <div className="sm:col-span-2 pt-2 mt-1 border-t" style={{ borderColor: COLORS.divider }}>
+                        <label className="flex items-center gap-2 text-xs font-semibold" style={{ color: COLORS.accentDark }}>
+                          <input
+                            type="checkbox"
+                            checked={!!budgetParams.global.whatIfEnabled}
+                            onChange={(e) => patchBudgetParams("global", { whatIfEnabled: e.target.checked })}
+                          />
+                          תרחיש היפותטי - כמה יעלה עם מספר חברים אחר?
+                        </label>
+                        {budgetParams.global.whatIfEnabled && (
+                          <div className="mt-2 max-w-[180px]">
+                            <NumField
+                              label="מספר חברים היפותטי"
+                              value={budgetParams.global.whatIfN}
+                              onChange={(v) => patchBudgetParams("global", { whatIfN: v })}
+                            />
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -4295,19 +4447,21 @@ export default function App() {
                         const items = TEAM_CHECKLISTS[t.name];
                         const state = checklistState[t.name] || {};
                         const doneCount = items.filter((_, i) => state[i]).length;
+                        const canCheck = isAdmin || teamLeads[t.name] === identity;
                         return (
                           <div className="mt-3 pt-3 border-t" style={{ borderColor: COLORS.divider }}>
                             <div className="text-xs mb-1.5 flex items-center justify-between" style={{ color: COLORS.textMuted }}>
-                              <span>צ'קליסט בטיחות ותפעול</span>
+                              <span>צ'קליסט בטיחות ותפעול{!canCheck && " (רק מוביל/ת הצוות או מנהל יכולים לסמן)"}</span>
                               <span>{doneCount}/{items.length}</span>
                             </div>
                             <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
                               {items.map((item, i) => (
-                                <label key={i} className="flex items-center gap-2 text-xs cursor-pointer">
+                                <label key={i} className={`flex items-center gap-2 text-xs ${canCheck ? "cursor-pointer" : "cursor-not-allowed"}`}>
                                   <input
                                     type="checkbox"
                                     checked={!!state[i]}
-                                    onChange={() => toggleChecklistItem(t.name, i)}
+                                    disabled={!canCheck}
+                                    onChange={() => canCheck && toggleChecklistItem(t.name, i)}
                                   />
                                   <span style={{ textDecoration: state[i] ? "line-through" : "none", opacity: state[i] ? 0.6 : 1 }}>{item}</span>
                                 </label>

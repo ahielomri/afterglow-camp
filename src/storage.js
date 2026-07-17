@@ -181,7 +181,9 @@ export async function addMemberRow(name, role = "member") {
 // Admin-only: registers a real ID number (hashed server-side) for a
 // member, giving them real ID verification instead of the weaker
 // "no ID on file" path. Only succeeds if the caller is actually an
-// admin/owner - checked inside the Edge Function itself.
+// admin/owner - checked inside the Edge Function itself. Works for both
+// brand-new members and existing ones (e.g. adding/replacing an ID for
+// someone who was added without one).
 export async function adminSetMemberId(name, idNumber) {
   const { data, error } = await supabase.functions.invoke("admin-set-member-id", {
     body: { name, id: idNumber },
@@ -201,6 +203,40 @@ export async function adminSetMemberId(name, idNumber) {
   }
   if (data?.error) throw new Error(data.error);
   return data;
+}
+
+// Owner-only: promotes/demotes a member between "member" and "admin".
+// Deliberately narrower than the admin-only actions above - checked
+// server-side against the caller's own role, and the owner row itself
+// can never be changed this way.
+export async function adminSetMemberRole(name, role) {
+  const { data, error } = await supabase.functions.invoke("admin-set-member-role", {
+    body: { name, role },
+  });
+  if (error) {
+    let message = "set_role_failed";
+    try {
+      const ctx = error.context;
+      if (ctx && typeof ctx.json === "function") {
+        const parsed = await ctx.json();
+        message = parsed.detail ? `${parsed.error}: ${parsed.detail}` : (parsed.error || message);
+      }
+    } catch {
+      // ignore - fall back to generic message
+    }
+    throw new Error(message);
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+// Which members currently have a verified ID hash on file - names only,
+// never the hash itself. Used to keep the login screen's "ID required"
+// prompt in sync with DB truth instead of a static/optimistic client flag.
+export async function listMembersWithIdOnFile() {
+  const { data, error } = await supabase.rpc("members_with_id_on_file");
+  if (error) throw error;
+  return new Set((data || []).map((r) => r.name));
 }
 
 // ---------------------------------------------------------------------------
