@@ -727,17 +727,17 @@ function EquipmentForm({ onAdd, lockedCategory, initial, onCancel }) {
   );
 }
 
-function BudgetExpenseForm({ onAdd, lockedAllocation, categories }) {
-  const [allocation, setAllocation] = useState(lockedAllocation || "");
-  const [description, setDescription] = useState("");
-  const [vendor, setVendor] = useState("");
-  const [amount, setAmount] = useState("");
-  const [purchaseDate, setPurchaseDate] = useState("");
-  const [paymentStatus, setPaymentStatus] = useState("paid"); // "paid" | "partial"
-  const [paidAmount, setPaidAmount] = useState("");
-  const [dueDate, setDueDate] = useState("");
-  const [vatIncluded, setVatIncluded] = useState(true);
-  const [isRefund, setIsRefund] = useState(false);
+function BudgetExpenseForm({ onAdd, lockedAllocation, categories, initial, onCancel }) {
+  const [allocation, setAllocation] = useState(initial?.allocation || lockedAllocation || "");
+  const [description, setDescription] = useState(initial?.description || "");
+  const [vendor, setVendor] = useState(initial?.vendor || "");
+  const [amount, setAmount] = useState(initial?.amount ?? "");
+  const [purchaseDate, setPurchaseDate] = useState(initial?.purchaseDate || "");
+  const [paymentStatus, setPaymentStatus] = useState(initial?.paymentStatus || "paid"); // "paid" | "partial"
+  const [paidAmount, setPaidAmount] = useState(initial?.paidAmount ?? "");
+  const [dueDate, setDueDate] = useState(initial?.dueDate || "");
+  const [vatIncluded, setVatIncluded] = useState(initial ? !!initial.vatIncluded : true);
+  const [isRefund, setIsRefund] = useState(initial?.isRefund || false);
   const [receiptFile, setReceiptFile] = useState(null);
   const [receiptPreview, setReceiptPreview] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -752,7 +752,7 @@ function BudgetExpenseForm({ onAdd, lockedAllocation, categories }) {
   }
 
   async function submit() {
-    let receiptUrl = "";
+    let receiptUrl = initial?.receiptUrl || "";
     if (receiptFile) {
       setUploading(true);
       try {
@@ -771,9 +771,11 @@ function BudgetExpenseForm({ onAdd, lockedAllocation, categories }) {
       dueDate: paymentStatus === "partial" ? dueDate : "",
       vatIncluded, isRefund, receiptUrl,
     });
-    setDescription(""); setVendor(""); setAmount(""); setPurchaseDate("");
-    setPaymentStatus("paid"); setPaidAmount(""); setDueDate(""); setIsRefund(false);
-    setReceiptFile(null); setReceiptPreview("");
+    if (!initial) {
+      setDescription(""); setVendor(""); setAmount(""); setPurchaseDate("");
+      setPaymentStatus("paid"); setPaidAmount(""); setDueDate(""); setIsRefund(false);
+      setReceiptFile(null); setReceiptPreview("");
+    }
   }
 
   return (
@@ -873,19 +875,30 @@ function BudgetExpenseForm({ onAdd, lockedAllocation, categories }) {
         <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>צילום קבלה (אופציונלי)</label>
         <div className="flex items-center gap-2">
           <input type="file" accept="image/*" onChange={pickReceipt} className="text-xs" style={{ color: COLORS.textMuted }} />
-          {receiptPreview && (
-            <img src={receiptPreview} alt="" className="h-12 w-12 object-cover rounded-lg" style={{ border: `1px solid ${COLORS.divider}` }} />
+          {(receiptPreview || initial?.receiptUrl) && (
+            <img src={receiptPreview || initial.receiptUrl} alt="" className="h-12 w-12 object-cover rounded-lg" style={{ border: `1px solid ${COLORS.divider}` }} />
           )}
         </div>
       </div>
-      <button
-        onClick={submit}
-        disabled={uploading}
-        className="px-4 py-2 rounded-full text-sm font-semibold"
-        style={{ background: COLORS.accent, color: COLORS.bg, opacity: uploading ? 0.6 : 1 }}
-      >
-        {uploading ? "מעלה קבלה..." : "רישום הוצאה"}
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={submit}
+          disabled={uploading}
+          className="px-4 py-2 rounded-full text-sm font-semibold"
+          style={{ background: COLORS.accent, color: COLORS.bg, opacity: uploading ? 0.6 : 1 }}
+        >
+          {uploading ? "מעלה קבלה..." : initial ? "שמירת שינויים" : "רישום הוצאה"}
+        </button>
+        {onCancel && (
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 rounded-full text-sm font-semibold"
+            style={{ background: COLORS.surface2, color: COLORS.textMuted }}
+          >
+            ביטול
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -1901,6 +1914,7 @@ export default function App() {
   const [budgetExpenses, setBudgetExpenses] = useState([]);
   const [campEquipment, setCampEquipment] = useState([]);
   const [editingEquipmentId, setEditingEquipmentId] = useState(null);
+  const [editingExpenseId, setEditingExpenseId] = useState(null);
   const [extraBudgetCategories, setExtraBudgetCategories] = useState([]);
   const [showBudgetSection, setShowBudgetSection] = useState(null);
   const [showQuickAddExpense, setShowQuickAddExpense] = useState(false);
@@ -2208,6 +2222,20 @@ export default function App() {
     setBudgetExpenses(next);
     try {
       await window.storage.set("budget-expenses", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  // Lets admins/budget team fix an already-recorded expense (e.g. one that
+  // was saved without a budget category) instead of only being able to
+  // delete and re-enter it from scratch.
+  async function updateBudgetExpense(id, patch) {
+    const next = budgetExpenses.map((e) => (e.id === id ? { ...e, ...patch } : e));
+    setBudgetExpenses(next);
+    try {
+      await window.storage.set("budget-expenses", JSON.stringify(next), true);
+      showToast("ההוצאה עודכנה", "ok");
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -4982,32 +5010,53 @@ export default function App() {
                     <div className="space-y-3">
                       {canEditBudget && <BudgetExpenseForm onAdd={addBudgetExpense} lockedAllocation={isAdmin ? null : myLeadTeam} categories={allBudgetCategories} />}
                       <div className="space-y-1.5">
-                        {budgetExpenses.map((e) => (
-                          <div key={e.id} className="rounded-xl px-3 py-2 text-xs flex items-center justify-between gap-2" style={{ background: COLORS.surface }}>
-                            <div className="flex items-center gap-2 min-w-0">
-                              {e.receiptUrl && (
-                                <a href={e.receiptUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                                  <img src={e.receiptUrl} alt="קבלה" className="h-10 w-10 object-cover rounded-lg" style={{ border: `1px solid ${COLORS.divider}` }} />
-                                </a>
-                              )}
-                              <div className="min-w-0">
-                                <div className="font-semibold">{e.allocation}{(e.description || e.subcategory) ? ` · ${e.description || e.subcategory}` : ""}{e.vendor ? ` · ${e.vendor}` : ""}</div>
-                                <div style={{ color: COLORS.textMuted }}>
-                                  {e.isRefund ? "זיכוי: " : ""}₪{Number(e.amount).toLocaleString()} · {e.vatIncluded ? "כולל מע\"מ" : "לא כולל מע\"מ"}
-                                  {e.purchaseDate ? ` · נקנה ${formatDateShort(e.purchaseDate)}` : ""}
-                                </div>
-                                <div style={{ color: e.paymentStatus === "partial" ? COLORS.danger : COLORS.accent2Dark }}>
-                                  {e.paymentStatus === "partial"
-                                    ? `שולם ₪${Number(e.paidAmount || 0).toLocaleString()} · נותר ₪${Number(e.remainingAmount || 0).toLocaleString()}${e.dueDate ? ` עד ${formatDateShort(e.dueDate)}` : ""}`
-                                    : (e.paymentStatus ? "שולם במלואו" : "")}
+                        {budgetExpenses.map((e) => {
+                          const canManageThis = isAdmin || myLeadTeam === e.allocation;
+                          if (editingExpenseId === e.id) {
+                            return (
+                              <BudgetExpenseForm
+                                key={e.id}
+                                initial={e}
+                                categories={allBudgetCategories}
+                                lockedAllocation={isAdmin ? null : myLeadTeam}
+                                onCancel={() => setEditingExpenseId(null)}
+                                onAdd={(patch) => {
+                                  updateBudgetExpense(e.id, patch);
+                                  setEditingExpenseId(null);
+                                }}
+                              />
+                            );
+                          }
+                          return (
+                            <div key={e.id} className="rounded-xl px-3 py-2 text-xs flex items-center justify-between gap-2" style={{ background: COLORS.surface }}>
+                              <div className="flex items-center gap-2 min-w-0">
+                                {e.receiptUrl && (
+                                  <a href={e.receiptUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                                    <img src={e.receiptUrl} alt="קבלה" className="h-10 w-10 object-cover rounded-lg" style={{ border: `1px solid ${COLORS.divider}` }} />
+                                  </a>
+                                )}
+                                <div className="min-w-0">
+                                  <div className="font-semibold">{e.allocation || "ללא שיוך תקציבי"}{(e.description || e.subcategory) ? ` · ${e.description || e.subcategory}` : ""}{e.vendor ? ` · ${e.vendor}` : ""}</div>
+                                  <div style={{ color: COLORS.textMuted }}>
+                                    {e.isRefund ? "זיכוי: " : ""}₪{Number(e.amount).toLocaleString()} · {e.vatIncluded ? "כולל מע\"מ" : "לא כולל מע\"מ"}
+                                    {e.purchaseDate ? ` · נקנה ${formatDateShort(e.purchaseDate)}` : ""}
+                                  </div>
+                                  <div style={{ color: e.paymentStatus === "partial" ? COLORS.danger : COLORS.accent2Dark }}>
+                                    {e.paymentStatus === "partial"
+                                      ? `שולם ₪${Number(e.paidAmount || 0).toLocaleString()} · נותר ₪${Number(e.remainingAmount || 0).toLocaleString()}${e.dueDate ? ` עד ${formatDateShort(e.dueDate)}` : ""}`
+                                      : (e.paymentStatus ? "שולם במלואו" : "")}
+                                  </div>
                                 </div>
                               </div>
+                              {canManageThis && (
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button onClick={() => setEditingExpenseId(e.id)} style={{ color: COLORS.textMuted }}><Pencil size={14} /></button>
+                                  <button onClick={() => removeBudgetExpense(e.id)} style={{ color: COLORS.textMuted }}><Trash2 size={14} /></button>
+                                </div>
+                              )}
                             </div>
-                            {(isAdmin || myLeadTeam === e.allocation) && (
-                              <button onClick={() => removeBudgetExpense(e.id)} style={{ color: COLORS.textMuted }} className="shrink-0"><Trash2 size={14} /></button>
-                            )}
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
