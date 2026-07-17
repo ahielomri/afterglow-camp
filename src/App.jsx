@@ -2270,8 +2270,13 @@ export default function App() {
   async function sendTestPush() {
     setSendingTestPush(true);
     try {
-      await sendEventReminderPush("בדיקה 🔔", "זו התראת בדיקה - אם קיבלת את זה, ההתראות עובדות אצלך!", identity);
-      showToast("נשלחה התראת בדיקה - אמור/ה לקבל אותה תוך כמה שניות", "ok");
+      const result = await sendEventReminderPush("בדיקה 🔔", "זו התראת בדיקה - אם קיבלת את זה, ההתראות עובדות אצלך!", identity);
+      if (result?.sent > 0) {
+        showToast("נשלחה התראת בדיקה - אמור/ה לקבל אותה תוך כמה שניות", "ok");
+      } else {
+        const reason = result?.errors?.[0]?.message || result?.detail || "לא נמצאה מנוי פעיל במכשיר הזה";
+        showToast(`ההתראה לא הגיעה בפועל: ${reason} - נסה/י לבטל ולהפעיל התראות מחדש`, "error");
+      }
     } catch (err) {
       showToast(`שליחת הבדיקה נכשלה: ${err?.message || "שגיאה לא ידועה"}`, "error");
     } finally {
@@ -2599,8 +2604,13 @@ export default function App() {
     setSendingReminder(true);
     try {
       const result = await sendEventReminderPush(reminderTitle.trim(), reminderMessage.trim());
-      showToast(`התראה נשלחה ל-${result?.sent ?? 0} מכשירים`, "ok");
-      logActivity("שליחת תזכורת התראה", reminderTitle.trim());
+      const sent = result?.sent ?? 0;
+      if (sent > 0) {
+        showToast(`התראה נשלחה ל-${sent} מכשירים`, "ok");
+      } else {
+        showToast("לא נשלחה אף התראה בפועל - כנראה שאף אחד עדיין לא אישר התראות דחיפה", "error");
+      }
+      logActivity("שליחת תזכורת התראה", `${reminderTitle.trim()} (נשלח ל-${sent})`);
       setReminderTitle("");
       setReminderMessage("");
       setShowReminderForm(false);
@@ -3038,77 +3048,6 @@ export default function App() {
               ))}
             </div>
 
-            <button
-              onClick={() => setShowPushStatusList(!showPushStatusList)}
-              className="w-full flex items-center justify-between mt-5 mb-2 text-sm font-bold"
-              style={{ color: COLORS.textMuted }}
-            >
-              <span className="flex items-center gap-1.5">
-                <Bell size={14} /> אישור התראות - דחיפה ({pushEnabledNames ? allMembers.filter((m) => pushEnabledNames.has(m.name)).length : 0}/{allMembers.length}) · וואטסאפ ({allMembers.filter((m) => whatsappConsent[m.name]).length}/{allMembers.length})
-              </span>
-              <ChevronDown size={15} style={{ transform: showPushStatusList ? "rotate(180deg)" : "none" }} />
-            </button>
-            {showPushStatusList && (
-              <div className="space-y-1 max-h-72 overflow-y-auto pr-1 mb-2">
-                {allMembers.map((m) => {
-                  const pushEnabled = !!pushEnabledNames?.has(m.name);
-                  const waEnabled = !!whatsappConsent[m.name];
-                  return (
-                    <div key={m.name} className="flex items-center justify-between text-sm rounded-lg px-3 py-1.5" style={{ background: COLORS.surface }}>
-                      <span>{m.name}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="flex items-center gap-1 text-xs font-semibold" style={{ color: pushEnabled ? COLORS.accent2Dark : COLORS.textMuted }}>
-                          {pushEnabled ? <Bell size={12} /> : <BellOff size={12} />} דחיפה
-                        </span>
-                        <span className="flex items-center gap-1 text-xs font-semibold" style={{ color: waEnabled ? "#25D366" : COLORS.textMuted }}>
-                          <MessageCircle size={12} /> וואטסאפ
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            <button
-              onClick={() => setShowReminderForm(!showReminderForm)}
-              className="w-full flex items-center justify-between mb-2 text-sm font-bold"
-              style={{ color: COLORS.textMuted }}
-            >
-              <span className="flex items-center gap-1.5"><Bell size={14} /> שליחת תזכורת/התראה עכשיו</span>
-              <ChevronDown size={15} style={{ transform: showReminderForm ? "rotate(180deg)" : "none" }} />
-            </button>
-            {showReminderForm && (
-              <div className="rounded-2xl p-4 space-y-2 mb-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                <p className="text-xs" style={{ color: COLORS.textMuted }}>
-                  שולח התראת דחיפה מיידית לכל מי שאישר התראות ({pushEnabledNames ? pushEnabledNames.size : 0} מכשירים) - למשל תזכורת על אירוע קרוב. זה נפרד מההתראה האוטומטית שנשלחת כשמפרסמים מודעה/סקר.
-                </p>
-                <input
-                  value={reminderTitle}
-                  onChange={(e) => setReminderTitle(e.target.value)}
-                  placeholder="כותרת (למשל: תזכורת - מפגש הכנה ביום ג')"
-                  className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-                  style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-                />
-                <textarea
-                  value={reminderMessage}
-                  onChange={(e) => setReminderMessage(e.target.value)}
-                  placeholder="תוכן ההודעה"
-                  rows={2}
-                  className="w-full px-3 py-2 rounded-xl text-sm outline-none resize-none"
-                  style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-                />
-                <button
-                  onClick={sendReminder}
-                  disabled={sendingReminder || !reminderTitle.trim() || !reminderMessage.trim()}
-                  className="px-4 py-2 rounded-full text-sm font-semibold"
-                  style={{ background: COLORS.accent, color: COLORS.bg, opacity: (sendingReminder || !reminderTitle.trim() || !reminderMessage.trim()) ? 0.5 : 1 }}
-                >
-                  {sendingReminder ? "שולח..." : "שליחה עכשיו"}
-                </button>
-              </div>
-            )}
-
             {(paymentTotals.remaining > 0 || unfilledShiftsCount > 0 || membersWithoutShift > 0 || overBudgetCategories.length > 0 || lookingForRide.length > 0) && (
               <div className="mt-4 rounded-2xl p-4 space-y-2" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
                 <div className="text-xs font-bold mb-1" style={{ color: COLORS.accentDark }}>התרעות חשובות</div>
@@ -3254,6 +3193,77 @@ export default function App() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowPushStatusList(!showPushStatusList)}
+              className="w-full flex items-center justify-between mt-5 mb-2 text-sm font-bold"
+              style={{ color: COLORS.textMuted }}
+            >
+              <span className="flex items-center gap-1.5">
+                <Bell size={14} /> אישור התראות - דחיפה ({pushEnabledNames ? allMembers.filter((m) => pushEnabledNames.has(m.name)).length : 0}/{allMembers.length}) · וואטסאפ ({allMembers.filter((m) => whatsappConsent[m.name]).length}/{allMembers.length})
+              </span>
+              <ChevronDown size={15} style={{ transform: showPushStatusList ? "rotate(180deg)" : "none" }} />
+            </button>
+            {showPushStatusList && (
+              <div className="space-y-1 max-h-72 overflow-y-auto pr-1 mb-2">
+                {allMembers.map((m) => {
+                  const pushEnabled = !!pushEnabledNames?.has(m.name);
+                  const waEnabled = !!whatsappConsent[m.name];
+                  return (
+                    <div key={m.name} className="flex items-center justify-between text-sm rounded-lg px-3 py-1.5" style={{ background: COLORS.surface }}>
+                      <span>{m.name}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="flex items-center gap-1 text-xs font-semibold" style={{ color: pushEnabled ? COLORS.accent2Dark : COLORS.textMuted }}>
+                          {pushEnabled ? <Bell size={12} /> : <BellOff size={12} />} דחיפה
+                        </span>
+                        <span className="flex items-center gap-1 text-xs font-semibold" style={{ color: waEnabled ? "#25D366" : COLORS.textMuted }}>
+                          <MessageCircle size={12} /> וואטסאפ
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowReminderForm(!showReminderForm)}
+              className="w-full flex items-center justify-between mb-2 text-sm font-bold"
+              style={{ color: COLORS.textMuted }}
+            >
+              <span className="flex items-center gap-1.5"><Bell size={14} /> שליחת תזכורת/התראה עכשיו</span>
+              <ChevronDown size={15} style={{ transform: showReminderForm ? "rotate(180deg)" : "none" }} />
+            </button>
+            {showReminderForm && (
+              <div className="rounded-2xl p-4 space-y-2 mb-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                <p className="text-xs" style={{ color: COLORS.textMuted }}>
+                  שולח התראת דחיפה מיידית לכל מי שאישר התראות ({pushEnabledNames ? pushEnabledNames.size : 0} מכשירים) - למשל תזכורת על אירוע קרוב. זה נפרד מההתראה האוטומטית שנשלחת כשמפרסמים מודעה/סקר.
+                </p>
+                <input
+                  value={reminderTitle}
+                  onChange={(e) => setReminderTitle(e.target.value)}
+                  placeholder="כותרת (למשל: תזכורת - מפגש הכנה ביום ג')"
+                  className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                  style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                />
+                <textarea
+                  value={reminderMessage}
+                  onChange={(e) => setReminderMessage(e.target.value)}
+                  placeholder="תוכן ההודעה"
+                  rows={2}
+                  className="w-full px-3 py-2 rounded-xl text-sm outline-none resize-none"
+                  style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                />
+                <button
+                  onClick={sendReminder}
+                  disabled={sendingReminder || !reminderTitle.trim() || !reminderMessage.trim()}
+                  className="px-4 py-2 rounded-full text-sm font-semibold"
+                  style={{ background: COLORS.accent, color: COLORS.bg, opacity: (sendingReminder || !reminderTitle.trim() || !reminderMessage.trim()) ? 0.5 : 1 }}
+                >
+                  {sendingReminder ? "שולח..." : "שליחה עכשיו"}
+                </button>
               </div>
             )}
 
