@@ -1874,6 +1874,7 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [pushStatus, setPushStatus] = useState("unsupported");
   const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [sendingTestPush, setSendingTestPush] = useState(false);
   const loadSharedDataRef = useRef(null);
 
   useEffect(() => {
@@ -2260,6 +2261,18 @@ export default function App() {
       showToast("התראות בוטלו", "ok");
     } catch {
       showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function sendTestPush() {
+    setSendingTestPush(true);
+    try {
+      await sendEventReminderPush("בדיקה 🔔", "זו התראת בדיקה - אם קיבלת את זה, ההתראות עובדות אצלך!", identity);
+      showToast("נשלחה התראת בדיקה - אמור/ה לקבל אותה תוך כמה שניות", "ok");
+    } catch (err) {
+      showToast(`שליחת הבדיקה נכשלה: ${err?.message || "שגיאה לא ידועה"}`, "error");
+    } finally {
+      setSendingTestPush(false);
     }
   }
 
@@ -3427,6 +3440,16 @@ export default function App() {
               <div className="rounded-2xl p-3 mb-4 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, color: COLORS.textMuted }}>
                 חסמת התראות בעבר - כדי לקבל עדכונים על מודעות וסקרים חדשים, אפשר להפעיל אותן מחדש דרך הגדרות הדפדפן (הרשאות אתר → התראות).
               </div>
+            )}
+            {pushSubscribed && (
+              <button
+                onClick={sendTestPush}
+                disabled={sendingTestPush}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold mb-4"
+                style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, color: COLORS.textMuted, opacity: sendingTestPush ? 0.6 : 1 }}
+              >
+                <Bell size={12} /> {sendingTestPush ? "שולח..." : "שליחת התראת בדיקה לעצמי"}
+              </button>
             )}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               {[

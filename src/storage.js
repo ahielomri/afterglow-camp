@@ -275,9 +275,9 @@ export async function listMembersWithPushEnabled() {
 // Admin/owner-only: sends an ad-hoc push notification (e.g. an event
 // reminder) to every subscribed device right now, separate from the
 // automatic push that fires when a new announcement/poll is posted.
-export async function sendEventReminderPush(title, message) {
+export async function sendEventReminderPush(title, message, targetName) {
   const { data, error } = await supabase.functions.invoke("send-event-reminder", {
-    body: { title, message },
+    body: { title, message, targetName: targetName || undefined },
   });
   if (error) {
     let msg = "send_failed";
