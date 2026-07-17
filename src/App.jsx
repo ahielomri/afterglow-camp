@@ -1816,6 +1816,7 @@ export default function App() {
   const [allocationInfo, setAllocationInfo] = useState({});
   const [feeOverrides, setFeeOverrides] = useState({});
   const [memberEmails, setMemberEmails] = useState({});
+  const [whatsappConsent, setWhatsappConsentState] = useState({});
   const [checklistState, setChecklistState] = useState({});
   const [manualTeamMembers, setManualTeamMembers] = useState({});
   const [budgetParams, setBudgetParams] = useState({
@@ -1890,7 +1891,7 @@ export default function App() {
     async function loadSharedData() {
       const [
         rawAssignments, rawBudget, rawCatBudget, rawTeardown, rawPayments, rawFee,
-        rawLeads, rawPhones, rawRides, rawFeeOv, rawEmails, rawChecklists,
+        rawLeads, rawPhones, rawRides, rawFeeOv, rawEmails, rawWhatsappConsent, rawChecklists,
         rawManualTeam, rawLog, rawLogins, rawExtra, rawRemoved,
         rawAnn, rawPolls, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories,
       ] = await Promise.all([
@@ -1905,6 +1906,7 @@ export default function App() {
         safeGet("ride-info", true),
         safeGet("fee-overrides", true),
         safeGet("member-emails", true),
+        safeGet("whatsapp-consent", true),
         safeGet("team-checklists", true),
         safeGet("manual-team-members", true),
         safeGet("activity-log", true),
@@ -1957,6 +1959,7 @@ export default function App() {
       setRideInfo(rawRides ? JSON.parse(rawRides) : {});
       setFeeOverrides(rawFeeOv ? JSON.parse(rawFeeOv) : {});
       setMemberEmails(rawEmails ? JSON.parse(rawEmails) : {});
+      setWhatsappConsentState(rawWhatsappConsent ? JSON.parse(rawWhatsappConsent) : {});
       setChecklistState(rawChecklists ? JSON.parse(rawChecklists) : {});
       setManualTeamMembers(rawManualTeam ? JSON.parse(rawManualTeam) : {});
       setActivityLog(rawLog ? JSON.parse(rawLog) : []);
@@ -2440,6 +2443,20 @@ export default function App() {
     setMemberEmails(next);
     try {
       await window.storage.set("member-emails", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  // Each member opts themselves in/out of receiving WhatsApp reminders -
+  // separate from having a phone number on file, and separate from push
+  // notifications. Admins can still see who's opted in on the dashboard,
+  // and the WhatsApp reminder buttons only appear for members who have.
+  async function setWhatsappConsent(name, consent) {
+    const next = { ...whatsappConsent, [name]: consent };
+    setWhatsappConsentState(next);
+    try {
+      await window.storage.set("whatsapp-consent", JSON.stringify(next), true);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3027,26 +3044,26 @@ export default function App() {
               style={{ color: COLORS.textMuted }}
             >
               <span className="flex items-center gap-1.5">
-                <Bell size={14} /> אישור התראות ({pushEnabledNames ? allMembers.filter((m) => pushEnabledNames.has(m.name)).length : 0}/{allMembers.length})
+                <Bell size={14} /> אישור התראות - דחיפה ({pushEnabledNames ? allMembers.filter((m) => pushEnabledNames.has(m.name)).length : 0}/{allMembers.length}) · וואטסאפ ({allMembers.filter((m) => whatsappConsent[m.name]).length}/{allMembers.length})
               </span>
               <ChevronDown size={15} style={{ transform: showPushStatusList ? "rotate(180deg)" : "none" }} />
             </button>
             {showPushStatusList && (
               <div className="space-y-1 max-h-72 overflow-y-auto pr-1 mb-2">
                 {allMembers.map((m) => {
-                  const enabled = !!pushEnabledNames?.has(m.name);
+                  const pushEnabled = !!pushEnabledNames?.has(m.name);
+                  const waEnabled = !!whatsappConsent[m.name];
                   return (
                     <div key={m.name} className="flex items-center justify-between text-sm rounded-lg px-3 py-1.5" style={{ background: COLORS.surface }}>
                       <span>{m.name}</span>
-                      {enabled ? (
-                        <span className="flex items-center gap-1 text-xs font-semibold" style={{ color: COLORS.accent2Dark }}>
-                          <Bell size={12} /> אישר/ה
+                      <div className="flex items-center gap-3">
+                        <span className="flex items-center gap-1 text-xs font-semibold" style={{ color: pushEnabled ? COLORS.accent2Dark : COLORS.textMuted }}>
+                          {pushEnabled ? <Bell size={12} /> : <BellOff size={12} />} דחיפה
                         </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-xs" style={{ color: COLORS.textMuted }}>
-                          <BellOff size={12} /> לא אישר/ה
+                        <span className="flex items-center gap-1 text-xs font-semibold" style={{ color: waEnabled ? "#25D366" : COLORS.textMuted }}>
+                          <MessageCircle size={12} /> וואטסאפ
                         </span>
-                      )}
+                      </div>
                     </div>
                   );
                 })}
@@ -4185,7 +4202,9 @@ export default function App() {
                           />
                         </div>
                         {remaining > 0 && (
-                          memberPhones[m.name] ? (
+                          !memberPhones[m.name] ? (
+                            <div className="text-xs" style={{ color: COLORS.textMuted }}>אין מספר טלפון רשום ל-{m.name} - אי אפשר לשלוח תזכורת (אפשר להוסיף בטאב "אנשי קשר")</div>
+                          ) : whatsappConsent[m.name] ? (
                             <a
                               href={buildWhatsAppLink(memberPhones[m.name], duesReminderMessage(m.name, remaining))}
                               target="_blank"
@@ -4196,7 +4215,7 @@ export default function App() {
                               <MessageCircle size={13} /> שליחת תזכורת בוואטסאפ
                             </a>
                           ) : (
-                            <div className="text-xs" style={{ color: COLORS.textMuted }}>אין מספר טלפון רשום ל-{m.name} - אי אפשר לשלוח תזכורת (אפשר להוסיף בטאב "חברי קמפ")</div>
+                            <div className="text-xs" style={{ color: COLORS.textMuted }}>{m.name} עדיין לא אישר/ה קבלת תזכורות בוואטסאפ</div>
                           )
                         )}
                         {list.length > 0 && (
@@ -4923,7 +4942,17 @@ export default function App() {
                       )}
                     </div>
                   )}
-                  {isAdmin && memberPhones[m.name] && (
+                  {m.name === identity && memberPhones[m.name] && (
+                    <label className="mt-2 flex items-center gap-1.5 text-xs w-fit cursor-pointer" style={{ color: COLORS.textMuted }}>
+                      <input
+                        type="checkbox"
+                        checked={!!whatsappConsent[m.name]}
+                        onChange={(e) => setWhatsappConsent(m.name, e.target.checked)}
+                      />
+                      מאשר/ת קבלת תזכורות בוואטסאפ (תשלומים ואירועים)
+                    </label>
+                  )}
+                  {isAdmin && memberPhones[m.name] && whatsappConsent[m.name] && (
                     <div className="mt-2">
                       <a
                         href={buildWhatsAppLink(memberPhones[m.name], eventReminderMessage(m.name))}
@@ -4934,6 +4963,11 @@ export default function App() {
                       >
                         <MessageCircle size={13} /> תזכורת אירוע בוואטסאפ
                       </a>
+                    </div>
+                  )}
+                  {isAdmin && memberPhones[m.name] && !whatsappConsent[m.name] && (
+                    <div className="mt-2 text-xs" style={{ color: COLORS.textMuted }}>
+                      {m.name} עדיין לא אישר/ה קבלת תזכורות בוואטסאפ
                     </div>
                   )}
                 </div>
