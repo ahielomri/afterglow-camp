@@ -943,26 +943,41 @@ function AddPaymentForm({ onAdd }) {
   );
 }
 
-function TeamLeadPicker({ team, current, members, onSet }) {
+// Primary lead (slot 0) can only be set/changed by an admin - the second
+// slot can also be managed by whoever is already leading this team, so a
+// lead can bring on a co-lead without needing an admin every time.
+function TeamLeadPicker({ team, current, members, onSet, canEditPrimary }) {
   const leads = current || [];
   const slot0 = leads[0] || "";
   const slot1 = leads[1] || "";
   return (
     <div className="flex items-center gap-1.5 mt-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
-      {[slot0, slot1].map((val, slot) => (
+      {canEditPrimary ? (
         <select
-          key={slot}
-          value={val}
-          onChange={(e) => onSet(team, e.target.value, slot)}
+          value={slot0}
+          onChange={(e) => onSet(team, e.target.value, 0)}
           className="text-xs px-2 py-1 rounded-lg outline-none"
           style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
         >
-          <option value="">{slot === 0 ? "ללא מוביל/ה" : "מוביל/ה נוסף/ת (אופציונלי)"}</option>
-          {members
-            .filter((m) => m.name === val || m.name !== (slot === 0 ? slot1 : slot0))
-            .map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
+          <option value="">ללא מוביל/ה</option>
+          {members.filter((m) => m.name === slot0 || m.name !== slot1).map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
         </select>
-      ))}
+      ) : (
+        slot0 && (
+          <span className="text-xs px-2 py-1 rounded-lg" style={{ background: COLORS.input, color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}>
+            מוביל/ה ראשי/ת: {slot0}
+          </span>
+        )
+      )}
+      <select
+        value={slot1}
+        onChange={(e) => onSet(team, e.target.value, 1)}
+        className="text-xs px-2 py-1 rounded-lg outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      >
+        <option value="">מוביל/ה נוסף/ת (אופציונלי)</option>
+        {members.filter((m) => m.name === slot1 || m.name !== slot0).map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
+      </select>
     </div>
   );
 }
@@ -4946,8 +4961,8 @@ export default function App() {
                     )}
                   </button>
 
-                  {isAdmin && (
-                    <TeamLeadPicker team={t.name} current={teamLeads[t.name]} members={allMembers} onSet={setTeamLead} />
+                  {(isAdmin || leads.some((l) => l.name === identity)) && (
+                    <TeamLeadPicker team={t.name} current={teamLeads[t.name]} members={allMembers} onSet={setTeamLead} canEditPrimary={isAdmin} />
                   )}
 
                   <div className="text-xs leading-relaxed mt-2" style={{ color: COLORS.textMuted }}>{t.desc}</div>
