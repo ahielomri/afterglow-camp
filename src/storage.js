@@ -205,6 +205,33 @@ export async function adminSetMemberId(name, idNumber) {
   return data;
 }
 
+// Owner-only: clears a member's login (deletes their Supabase Auth account
+// and unlinks it from their members row) without the admin ever setting or
+// seeing a password - the member then goes through "כניסה ראשונה" again,
+// which re-verifies their ID before letting them pick a new password. This
+// is the secure replacement for an admin directly resetting someone's
+// password (removed on purpose - see the note in the admin panel).
+export async function adminResetMemberAccess(name) {
+  const { data, error } = await supabase.functions.invoke("admin-reset-member-access", {
+    body: { name },
+  });
+  if (error) {
+    let message = "reset_failed";
+    try {
+      const ctx = error.context;
+      if (ctx && typeof ctx.json === "function") {
+        const parsed = await ctx.json();
+        message = parsed.detail ? `${parsed.error}: ${parsed.detail}` : (parsed.error || message);
+      }
+    } catch {
+      // ignore - fall back to generic message
+    }
+    throw new Error(message);
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
 // Owner-only: promotes/demotes a member between "member" and "admin".
 // Deliberately narrower than the admin-only actions above - checked
 // server-side against the caller's own role, and the owner row itself

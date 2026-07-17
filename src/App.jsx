@@ -19,6 +19,7 @@ import {
   addTeamMemberRow,
   removeTeamMemberRow,
   adminSetMemberId,
+  adminResetMemberAccess,
   adminSetMemberRole,
   listMembersWithIdOnFile,
   adminRenameMember,
@@ -726,7 +727,7 @@ function EquipmentForm({ onAdd, lockedCategory, initial, onCancel }) {
   );
 }
 
-function BudgetExpenseForm({ onAdd, lockedAllocation }) {
+function BudgetExpenseForm({ onAdd, lockedAllocation, categories }) {
   const [allocation, setAllocation] = useState(lockedAllocation || "");
   const [description, setDescription] = useState("");
   const [vendor, setVendor] = useState("");
@@ -778,13 +779,15 @@ function BudgetExpenseForm({ onAdd, lockedAllocation }) {
   return (
     <div className="rounded-2xl p-4 space-y-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
       <div className="grid sm:grid-cols-2 gap-2">
-        <input
+        <select
           value={allocation} onChange={(e) => setAllocation(e.target.value)}
-          placeholder="שיוך תקציבי (מחנה/סלון/מים/...)"
           disabled={!!lockedAllocation}
           className="px-3 py-2 rounded-xl text-sm outline-none"
           style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}`, opacity: lockedAllocation ? 0.7 : 1 }}
-        />
+        >
+          {!lockedAllocation && <option value="">שיוך תקציבי - בחר/י</option>}
+          {(lockedAllocation ? [lockedAllocation] : categories || []).map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
         <input
           value={description} onChange={(e) => setDescription(e.target.value)}
           placeholder="מהות ההוצאה"
@@ -2677,6 +2680,19 @@ export default function App() {
     }
   }
 
+  // Owner-only: clears a member's login so they have to go through "כניסה
+  // ראשונה" again (re-verified against their ID) - the secure stand-in for
+  // an admin resetting/knowing someone's password directly.
+  async function resetMemberAccess(name) {
+    try {
+      await adminResetMemberAccess(name);
+      showToast(`הגישה של ${name} אופסה - הם יצטרכו לעבור "כניסה ראשונה" מחדש`, "ok");
+      logActivity("איפוס גישה לחבר קמפ", name);
+    } catch (err) {
+      showToast(`האיפוס נכשל: ${err?.message || "שגיאה לא ידועה"}`, "error");
+    }
+  }
+
   // Owner-only: promote a member to admin or demote an admin back to
   // member. Server-side checked against the caller's real role, so this
   // is a UI convenience, not the actual security boundary.
@@ -3263,7 +3279,7 @@ export default function App() {
             {showMemberList && (
               <div>
                 <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
-                  איפוס סיסמה כבר לא נעשה על ידי מנהל - כל חבר/ה עושה זאת בעצמו/ה במסך הכניסה, דרך "כניסה ראשונה / שכחת סיסמה", בעזרת תעודת הזהות שלו/ה.
+                  מנהל לא בוחר סיסמה במקום מישהו (מטעמי אבטחה) - אבל אפשר "לאפס גישה" כדי שהם יעברו שוב "כניסה ראשונה" עם תעודת הזהות שלהם ויבחרו סיסמה חדשה.
                 </p>
                 <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
                   {allMembers.map((m) => (
@@ -3304,6 +3320,16 @@ export default function App() {
                             >
                               {m.role === "admin" ? <ShieldOff size={12} /> : <ShieldCheck size={12} />}
                               {m.role === "admin" ? "הסרת ניהול" : "הפוך למנהל"}
+                            </button>
+                          )}
+                          {isOwner && m.role !== "owner" && (
+                            <button
+                              onClick={() => { if (window.confirm(`לאפס את הגישה של ${m.name}? הם יצטרכו לעבור "כניסה ראשונה" מחדש עם תעודת הזהות שלהם.`)) resetMemberAccess(m.name); }}
+                              className="text-xs px-2 py-1 rounded-lg flex items-center gap-1"
+                              style={{ color: COLORS.textMuted }}
+                              title="איפוס גישה"
+                            >
+                              <LockKeyhole size={12} /> איפוס גישה
                             </button>
                           )}
                           <button
@@ -4317,6 +4343,7 @@ export default function App() {
                         setShowBudgetSection("expenses");
                       }}
                       lockedAllocation={isAdmin ? null : myLeadTeam}
+                      categories={allBudgetCategories}
                     />
                   </div>
                 )}
@@ -4953,7 +4980,7 @@ export default function App() {
                   </button>
                   {open && (
                     <div className="space-y-3">
-                      {canEditBudget && <BudgetExpenseForm onAdd={addBudgetExpense} lockedAllocation={isAdmin ? null : myLeadTeam} />}
+                      {canEditBudget && <BudgetExpenseForm onAdd={addBudgetExpense} lockedAllocation={isAdmin ? null : myLeadTeam} categories={allBudgetCategories} />}
                       <div className="space-y-1.5">
                         {budgetExpenses.map((e) => (
                           <div key={e.id} className="rounded-xl px-3 py-2 text-xs flex items-center justify-between gap-2" style={{ background: COLORS.surface }}>
@@ -5257,10 +5284,10 @@ export default function App() {
 
         {tab === "contacts" && (
           <div className="space-y-2">
-            {/* Phone/email are now filled in from "לוח בקרה אישי" - this tab
-                just displays that data (admins can still correct it here). */}
+            {/* Read-only: phone/email are only ever edited from "לוח בקרה
+                אישי" (each person edits their own) - this tab just displays
+                that data, no edit path here at all anymore, not even admin. */}
             {allMembers.map((m) => {
-              const canEdit = isAdmin;
               return (
                 <div key={m.name} className="rounded-xl px-4 py-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                   <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -5268,30 +5295,9 @@ export default function App() {
                       {m.name}
                       {rideInfo[m.name]?.city && <span className="font-normal" style={{ color: COLORS.textMuted }}> · {rideInfo[m.name].city}</span>}
                     </span>
-                    {canEdit ? (
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <input
-                          defaultValue={memberPhones[m.name] || ""}
-                          onBlur={(e) => setPhone(m.name, e.target.value)}
-                          placeholder="טלפון"
-                          dir="ltr"
-                          className="text-sm px-2 py-1 rounded-lg outline-none text-left"
-                          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}`, width: 130 }}
-                        />
-                        <input
-                          defaultValue={memberEmails[m.name] || ""}
-                          onBlur={(e) => setEmail(m.name, e.target.value)}
-                          placeholder="אימייל"
-                          dir="ltr"
-                          className="text-sm px-2 py-1 rounded-lg outline-none text-left"
-                          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}`, width: 170 }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="text-sm text-left" dir="ltr" style={{ color: COLORS.textMuted }}>
-                        {memberPhones[m.name] || "—"} · {memberEmails[m.name] || "—"}
-                      </div>
-                    )}
+                    <div className="text-sm text-left" dir="ltr" style={{ color: COLORS.textMuted }}>
+                      {memberPhones[m.name] || "—"} · {memberEmails[m.name] || "—"}
+                    </div>
                   </div>
                   {m.name === identity && pushStatus !== "unsupported" && (
                     <div className="mt-2">
