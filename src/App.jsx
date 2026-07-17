@@ -1426,6 +1426,89 @@ function ReplyBox({ onReply }) {
   );
 }
 
+const REACTION_EMOJIS = ["❤️", "😂", "👍", "🎉", "😮", "😢"];
+const LONG_PRESS_MS = 450;
+
+// Wraps a message body with WhatsApp-style long-press-to-react, plus
+// reaction pills and a tap trigger below it. One emoji per person
+// (picking another swaps it). Owns its own long-press ref/timer so it
+// works correctly when rendered many times in a list (each instance is
+// a separate component, so this stays rules-of-hooks safe unlike trying
+// to create one ref per loop iteration in the parent).
+function ReactionBar({ reactions, identity, onToggle, children }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pressTimer = useRef(null);
+  const longPressTargetRef = useRef(null);
+  const entries = Object.entries(reactions || {}).filter(([, names]) => names && names.length > 0);
+
+  useEffect(() => {
+    const el = longPressTargetRef.current;
+    if (!el) return;
+    function start() {
+      pressTimer.current = setTimeout(() => setPickerOpen(true), LONG_PRESS_MS);
+    }
+    function cancel() {
+      clearTimeout(pressTimer.current);
+    }
+    el.addEventListener("pointerdown", start);
+    el.addEventListener("pointerup", cancel);
+    el.addEventListener("pointerleave", cancel);
+    el.addEventListener("pointercancel", cancel);
+    return () => {
+      el.removeEventListener("pointerdown", start);
+      el.removeEventListener("pointerup", cancel);
+      el.removeEventListener("pointerleave", cancel);
+      el.removeEventListener("pointercancel", cancel);
+      clearTimeout(pressTimer.current);
+    };
+  }, []);
+
+  return (
+    <div className="relative mt-2">
+      <div ref={longPressTargetRef}>{children}</div>
+      {pickerOpen && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setPickerOpen(false)} />
+          <div
+            className="absolute bottom-full mb-1 right-0 z-20 flex gap-1 rounded-full px-2 py-1.5 shadow-lg"
+            style={{ background: COLORS.bg, border: `1px solid ${COLORS.divider}` }}
+          >
+            {REACTION_EMOJIS.map((emoji) => (
+              <button key={emoji} onClick={() => { onToggle(emoji); setPickerOpen(false); }} className="text-lg px-1 leading-none">
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      <div className="flex items-center gap-1 flex-wrap">
+        {entries.map(([emoji, names]) => (
+          <button
+            key={emoji}
+            onClick={() => onToggle(emoji)}
+            className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1 font-semibold"
+            style={{
+              background: names.includes(identity) ? COLORS.accentLight : "rgba(255,255,255,0.55)",
+              border: `1px solid ${names.includes(identity) ? COLORS.accent : "transparent"}`,
+              color: COLORS.text,
+            }}
+            title={names.join(", ")}
+          >
+            <span>{emoji}</span><span>{names.length}</span>
+          </button>
+        ))}
+        <button
+          onClick={() => setPickerOpen((v) => !v)}
+          className="text-xs px-2 py-0.5 rounded-full"
+          style={{ color: COLORS.textMuted, background: "rgba(255,255,255,0.4)" }}
+        >
+          😊+
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function EmergencyCardForm({ data, onChange }) {
   const d = data || {};
   const [local, setLocal] = useState({
@@ -2815,6 +2898,31 @@ export default function App() {
         ? { ...a, replies: [...(a.replies || []), { id: Date.now().toString(), author: identity, text: text.trim(), ts: Date.now() }] }
         : a
     );
+    setAnnouncements(next);
+    try {
+      await window.storage.set("announcements", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  // Toggles the current member's reaction of this emoji on/off - like
+  // WhatsApp's message reactions, one emoji-per-person per announcement
+  // (picking a different emoji swaps it rather than stacking multiple).
+  async function toggleReaction(annId, emoji) {
+    const next = announcements.map((a) => {
+      if (a.id !== annId) return a;
+      const reactions = { ...(a.reactions || {}) };
+      const alreadyHasThis = (reactions[emoji] || []).includes(identity);
+      Object.keys(reactions).forEach((key) => {
+        reactions[key] = reactions[key].filter((n) => n !== identity);
+        if (reactions[key].length === 0) delete reactions[key];
+      });
+      if (!alreadyHasThis) {
+        reactions[emoji] = [...(reactions[emoji] || []), identity];
+      }
+      return { ...a, reactions };
+    });
     setAnnouncements(next);
     try {
       await window.storage.set("announcements", JSON.stringify(next), true);
@@ -4292,7 +4400,9 @@ export default function App() {
                           )}
                         </div>
                       </div>
-                      <p className="text-sm whitespace-pre-wrap" style={{ fontFamily: FONT_HEADING, lineHeight: 1.5 }}>{a.text}</p>
+                      <ReactionBar reactions={a.reactions} identity={identity} onToggle={(emoji) => toggleReaction(a.id, emoji)}>
+                        <p className="text-sm whitespace-pre-wrap select-none" style={{ fontFamily: FONT_HEADING, lineHeight: 1.5 }}>{a.text}</p>
+                      </ReactionBar>
 
                       {a.isEvent && (a.eventDate || a.eventTime) && (() => {
                         const authorRole = allMembers.find((m) => m.name === a.author)?.role;
