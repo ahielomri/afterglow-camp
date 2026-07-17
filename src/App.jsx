@@ -1849,6 +1849,7 @@ export default function App() {
   const [campEquipment, setCampEquipment] = useState([]);
   const [extraBudgetCategories, setExtraBudgetCategories] = useState([]);
   const [showBudgetSection, setShowBudgetSection] = useState(null);
+  const [showQuickAddExpense, setShowQuickAddExpense] = useState(false);
   const [financesView, setFinancesView] = useState("dues");
   const [activityLog, setActivityLog] = useState([]);
   const [loginHistory, setLoginHistory] = useState([]);
@@ -2025,7 +2026,16 @@ export default function App() {
       // one (returning visit), pick it back up here; otherwise this
       // just loads harmless empty defaults and the login screen shows.
       const restoredName = await getSignedInMemberName().catch(() => null);
-      await loadSharedData();
+      await Promise.all([
+        loadSharedData(),
+        // Needed before any login attempt, not just after one: the login
+        // screen's "first-time signup needs ID" check reads idOnFileNames,
+        // so a first-time visitor who was never logged in on this device
+        // must still see fresh DB truth here - otherwise it falls back to
+        // the stale static idOnFile flag baked into extra-members and can
+        // wrongly tell a member with a freshly-added ID that they have none.
+        listMembersWithIdOnFile().then(setIdOnFileNames).catch(() => {}),
+      ]);
       if (restoredName) {
         await applyIdentity(restoredName, false);
       }
@@ -4077,16 +4087,27 @@ export default function App() {
             </div>
 
             {canEditBudget && (
-              <button
-                onClick={() => {
-                  setShowBudgetSection("expenses");
-                  setTimeout(() => document.getElementById("budget-expenses-section")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-                }}
-                className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold mb-6"
-                style={{ background: COLORS.accent, color: COLORS.bg }}
-              >
-                <Plus size={15} /> הוספת הוצאה
-              </button>
+              <div className="mb-6">
+                <button
+                  onClick={() => setShowQuickAddExpense((v) => !v)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold"
+                  style={{ background: COLORS.accent, color: COLORS.bg }}
+                >
+                  <Plus size={15} /> הוספת הוצאה
+                </button>
+                {showQuickAddExpense && (
+                  <div className="mt-3">
+                    <BudgetExpenseForm
+                      onAdd={(exp) => {
+                        addBudgetExpense(exp);
+                        setShowQuickAddExpense(false);
+                        setShowBudgetSection("expenses");
+                      }}
+                      lockedAllocation={isAdmin ? null : myLeadTeam}
+                    />
+                  </div>
+                )}
+              </div>
             )}
 
             <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.textMuted }}>תקציב לפי קטגוריה</h3>
