@@ -354,6 +354,7 @@ function LoginScreen({ members, onLogin, onSetup }) {
       await onSetup(selected.name, idVal, newPassword);
     } catch (err) {
       if (err.message === "id_mismatch") setError("תעודת הזהות לא תואמת לשם שנבחר");
+      else if (err.message === "id_required") setError('אין תעודת זהות מאומתת רשומה עבורך במערכת - יש לפנות למנהל/ת הקמפ כדי שיוסיפו אותה לפני הכניסה הראשונה');
       else setError(`משהו השתבש: ${err.message || err}`);
     } finally {
       setLoading(false);
@@ -435,7 +436,9 @@ function LoginScreen({ members, onLogin, onSetup }) {
                 />
               </>
             ) : (
-              <p className="text-xs mb-3" style={{ color: COLORS.textMuted }}>אין ת.ז רשומה עבורך במערכת - בחר/י סיסמה כדי להמשיך</p>
+              <p className="text-xs mb-3" style={{ color: COLORS.textMuted }}>
+                אין ת.ז מאומתת רשומה עבורך במערכת. אם זו הכניסה הראשונה שלך, יש לפנות למנהל/ת הקמפ כדי שיוסיפו תעודת זהות מאומתת - זה נדרש לפני שאפשר לבחור סיסמה. אם כבר יש לך חשבון ואת/ה רק מאפס/ת סיסמה, אפשר להמשיך.
+              </p>
             )}
             <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>סיסמה חדשה</label>
             <input
@@ -867,7 +870,7 @@ function AddMemberForm({ onAdd }) {
         />
       </div>
       <div className="flex-1 min-w-[120px]">
-        <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>ת.ז (אופציונלי, לאימות זהות)</label>
+        <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>ת.ז (חובה, לאימות זהות בכניסה ראשונה)</label>
         <input
           value={id} onChange={(e) => setId(e.target.value)}
           placeholder="תעודת זהות"
@@ -876,9 +879,10 @@ function AddMemberForm({ onAdd }) {
         />
       </div>
       <button
-        onClick={() => { if (name.trim()) { onAdd(name.trim(), id.trim() || null); setName(""); setId(""); } }}
+        onClick={() => { if (name.trim() && id.trim()) { onAdd(name.trim(), id.trim()); setName(""); setId(""); } }}
+        disabled={!name.trim() || !id.trim()}
         className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold"
-        style={{ background: COLORS.accent, color: COLORS.bg }}
+        style={{ background: COLORS.accent, color: COLORS.bg, opacity: (!name.trim() || !id.trim()) ? 0.5 : 1 }}
       >
         <UserPlus size={15} /> הוספת חבר
       </button>
