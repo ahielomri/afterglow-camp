@@ -94,18 +94,32 @@ const MEMBERS = [
   { name: "שלומי קוך", idOnFile: false, role: "member" },
 ];
 
+// Each team now allows up to 2 leads, so every entry is an array of names
+// (never a bare string) - normalizeTeamLeads() below upgrades any older
+// single-name data (from before this change) the same way.
 const DEFAULT_TEAM_LEADS = {
-  "הקמות": "גלעד אהרוני",
-  "צוות תקציב": "רותם פלש",
-  "רכש ולוגיסטיקה": "אורנה חזוט צורים",
-  "פירוקים": "תמיר צמח",
-  "מים": "מתיאס זיפיליבן",
-  "שירותים ומקלחות": "בתאל בר גיורא",
-  "צוות חשל\"ש": "יעל נאש",
-  "עיצוב המחנה ותפאורה": "רוני דאיה",
-  "צוות תוכן גיפט": "מירי אביהו",
-  "אחראי קרח": "איתי כהן",
+  "הקמות": ["גלעד אהרוני"],
+  "צוות תקציב": ["רותם פלש"],
+  "רכש ולוגיסטיקה": ["אורנה חזוט צורים"],
+  "פירוקים": ["תמיר צמח"],
+  "מים": ["מתיאס זיפיליבן"],
+  "שירותים ומקלחות": ["בתאל בר גיורא"],
+  "צוות חשל\"ש": ["יעל נאש"],
+  "עיצוב המחנה ותפאורה": ["רוני דאיה"],
+  "צוות תוכן גיפט": ["מירי אביהו"],
+  "אחראי קרח": ["איתי כהן"],
 };
+
+// Upgrades old data shaped as { team: "name" } (single lead) to the new
+// { team: ["name"] } shape, and drops empty/blank entries either way.
+function normalizeTeamLeads(raw) {
+  const next = {};
+  Object.entries(raw || {}).forEach(([team, val]) => {
+    const arr = Array.isArray(val) ? val : val ? [val] : [];
+    next[team] = arr.filter(Boolean).slice(0, 2);
+  });
+  return next;
+}
 
 const TEAMS = [
   { name: "תכנון המחנה", desc: "תכנון פיזי והעמדה של הקמפ: מיקומי המטבח, השירותים, המקלחות, אזור הלינה ומרחב הגיפט/הסלון" },
@@ -930,18 +944,25 @@ function AddPaymentForm({ onAdd }) {
 }
 
 function TeamLeadPicker({ team, current, members, onSet }) {
-  const [val, setVal] = useState(current || "");
+  const leads = current || [];
+  const slot0 = leads[0] || "";
+  const slot1 = leads[1] || "";
   return (
-    <div className="flex items-center gap-1.5 mt-1" onClick={(e) => e.stopPropagation()}>
-      <select
-        value={val}
-        onChange={(e) => { setVal(e.target.value); onSet(team, e.target.value); }}
-        className="text-xs px-2 py-1 rounded-lg outline-none"
-        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-      >
-        <option value="">ללא מוביל/ה</option>
-        {members.map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
-      </select>
+    <div className="flex items-center gap-1.5 mt-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
+      {[slot0, slot1].map((val, slot) => (
+        <select
+          key={slot}
+          value={val}
+          onChange={(e) => onSet(team, e.target.value, slot)}
+          className="text-xs px-2 py-1 rounded-lg outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        >
+          <option value="">{slot === 0 ? "ללא מוביל/ה" : "מוביל/ה נוסף/ת (אופציונלי)"}</option>
+          {members
+            .filter((m) => m.name === val || m.name !== (slot === 0 ? slot1 : slot0))
+            .map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
+        </select>
+      ))}
     </div>
   );
 }
@@ -1980,7 +2001,7 @@ export default function App() {
       setCampFee(rawFee ? JSON.parse(rawFee) : 0);
 
       if (rawLeads) {
-        setTeamLeadsState(JSON.parse(rawLeads));
+        setTeamLeadsState(normalizeTeamLeads(JSON.parse(rawLeads)));
       } else {
         setTeamLeadsState(DEFAULT_TEAM_LEADS);
         window.storage.set("team-leads", JSON.stringify(DEFAULT_TEAM_LEADS), true).catch(() => {});
@@ -2431,14 +2452,20 @@ export default function App() {
     }
   }
 
-  async function setTeamLead(team, name) {
+  // slot is 0 or 1 - each team has up to 2 lead slots, set independently so
+  // picking the second lead doesn't disturb the first.
+  async function setTeamLead(team, name, slot = 0) {
+    const current = teamLeads[team] || [];
+    const nextSlots = [current[0] || "", current[1] || ""];
+    nextSlots[slot] = name || "";
+    const cleaned = nextSlots.filter(Boolean);
     const next = { ...teamLeads };
-    if (name) next[team] = name; else delete next[team];
+    if (cleaned.length) next[team] = cleaned; else delete next[team];
     setTeamLeadsState(next);
     try {
       await window.storage.set("team-leads", JSON.stringify(next), true);
-      showToast(`מוביל/ה ${team} עודכן`, "ok");
-      logActivity("שינוי מוביל צוות", `${team}: ${name || "ללא מוביל"}`);
+      showToast(`מובילי ${team} עודכנו`, "ok");
+      logActivity("שינוי מוביל צוות", `${team}: ${cleaned.join(", ") || "ללא מוביל"}`);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -2829,13 +2856,14 @@ export default function App() {
       showToast("שמירה נכשלה", "error");
     }
   }
-  function teamLead(teamName) {
-    const name = teamLeads[teamName];
-    return name ? allMembers.find((m) => m.name === name) : null;
+  function teamLeadsOf(teamName) {
+    return (teamLeads[teamName] || [])
+      .map((name) => allMembers.find((m) => m.name === name))
+      .filter(Boolean);
   }
 
   function isInTeam(teamName) {
-    return teamLeads[teamName] === identity || teamMembers(teamName).includes(identity);
+    return (teamLeads[teamName] || []).includes(identity) || teamMembers(teamName).includes(identity);
   }
 
   function teamStats(team) {
@@ -2885,7 +2913,7 @@ export default function App() {
   const currentMember = allMembers.find((m) => m.name === identity);
   const isOwner = currentMember?.role === "owner";
   const isAdmin = currentMember?.role === "admin" || isOwner;
-  const myLeadTeam = !isAdmin ? Object.keys(teamLeads).find((t) => teamLeads[t] === identity) : null;
+  const myLeadTeam = !isAdmin ? Object.keys(teamLeads).find((t) => (teamLeads[t] || []).includes(identity)) : null;
   const canEditBudget = isAdmin || !!myLeadTeam;
   const canManageFinances = isAdmin || isInTeam("צוות תקציב");
 
@@ -3181,7 +3209,7 @@ export default function App() {
                               : <span className="text-xs" style={{ color: COLORS.accentDark }}> (מנהל)</span>
                           )}
                           {m.role === "admin" && <span className="text-xs" style={{ color: COLORS.accentDark }}> (מנהל)</span>}
-                          {m.role === "member" && Object.values(teamLeads).includes(m.name) && <span className="text-xs" style={{ color: COLORS.accent2Dark }}> (מנהל צוות)</span>}
+                          {m.role === "member" && Object.values(teamLeads).some((leads) => leads.includes(m.name)) && <span className="text-xs" style={{ color: COLORS.accent2Dark }}> (מנהל צוות)</span>}
                           {m.idOnFile && <span className="text-xs" style={{ color: COLORS.textMuted }}> · ת.ז מאומתת</span>}
                         </span>
                         <div className="flex items-center gap-1">
@@ -4901,7 +4929,7 @@ export default function App() {
         {tab === "teams" && (
           <div className="grid sm:grid-cols-2 gap-3">
             {TEAMS.map((t) => {
-              const lead = teamLead(t.name);
+              const leads = teamLeadsOf(t.name);
               const members = teamMembers(t.name);
               const open = expandedTeam === t.name;
               return (
@@ -4911,7 +4939,11 @@ export default function App() {
                       <span className="font-bold" style={{ color: COLORS.accentDark }}>{t.name}</span>
                       <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none", opacity: 0.7 }} />
                     </div>
-                    {lead && <div className="text-xs mt-0.5" style={{ color: COLORS.textMuted }}>מוביל/ה: {lead.name}</div>}
+                    {leads.length > 0 && (
+                      <div className="text-xs mt-0.5" style={{ color: COLORS.textMuted }}>
+                        {leads.length > 1 ? "מובילים: " : "מוביל/ה: "}{leads.map((l) => l.name).join(", ")}
+                      </div>
+                    )}
                   </button>
 
                   {isAdmin && (
@@ -4951,7 +4983,7 @@ export default function App() {
                         const items = TEAM_CHECKLISTS[t.name];
                         const state = checklistState[t.name] || {};
                         const doneCount = items.filter((_, i) => state[i]).length;
-                        const canCheck = isAdmin || teamLeads[t.name] === identity;
+                        const canCheck = isAdmin || (teamLeads[t.name] || []).includes(identity);
                         return (
                           <div className="mt-3 pt-3 border-t" style={{ borderColor: COLORS.divider }}>
                             <div className="text-xs mb-1.5 flex items-center justify-between" style={{ color: COLORS.textMuted }}>
