@@ -2971,6 +2971,7 @@ export default function App() {
   useEffect(() => {
     if (!loading && identity && !profileComplete && tab !== "dashboard-personal") {
       setTab("dashboard-personal");
+      showToast("כדי להמשיך להשתמש באפליקציה צריך קודם למלא את הפרטים החסרים כאן", "error");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, identity, profileComplete, tab]);
@@ -3167,8 +3168,10 @@ export default function App() {
           return (
             <button
               key={t.id}
-              onClick={() => { if (!locked) setTab(t.id); }}
-              disabled={locked}
+              onClick={() => {
+                if (locked) showToast("כדי להמשיך להשתמש באפליקציה צריך קודם למלא את הפרטים החסרים בלוח הבקרה האישי", "error");
+                else setTab(t.id);
+              }}
               title={locked ? "יש להשלים קודם את הפרטים האישיים" : undefined}
               className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold transition-colors"
               style={{
