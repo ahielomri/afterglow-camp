@@ -236,6 +236,18 @@ function daysUntil() {
   return Math.ceil((EVENT_START - new Date()) / (1000 * 60 * 60 * 24));
 }
 
+// "committed" = the full cost regardless of payment status, "paid" = what's
+// actually been paid so far (the full amount unless marked partial).
+// Refunds count negative in both. Used to fold budgetExpenses entries into
+// the same category totals that used to come only from the older, simpler
+// budgetItems form.
+function expenseAmounts(e) {
+  const amount = Number(e.amount) || 0;
+  const paidAmount = e.paymentStatus === "partial" ? (Number(e.paidAmount) || 0) : amount;
+  const sign = e.isRefund ? -1 : 1;
+  return { committed: sign * amount, paid: sign * paidAmount };
+}
+
 // ---------------------------------------------------------------------------
 // "היומן שלי" phone-calendar sync - exports shifts + calendar events as a
 // standard .ics file. No server involved: every phone/desktop calendar app
@@ -606,65 +618,6 @@ function CategoryBudgetForm({ onSet, categories }) {
       >
         עדכון תקציב
       </button>
-    </div>
-  );
-}
-
-function BudgetForm({ onAdd, onCancel, lockedCategory, categories }) {
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState(lockedCategory || categories[0]);
-  const [committed, setCommitted] = useState("");
-  const [paid, setPaid] = useState("");
-  const [notes, setNotes] = useState("");
-
-  return (
-    <div className="rounded-2xl p-4 mb-6 space-y-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-      <div className="grid sm:grid-cols-2 gap-2">
-        <input
-          value={name} onChange={(e) => setName(e.target.value)}
-          placeholder="שם הסעיף (למשל: שכירת גנרטור)"
-          className="px-3 py-2 rounded-xl text-sm outline-none sm:col-span-2"
-          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-        />
-        <select
-          value={category} onChange={(e) => setCategory(e.target.value)}
-          disabled={!!lockedCategory}
-          className="px-3 py-2 rounded-xl text-sm outline-none"
-          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}`, opacity: lockedCategory ? 0.7 : 1 }}
-        >
-          {(lockedCategory ? [lockedCategory] : categories).map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <input
-          value={notes} onChange={(e) => setNotes(e.target.value)}
-          placeholder="הערות (אופציונלי)"
-          className="px-3 py-2 rounded-xl text-sm outline-none"
-          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-        />
-        <input
-          type="number" value={committed} onChange={(e) => setCommitted(e.target.value)}
-          placeholder="סכום שהתחייבנו (₪)"
-          className="px-3 py-2 rounded-xl text-sm outline-none"
-          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-        />
-        <input
-          type="number" value={paid} onChange={(e) => setPaid(e.target.value)}
-          placeholder="סכום ששולם בפועל (₪)"
-          className="px-3 py-2 rounded-xl text-sm outline-none sm:col-span-2"
-          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-        />
-      </div>
-      <div className="flex gap-2 pt-1">
-        <button
-          onClick={() => onAdd({ name, category, committed, paid, notes })}
-          className="px-4 py-2 rounded-full text-sm font-semibold"
-          style={{ background: COLORS.accent, color: COLORS.bg }}
-        >
-          הוספה
-        </button>
-        <button onClick={onCancel} className="px-4 py-2 rounded-full text-sm" style={{ color: COLORS.textMuted }}>
-          ביטול
-        </button>
-      </div>
     </div>
   );
 }
@@ -1918,7 +1871,6 @@ export default function App() {
   const [openPersonalSection, setOpenPersonalSection] = useState(null);
   const [showPollForm, setShowPollForm] = useState(false);
   const [expandedMember, setExpandedMember] = useState(null);
-  const [showBudgetForm, setShowBudgetForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("dashboard-personal");
   const [teamFilter, setTeamFilter] = useState("הכל");
@@ -2100,15 +2052,6 @@ export default function App() {
     } catch {
       showToast("שמירה נכשלה, נסה שוב", "error");
     }
-  }
-
-  function addBudgetItem(item) {
-    if (!item.name || !item.category) return showToast("צריך שם וקטגוריה", "error");
-    const next = [...budgetItems, { ...item, id: Date.now().toString(), owner: identity }];
-    persistBudget(next);
-    setShowBudgetForm(false);
-    showToast("הסעיף נוסף לתקציב", "ok");
-    logActivity("הוספת הוצאה", `${item.name} (${item.category})`);
   }
 
   function removeBudgetItem(id) {
@@ -2945,10 +2888,15 @@ export default function App() {
 
   const budgetTotals = useMemo(() => {
     const planned = Object.values(categoryBudgets).reduce((sum, v) => sum + (Number(v) || 0), 0);
-    const committed = budgetItems.reduce((sum, b) => sum + (Number(b.committed) || 0), 0);
-    const paid = budgetItems.reduce((sum, b) => sum + (Number(b.paid) || 0), 0);
+    let committed = budgetItems.reduce((sum, b) => sum + (Number(b.committed) || 0), 0);
+    let paid = budgetItems.reduce((sum, b) => sum + (Number(b.paid) || 0), 0);
+    budgetExpenses.forEach((e) => {
+      const amounts = expenseAmounts(e);
+      committed += amounts.committed;
+      paid += amounts.paid;
+    });
     return { planned, committed, paid, remaining: planned - committed };
-  }, [budgetItems, categoryBudgets]);
+  }, [budgetItems, budgetExpenses, categoryBudgets]);
 
   const paymentTotals = useMemo(() => {
     let due = 0;
@@ -4121,25 +4069,24 @@ export default function App() {
             </div>
 
             {canEditBudget && (
-              showBudgetForm ? (
-                <BudgetForm onAdd={addBudgetItem} onCancel={() => setShowBudgetForm(false)} lockedCategory={isAdmin ? null : myLeadTeam} categories={allBudgetCategories} />
-              ) : (
-                <button
-                  onClick={() => setShowBudgetForm(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold mb-6"
-                  style={{ background: COLORS.accent, color: COLORS.bg }}
-                >
-                  <Plus size={15} /> הוספת סעיף תקציב
-                </button>
-              )
+              <button
+                onClick={() => setShowBudgetSection("expenses")}
+                className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold mb-6"
+                style={{ background: COLORS.accent, color: COLORS.bg }}
+              >
+                <Plus size={15} /> הוספת הוצאה
+              </button>
             )}
 
             <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.textMuted }}>תקציב לפי קטגוריה</h3>
             <div className="space-y-2 mb-6">
               {allBudgetCategories.map((cat) => {
                 const items = budgetItems.filter((b) => b.category === cat);
+                const catExpenses = budgetExpenses.filter((e) => e.allocation === cat);
                 const planned = Number(categoryBudgets[cat]) || 0;
-                const paid = items.reduce((s, b) => s + (Number(b.paid) || 0), 0);
+                const legacyPaid = items.reduce((s, b) => s + (Number(b.paid) || 0), 0);
+                const expensesPaid = catExpenses.reduce((s, e) => s + expenseAmounts(e).paid, 0);
+                const paid = legacyPaid + expensesPaid;
                 const toPay = planned - paid;
                 const pct = planned > 0 ? Math.min(paid / planned, 1) * 100 : 0;
                 return (
@@ -4156,6 +4103,35 @@ export default function App() {
                     </div>
                     <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>תקציב מתוכנן: ₪{planned.toLocaleString()}</div>
 
+                    {catExpenses.length > 0 && (
+                      <div className="mt-3 space-y-1.5">
+                        {catExpenses.map((e) => (
+                          <div key={e.id} className="flex items-center justify-between text-xs rounded-xl px-3 py-2 gap-2" style={{ background: COLORS.input }}>
+                            <div className="flex items-center gap-2 min-w-0">
+                              {e.receiptUrl && (
+                                <a href={e.receiptUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                                  <img src={e.receiptUrl} alt="קבלה" className="h-8 w-8 object-cover rounded-lg" style={{ border: `1px solid ${COLORS.divider}` }} />
+                                </a>
+                              )}
+                              <div className="min-w-0">
+                                <div className="font-semibold">{e.description || e.subcategory || "הוצאה"}{e.vendor ? ` · ${e.vendor}` : ""}</div>
+                                <div className="mt-0.5" style={{ color: COLORS.textMuted }}>
+                                  {e.isRefund ? "זיכוי: " : ""}₪{Number(e.amount).toLocaleString()}
+                                  {e.paymentStatus === "partial" ? ` · שולם ₪${Number(e.paidAmount || 0).toLocaleString()}, נותר ₪${Number(e.remainingAmount || 0).toLocaleString()}` : ""}
+                                  {e.purchaseDate ? ` · ${formatDateShort(e.purchaseDate)}` : ""}
+                                </div>
+                                <div className="mt-0.5" style={{ color: COLORS.textMuted, opacity: 0.7 }}>הוזן ע"י {e.enteredBy}</div>
+                              </div>
+                            </div>
+                            {(isAdmin || myLeadTeam === cat) && (
+                              <button onClick={() => removeBudgetExpense(e.id)} style={{ color: COLORS.textMuted }} className="shrink-0">
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     {items.length > 0 && (
                       <div className="mt-3 space-y-1.5">
                         {items.map((b) => (
