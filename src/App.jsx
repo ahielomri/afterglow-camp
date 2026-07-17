@@ -2289,7 +2289,8 @@ export default function App() {
 
   async function addBudgetExpense(exp) {
     if (!exp.amount) return showToast("צריך סכום", "error");
-    const next = [{ ...exp, id: Date.now().toString(), enteredBy: identity }, ...budgetExpenses];
+    const latest = await getFreshShared("budget-expenses", budgetExpenses);
+    const next = [{ ...exp, id: Date.now().toString(), enteredBy: identity }, ...latest];
     setBudgetExpenses(next);
     try {
       await window.storage.set("budget-expenses", JSON.stringify(next), true);
@@ -2301,7 +2302,8 @@ export default function App() {
   }
 
   async function removeBudgetExpense(id) {
-    const next = budgetExpenses.filter((e) => e.id !== id);
+    const latest = await getFreshShared("budget-expenses", budgetExpenses);
+    const next = latest.filter((e) => e.id !== id);
     setBudgetExpenses(next);
     try {
       await window.storage.set("budget-expenses", JSON.stringify(next), true);
@@ -2314,7 +2316,8 @@ export default function App() {
   // was saved without a budget category) instead of only being able to
   // delete and re-enter it from scratch.
   async function updateBudgetExpense(id, patch) {
-    const next = budgetExpenses.map((e) => (e.id === id ? { ...e, ...patch } : e));
+    const latest = await getFreshShared("budget-expenses", budgetExpenses);
+    const next = latest.map((e) => (e.id === id ? { ...e, ...patch } : e));
     setBudgetExpenses(next);
     try {
       await window.storage.set("budget-expenses", JSON.stringify(next), true);
@@ -2325,7 +2328,8 @@ export default function App() {
   }
 
   async function addEquipment(item) {
-    const next = [...campEquipment, { ...item, id: Date.now().toString() }];
+    const latest = await getFreshShared("camp-equipment", campEquipment);
+    const next = [...latest, { ...item, id: Date.now().toString() }];
     setCampEquipment(next);
     try {
       await window.storage.set("camp-equipment", JSON.stringify(next), true);
@@ -2513,11 +2517,25 @@ export default function App() {
   }
 
   async function getLatestAssignments() {
+    return getFreshShared("shift-assignments", assignments);
+  }
+
+  // kv_store holds each key as one whole JSON blob, so two people editing
+  // the same shared list around the same moment can silently overwrite
+  // each other's change if both write from their own (possibly stale)
+  // local copy - whoever writes last wins, and the other person's add
+  // just vanishes. Re-fetching the current value right before merging in
+  // a change (instead of trusting local React state) closes that window
+  // to "however long the fetch+merge+write takes", same fix already used
+  // for shift-assignments (the highest-collision-risk list) - applied here
+  // to the other lists people are most likely to edit concurrently
+  // (adding a member, an expense, or equipment).
+  async function getFreshShared(key, fallback) {
     try {
-      const fresh = await window.storage.get("shift-assignments", true);
-      return fresh && fresh.value ? JSON.parse(fresh.value) : assignments;
+      const fresh = await window.storage.get(key, true);
+      return fresh && fresh.value ? JSON.parse(fresh.value) : fallback;
     } catch {
-      return assignments;
+      return fallback;
     }
   }
 
@@ -2738,7 +2756,8 @@ export default function App() {
         showToast(`${name} נוסף/ה, אך שמירת ת.ז נכשלה: ${err?.message || "שגיאה לא ידועה"} - אפשר לנסות שוב מהרשימה`, "error");
       }
     }
-    const next = [...extraMembers, { name, idOnFile: idSaved, role: "member" }];
+    const latestExtra = await getFreshShared("extra-members", extraMembers);
+    const next = [...latestExtra, { name, idOnFile: idSaved, role: "member" }];
     setExtraMembers(next);
     try {
       await window.storage.set("extra-members", JSON.stringify(next), true);
@@ -2753,7 +2772,8 @@ export default function App() {
   }
 
   async function removeMember(name) {
-    const next = [...removedMembers, name];
+    const latest = await getFreshShared("removed-members", removedMembers);
+    const next = [...latest, name];
     setRemovedMembers(next);
     try {
       await window.storage.set("removed-members", JSON.stringify(next), true);
@@ -2765,7 +2785,8 @@ export default function App() {
   }
 
   async function restoreMember(name) {
-    const next = removedMembers.filter((n) => n !== name);
+    const latest = await getFreshShared("removed-members", removedMembers);
+    const next = latest.filter((n) => n !== name);
     setRemovedMembers(next);
     try {
       await window.storage.set("removed-members", JSON.stringify(next), true);
