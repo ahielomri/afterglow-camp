@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff } from "lucide-react";
+import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole } from "lucide-react";
 import { pushSupported, pushPermission, enablePush, disablePush, isPushSubscribed, resetPush } from "./push.js";
 import {
   uploadFile,
@@ -1941,6 +1941,11 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [pushStatus, setPushStatus] = useState("unsupported");
   const [pushSubscribed, setPushSubscribed] = useState(false);
+  // Per-device, not per-account, on purpose: notification permission itself
+  // is per-browser, so a new device legitimately needs to be asked again -
+  // this only tracks "did this device's user make an active choice" so the
+  // profile-completeness gate below doesn't nag forever after a real "no".
+  const [pushDecisionMade, setPushDecisionMade] = useState(() => localStorage.getItem("push-decision-made") === "1");
   const [sendingTestPush, setSendingTestPush] = useState(false);
   const loadSharedDataRef = useRef(null);
 
@@ -2314,15 +2319,24 @@ export default function App() {
       await enablePush(identity);
       setPushStatus("granted");
       setPushSubscribed(true);
+      localStorage.setItem("push-decision-made", "1");
+      setPushDecisionMade(true);
       showToast("התראות פעילות! תקבל/י הודעה על מודעות וסקרים חדשים", "ok");
     } catch (err) {
       if (err.message === "permission-denied") {
         showToast("ההרשאה נדחתה - אפשר לשנות בהגדרות הדפדפן", "error");
         setPushStatus("denied");
+        localStorage.setItem("push-decision-made", "1");
+        setPushDecisionMade(true);
       } else {
         showToast("לא ניתן להפעיל התראות במכשיר/דפדפן הזה", "error");
       }
     }
+  }
+
+  function handleDeclinePush() {
+    localStorage.setItem("push-decision-made", "1");
+    setPushDecisionMade(true);
   }
 
   async function handleDisablePush() {
@@ -2932,6 +2946,35 @@ export default function App() {
   const canEditBudget = isAdmin || !!myLeadTeam;
   const canManageFinances = isAdmin || isInTeam("צוות תקציב");
 
+  // Everyone must fill these in before using the rest of the app - see the
+  // gating effect further down. "Filled" means "answered", not "answered
+  // yes" - e.g. hasCar === "no" counts, an unanswered hasCar doesn't.
+  const missingProfileFields = useMemo(() => {
+    if (!identity) return [];
+    const missing = [];
+    if (!memberPhones[identity]?.trim()) missing.push("טלפון");
+    if (!memberEmails[identity]?.trim()) missing.push("אימייל");
+    const emg = emergencyInfo[identity] || {};
+    if (!emg.contactName?.trim() || !emg.contactPhone?.trim()) missing.push("פרטי חירום");
+    const ride = rideInfo[identity] || {};
+    if (ride.hasCar !== "yes" && ride.hasCar !== "no") missing.push("התניידות");
+    const alloc = allocationInfo[identity] || {};
+    if (alloc.hasAllocation !== "yes" && alloc.hasAllocation !== "no") missing.push("הקצאה");
+    if (pushStatus === "default" && !pushDecisionMade) missing.push("החלטה לגבי התראות");
+    return missing;
+  }, [identity, memberPhones, memberEmails, emergencyInfo, rideInfo, allocationInfo, pushStatus, pushDecisionMade]);
+  const profileComplete = missingProfileFields.length === 0;
+
+  // Keep anyone with missing profile fields on their personal dashboard
+  // until they've filled everything in - covers both landing there after
+  // login and trying to tab away mid-setup.
+  useEffect(() => {
+    if (!loading && identity && !profileComplete && tab !== "dashboard-personal") {
+      setTab("dashboard-personal");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, identity, profileComplete, tab]);
+
   const myShifts = useMemo(
     () => SHIFTS.filter((s) => isJoined(s.id)).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start)),
     [assignments, identity]
@@ -3119,20 +3162,27 @@ export default function App() {
           { id: "rides", label: "התניידות", icon: Car },
           { id: "contacts", label: "חברי קמפ", icon: Phone },
           { id: "equipment", label: "ציוד קמפ", icon: Package },
-        ].map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold transition-colors"
-            style={{
-              background: tab === t.id ? COLORS.accent : COLORS.surface,
-              color: tab === t.id ? COLORS.bg : COLORS.textMuted,
-              border: `1px solid ${tab === t.id ? COLORS.accent : COLORS.divider}`,
-            }}
-          >
-            {t.icon && <t.icon size={16} />} {t.label}
-          </button>
-        ))}
+        ].map((t) => {
+          const locked = !profileComplete && t.id !== "dashboard-personal";
+          return (
+            <button
+              key={t.id}
+              onClick={() => { if (!locked) setTab(t.id); }}
+              disabled={locked}
+              title={locked ? "יש להשלים קודם את הפרטים האישיים" : undefined}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold transition-colors"
+              style={{
+                background: tab === t.id ? COLORS.accent : COLORS.surface,
+                color: tab === t.id ? COLORS.bg : COLORS.textMuted,
+                border: `1px solid ${tab === t.id ? COLORS.accent : COLORS.divider}`,
+                opacity: locked ? 0.45 : 1,
+                cursor: locked ? "not-allowed" : "pointer",
+              }}
+            >
+              {locked ? <LockKeyhole size={16} /> : t.icon && <t.icon size={16} />} {t.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Content */}
@@ -3569,26 +3619,44 @@ export default function App() {
 
         {tab === "dashboard-personal" && (
           <div>
+            {!profileComplete && (
+              <div className="rounded-2xl p-4 mb-4" style={{ background: COLORS.accent2Light, border: `1px solid ${COLORS.accent2}55` }}>
+                <div className="text-sm font-bold mb-1" style={{ color: COLORS.accent2Dark }}>יש להשלים פרטים לפני שממשיכים באפליקציה</div>
+                <p className="text-xs" style={{ color: COLORS.textMuted }}>
+                  חסר: {missingProfileFields.join(", ")}. שאר טאבי האפליקציה ייפתחו אוטומטית ברגע שהכל מלא.
+                </p>
+              </div>
+            )}
             {pushStatus === "default" && (
               <div className="rounded-2xl p-4 mb-4" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
                 <div className="text-sm font-bold mb-1.5 flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
                   <Bell size={14} /> הפעילו התראות כדי לא לפספס עדכונים
                 </div>
                 {isIOSDevice() && !isStandaloneDisplay() ? (
-                  <p className="text-xs" style={{ color: COLORS.textMuted }}>
-                    באייפון צריך קודם להוסיף את האתר למסך הבית: כפתור השיתוף בספארי ← "הוסף למסך הבית". אחר כך פותחים מהאייקון שנוסף למסך הבית, ומשם אפשר להפעיל התראות.
-                  </p>
+                  <>
+                    <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
+                      באייפון צריך קודם להוסיף את האתר למסך הבית: כפתור השיתוף בספארי ← "הוסף למסך הבית". אחר כך פותחים מהאייקון שנוסף למסך הבית, ומשם אפשר להפעיל התראות.
+                    </p>
+                    <button onClick={handleDeclinePush} className="px-4 py-2 rounded-full text-sm font-semibold" style={{ background: "transparent", color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}>
+                      לא כרגע
+                    </button>
+                  </>
                 ) : pushSupported() ? (
                   <>
                     <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
                       נשלח התראה כשיש מודעה או סקר חדש בקמפ - גם כשהאפליקציה סגורה בנייד.
                     </p>
-                    <button onClick={handleEnablePush} className="px-4 py-2 rounded-full text-sm font-semibold" style={{ background: COLORS.accent, color: COLORS.bg }}>
-                      הפעלת התראות
-                    </button>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button onClick={handleEnablePush} className="px-4 py-2 rounded-full text-sm font-semibold" style={{ background: COLORS.accent, color: COLORS.bg }}>
+                        הפעלת התראות
+                      </button>
+                      <button onClick={handleDeclinePush} className="px-4 py-2 rounded-full text-sm font-semibold" style={{ background: "transparent", color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}>
+                        לא כרגע
+                      </button>
+                    </div>
                   </>
                 ) : (
-                  <p className="text-xs" style={{ color: COLORS.textMuted }}>המכשיר/דפדפן הזה לא תומך בהתראות דחיפה.</p>
+                  <p className="text-xs" style={{ color: COLORS.textMuted }}>המכשיר/דפדפן הזה לא תומך בהתראות דחיפה. <button onClick={handleDeclinePush} className="underline">המשך/י</button></p>
                 )}
               </div>
             )}
@@ -3629,6 +3697,37 @@ export default function App() {
                 </button>
               </div>
             )}
+
+            <div className="rounded-2xl p-4 mb-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+              <div className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
+                <Phone size={14} /> פרטי קשר
+              </div>
+              <div className="grid sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>טלפון</label>
+                  <input
+                    defaultValue={memberPhones[identity] || ""}
+                    onBlur={(e) => setPhone(identity, e.target.value)}
+                    placeholder="050-1234567"
+                    dir="ltr"
+                    className="w-full px-3 py-2 rounded-xl text-sm outline-none text-left"
+                    style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>אימייל</label>
+                  <input
+                    defaultValue={memberEmails[identity] || ""}
+                    onBlur={(e) => setEmail(identity, e.target.value)}
+                    placeholder="name@example.com"
+                    dir="ltr"
+                    className="w-full px-3 py-2 rounded-xl text-sm outline-none text-left"
+                    style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-3 gap-2 sm:gap-4">
               {[
                 { label: "המשמרות שלי", value: myShifts.length },
@@ -3761,53 +3860,77 @@ export default function App() {
             </div>
 
 
-            <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
-              <button
-                onClick={() => setOpenPersonalSection(openPersonalSection === "emergency" ? null : "emergency")}
-                className="w-full flex items-center justify-between text-sm font-bold"
-                style={{ color: COLORS.accentDark }}
-              >
-                <span className="flex items-center gap-2"><HeartPulse size={15} /> כרטיס אישי - לשעת חירום</span>
-                <ChevronDown size={15} style={{ transform: openPersonalSection === "emergency" ? "rotate(180deg)" : "none" }} />
-              </button>
-              {openPersonalSection === "emergency" && (
-                <div className="mt-3">
-                  <EmergencyCardForm data={emergencyInfo[identity]} onChange={(d) => setEmergencyData(identity, d)} />
-                </div>
-              )}
-            </div>
+            {(() => {
+              const emergencyMissing = missingProfileFields.includes("פרטי חירום");
+              const rideMissing = missingProfileFields.includes("התניידות");
+              const allocationMissing = missingProfileFields.includes("הקצאה");
+              // Sections a required field is still missing from default open
+              // (until the user explicitly touches any section's toggle) so
+              // onboarding doesn't hide the very forms someone needs to fill.
+              const emergencyOpen = openPersonalSection === "emergency" || (openPersonalSection === null && emergencyMissing);
+              const rideOpen = openPersonalSection === "ride" || (openPersonalSection === null && rideMissing);
+              const allocationOpen = openPersonalSection === "allocation" || (openPersonalSection === null && allocationMissing);
+              return (
+                <>
+                  <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
+                    <button
+                      onClick={() => setOpenPersonalSection(emergencyOpen ? "closed" : "emergency")}
+                      className="w-full flex items-center justify-between text-sm font-bold"
+                      style={{ color: COLORS.accentDark }}
+                    >
+                      <span className="flex items-center gap-2">
+                        <HeartPulse size={15} /> כרטיס אישי - לשעת חירום
+                        {emergencyMissing && <span className="text-xs font-normal" style={{ color: COLORS.danger }}>· חובה</span>}
+                      </span>
+                      <ChevronDown size={15} style={{ transform: emergencyOpen ? "rotate(180deg)" : "none" }} />
+                    </button>
+                    {emergencyOpen && (
+                      <div className="mt-3">
+                        <EmergencyCardForm data={emergencyInfo[identity]} onChange={(d) => setEmergencyData(identity, d)} />
+                      </div>
+                    )}
+                  </div>
 
-            <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
-              <button
-                onClick={() => setOpenPersonalSection(openPersonalSection === "ride" ? null : "ride")}
-                className="w-full flex items-center justify-between text-sm font-bold"
-                style={{ color: COLORS.accentDark }}
-              >
-                <span className="flex items-center gap-2"><Car size={15} /> התניידות - הפרטים שלי</span>
-                <ChevronDown size={15} style={{ transform: openPersonalSection === "ride" ? "rotate(180deg)" : "none" }} />
-              </button>
-              {openPersonalSection === "ride" && (
-                <div className="mt-3">
-                  <RideWizard data={rideInfo[identity]} onChange={(d) => setRideData(identity, d)} />
-                </div>
-              )}
-            </div>
+                  <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
+                    <button
+                      onClick={() => setOpenPersonalSection(rideOpen ? "closed" : "ride")}
+                      className="w-full flex items-center justify-between text-sm font-bold"
+                      style={{ color: COLORS.accentDark }}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Car size={15} /> התניידות - הפרטים שלי
+                        {rideMissing && <span className="text-xs font-normal" style={{ color: COLORS.danger }}>· חובה</span>}
+                      </span>
+                      <ChevronDown size={15} style={{ transform: rideOpen ? "rotate(180deg)" : "none" }} />
+                    </button>
+                    {rideOpen && (
+                      <div className="mt-3">
+                        <RideWizard data={rideInfo[identity]} onChange={(d) => setRideData(identity, d)} />
+                      </div>
+                    )}
+                  </div>
 
-            <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
-              <button
-                onClick={() => setOpenPersonalSection(openPersonalSection === "allocation" ? null : "allocation")}
-                className="w-full flex items-center justify-between text-sm font-bold"
-                style={{ color: COLORS.accentDark }}
-              >
-                <span className="flex items-center gap-2"><Ticket size={15} /> הקצאה למידברן</span>
-                <ChevronDown size={15} style={{ transform: openPersonalSection === "allocation" ? "rotate(180deg)" : "none" }} />
-              </button>
-              {openPersonalSection === "allocation" && (
-                <div className="mt-3">
-                  <AllocationWizard data={allocationInfo[identity]} onChange={(d) => setAllocationData(identity, d)} />
-                </div>
-              )}
-            </div>
+                  <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
+                    <button
+                      onClick={() => setOpenPersonalSection(allocationOpen ? "closed" : "allocation")}
+                      className="w-full flex items-center justify-between text-sm font-bold"
+                      style={{ color: COLORS.accentDark }}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Ticket size={15} /> הקצאה למידברן
+                        {allocationMissing && <span className="text-xs font-normal" style={{ color: COLORS.danger }}>· חובה</span>}
+                      </span>
+                      <ChevronDown size={15} style={{ transform: allocationOpen ? "rotate(180deg)" : "none" }} />
+                    </button>
+                    {allocationOpen && (
+                      <div className="mt-3">
+                        <AllocationWizard data={allocationInfo[identity]} onChange={(d) => setAllocationData(identity, d)} />
+                      </div>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
 
@@ -5150,8 +5273,10 @@ export default function App() {
 
         {tab === "contacts" && (
           <div className="space-y-2">
+            {/* Phone/email are now filled in from "לוח בקרה אישי" - this tab
+                just displays that data (admins can still correct it here). */}
             {allMembers.map((m) => {
-              const canEdit = isAdmin || m.name === identity;
+              const canEdit = isAdmin;
               return (
                 <div key={m.name} className="rounded-xl px-4 py-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                   <div className="flex items-center justify-between gap-3 flex-wrap">
