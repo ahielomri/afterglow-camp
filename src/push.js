@@ -6,7 +6,7 @@ import { supabase } from "./storage.js";
 // the VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY secrets configured for the Edge
 // Functions (notify-new-content, send-event-reminder) or every push send
 // will fail the same way again.
-const VAPID_PUBLIC_KEY = "BNXPpnS089VQX9-zK53vxIgZ6_Nm4iZV4ClBqSlAipKfAYOzAZS_WuZVrjs_3uNSUD_pyZTnL0zSGPaGTw4yIPM";
+const VAPID_PUBLIC_KEY = "BGxMdGX3k-rNBdvN47kJm0m5DRqnRDUf8PGxSpVk82nUcrvJffOklHeuBJ8O5-yq0QvJinsMRFxkMReOStZ7KLo";
 
 function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
