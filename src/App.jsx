@@ -2888,14 +2888,14 @@ export default function App() {
               </div>
             )}
 
-            {isAdmin && (
+            {isOwner && (
               <>
                 <button
                   onClick={() => setShowActivityLog(!showActivityLog)}
                   className="w-full flex items-center justify-between mt-6 mb-2 text-sm font-bold"
                   style={{ color: COLORS.textMuted }}
                 >
-                  <span className="flex items-center gap-1.5"><History size={14} /> היסטוריית שינויים (רק מנהלים רואים)</span>
+                  <span className="flex items-center gap-1.5"><History size={14} /> היסטוריית שינויים (רק אתה רואה)</span>
                   <ChevronDown size={15} style={{ transform: showActivityLog ? "rotate(180deg)" : "none" }} />
                 </button>
                 {showActivityLog && (
@@ -2919,7 +2919,7 @@ export default function App() {
                   className="w-full flex items-center justify-between mt-4 mb-2 text-sm font-bold"
                   style={{ color: COLORS.textMuted }}
                 >
-                  <span className="flex items-center gap-1.5"><History size={14} /> היסטוריית כניסות (רק מנהלים רואים)</span>
+                  <span className="flex items-center gap-1.5"><History size={14} /> היסטוריית כניסות (רק אתה רואה)</span>
                   <ChevronDown size={15} style={{ transform: showLoginHistory ? "rotate(180deg)" : "none" }} />
                 </button>
                 {showLoginHistory && (
