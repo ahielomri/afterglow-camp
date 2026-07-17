@@ -1784,7 +1784,28 @@ export default function App() {
       setManualTeamMembers(rawManualTeam ? JSON.parse(rawManualTeam) : {});
       setActivityLog(rawLog ? JSON.parse(rawLog) : []);
       setLoginHistory(rawLogins ? JSON.parse(rawLogins) : []);
-      setExtraMembers(rawExtra ? JSON.parse(rawExtra) : []);
+      {
+        const parsedExtra = rawExtra ? JSON.parse(rawExtra) : [];
+        // Older buggy add-member attempts could append the same name to
+        // this list several times (e.g. retrying after a failed save) -
+        // collapse those duplicates here and write the cleaned list back
+        // so everyone's roster/login screen stops showing the name repeated.
+        const dedupedExtra = [];
+        const indexByName = new Map();
+        parsedExtra.forEach((m) => {
+          const idx = indexByName.get(m.name);
+          if (idx === undefined) {
+            indexByName.set(m.name, dedupedExtra.length);
+            dedupedExtra.push(m);
+          } else if (!dedupedExtra[idx].idOnFile && m.idOnFile) {
+            dedupedExtra[idx] = m;
+          }
+        });
+        setExtraMembers(dedupedExtra);
+        if (dedupedExtra.length !== parsedExtra.length) {
+          window.storage.set("extra-members", JSON.stringify(dedupedExtra), true).catch(() => {});
+        }
+      }
       setRemovedMembers(rawRemoved ? JSON.parse(rawRemoved) : []);
       setAnnouncements(rawAnn ? JSON.parse(rawAnn) : []);
       setEmergencyInfo(emergencyMap);
@@ -2236,19 +2257,45 @@ export default function App() {
   }
 
   async function addMember(name, id) {
-    const next = [...extraMembers, { name, idOnFile: !!id, role: "member" }];
+    if (allMembers.some((m) => m.name === name)) {
+      showToast(`${name} כבר קיים/ת ברשימת חברי הקמפ`, "error");
+      return;
+    }
+    // Write to the real `members` table first - it's the source of truth
+    // the login screen and every other member-related screen relies on.
+    // Only reflect the addition in the local/shared roster list once the
+    // server actually has the row, so a failed insert (bad permissions,
+    // network error, duplicate name, etc.) can never leave a "ghost"
+    // member that shows up in pickers but doesn't really exist - that's
+    // what was producing repeated/duplicate names and members the app
+    // couldn't recognize later on.
+    try {
+      await addMemberRow(name, "member");
+    } catch (err) {
+      showToast(`הוספת ${name} נכשלה: ${err?.message || "שגיאה לא ידועה"}`, "error");
+      return;
+    }
+    let idSaved = false;
+    if (id) {
+      try {
+        await adminSetMemberId(name, id);
+        idSaved = true;
+      } catch (err) {
+        showToast(`${name} נוסף/ה, אך שמירת ת.ז נכשלה: ${err?.message || "שגיאה לא ידועה"} - אפשר לנסות שוב מהרשימה`, "error");
+      }
+    }
+    const next = [...extraMembers, { name, idOnFile: idSaved, role: "member" }];
     setExtraMembers(next);
     try {
       await window.storage.set("extra-members", JSON.stringify(next), true);
-      await addMemberRow(name, "member");
-      if (id) {
-        await adminSetMemberId(name, id);
-      }
-      showToast(`${name} נוסף/ה לקמפ${id ? " עם ת.ז" : ""}`, "ok");
-      logActivity("הוספת חבר קמפ", name);
     } catch {
-      showToast("שמירה נכשלה", "error");
+      showToast(`${name} נוסף/ה בשרת, אך רשימת חברי הקמפ במכשיר הזה לא התעדכנה - רענן/י את הדף`, "error");
+      return;
     }
+    if (!id || idSaved) {
+      showToast(`${name} נוסף/ה לקמפ${idSaved ? " עם ת.ז" : ""}`, "ok");
+    }
+    logActivity("הוספת חבר קמפ", name);
   }
 
   async function removeMember(name) {
@@ -2438,13 +2485,21 @@ export default function App() {
     return { totalShifts: teamShifts.length, unfilled, planned, paid };
   }
 
-  const allMembers = useMemo(
-    () => [...MEMBERS, ...extraMembers]
+  const allMembers = useMemo(() => {
+    const byName = new Map();
+    [...MEMBERS, ...extraMembers]
       .filter((m) => !removedMembers.includes(m.name))
+      .forEach((m) => {
+        // Defensive de-dup: collapse repeated entries for the same name
+        // (e.g. left over from a previous failed add-member attempt)
+        // so the roster/login screen never lists someone more than once.
+        const existing = byName.get(m.name);
+        if (!existing || (!existing.idOnFile && m.idOnFile)) byName.set(m.name, m);
+      });
+    return [...byName.values()]
       .map((m) => ({ ...m, role: dbRoles[m.name] || m.role }))
-      .sort((a, b) => a.name.localeCompare(b.name, "he")),
-    [extraMembers, removedMembers, dbRoles]
-  );
+      .sort((a, b) => a.name.localeCompare(b.name, "he"));
+  }, [extraMembers, removedMembers, dbRoles]);
 
   const allBudgetCategories = useMemo(
     () => [...BUDGET_CATEGORIES, ...extraBudgetCategories],
@@ -2833,14 +2888,14 @@ export default function App() {
               </div>
             )}
 
-            {isOwner && (
+            {isAdmin && (
               <>
                 <button
                   onClick={() => setShowActivityLog(!showActivityLog)}
                   className="w-full flex items-center justify-between mt-6 mb-2 text-sm font-bold"
                   style={{ color: COLORS.textMuted }}
                 >
-                  <span className="flex items-center gap-1.5"><History size={14} /> היסטוריית שינויים (רק אתה רואה)</span>
+                  <span className="flex items-center gap-1.5"><History size={14} /> היסטוריית שינויים (רק מנהלים רואים)</span>
                   <ChevronDown size={15} style={{ transform: showActivityLog ? "rotate(180deg)" : "none" }} />
                 </button>
                 {showActivityLog && (
@@ -2864,7 +2919,7 @@ export default function App() {
                   className="w-full flex items-center justify-between mt-4 mb-2 text-sm font-bold"
                   style={{ color: COLORS.textMuted }}
                 >
-                  <span className="flex items-center gap-1.5"><History size={14} /> היסטוריית כניסות (רק אתה רואה)</span>
+                  <span className="flex items-center gap-1.5"><History size={14} /> היסטוריית כניסות (רק מנהלים רואים)</span>
                   <ChevronDown size={15} style={{ transform: showLoginHistory ? "rotate(180deg)" : "none" }} />
                 </button>
                 {showLoginHistory && (
