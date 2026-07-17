@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Users, CalendarDays, Clock, Flame, Tent, Sparkles, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff } from "lucide-react";
-import { pushSupported, pushPermission, enablePush, disablePush, isPushSubscribed } from "./push.js";
+import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff } from "lucide-react";
+import { pushSupported, pushPermission, enablePush, disablePush, isPushSubscribed, resetPush } from "./push.js";
 import {
   uploadFile,
   signInMember,
@@ -1817,6 +1817,7 @@ export default function App() {
   const [feeOverrides, setFeeOverrides] = useState({});
   const [memberEmails, setMemberEmails] = useState({});
   const [whatsappConsent, setWhatsappConsentState] = useState({});
+  const [personalCalendarAdds, setPersonalCalendarAddsState] = useState({});
   const [checklistState, setChecklistState] = useState({});
   const [manualTeamMembers, setManualTeamMembers] = useState({});
   const [budgetParams, setBudgetParams] = useState({
@@ -1891,7 +1892,7 @@ export default function App() {
     async function loadSharedData() {
       const [
         rawAssignments, rawBudget, rawCatBudget, rawTeardown, rawPayments, rawFee,
-        rawLeads, rawPhones, rawRides, rawFeeOv, rawEmails, rawWhatsappConsent, rawChecklists,
+        rawLeads, rawPhones, rawRides, rawFeeOv, rawEmails, rawWhatsappConsent, rawPersonalCalendarAdds, rawChecklists,
         rawManualTeam, rawLog, rawLogins, rawExtra, rawRemoved,
         rawAnn, rawPolls, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories,
       ] = await Promise.all([
@@ -1907,6 +1908,7 @@ export default function App() {
         safeGet("fee-overrides", true),
         safeGet("member-emails", true),
         safeGet("whatsapp-consent", true),
+        safeGet("personal-calendar-adds", true),
         safeGet("team-checklists", true),
         safeGet("manual-team-members", true),
         safeGet("activity-log", true),
@@ -1960,6 +1962,7 @@ export default function App() {
       setFeeOverrides(rawFeeOv ? JSON.parse(rawFeeOv) : {});
       setMemberEmails(rawEmails ? JSON.parse(rawEmails) : {});
       setWhatsappConsentState(rawWhatsappConsent ? JSON.parse(rawWhatsappConsent) : {});
+      setPersonalCalendarAddsState(rawPersonalCalendarAdds ? JSON.parse(rawPersonalCalendarAdds) : {});
       setChecklistState(rawChecklists ? JSON.parse(rawChecklists) : {});
       setManualTeamMembers(rawManualTeam ? JSON.parse(rawManualTeam) : {});
       setActivityLog(rawLog ? JSON.parse(rawLog) : []);
@@ -2267,6 +2270,20 @@ export default function App() {
     }
   }
 
+  async function handleResetPush() {
+    setSendingTestPush(true);
+    try {
+      await resetPush(identity);
+      setPushStatus(pushPermission());
+      setPushSubscribed(true);
+      showToast("ההתראות אופסו והופעלו מחדש - נסה/י עכשיו לשלוח בדיקה", "ok");
+    } catch (err) {
+      showToast(`האיפוס נכשל: ${err?.message || "שגיאה לא ידועה"}`, "error");
+    } finally {
+      setSendingTestPush(false);
+    }
+  }
+
   async function sendTestPush() {
     setSendingTestPush(true);
     try {
@@ -2462,6 +2479,22 @@ export default function App() {
     setWhatsappConsentState(next);
     try {
       await window.storage.set("whatsapp-consent", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  // Event announcements posted by an admin/owner go into everyone's "היומן
+  // שלי" automatically. An event posted by a regular member doesn't - each
+  // person opts in individually via this toggle, so the calendar doesn't
+  // fill up with events nobody but the poster cares about.
+  async function toggleMyCalendarAdd(announcementId) {
+    const mine = personalCalendarAdds[identity] || [];
+    const nextMine = mine.includes(announcementId) ? mine.filter((id) => id !== announcementId) : [...mine, announcementId];
+    const next = { ...personalCalendarAdds, [identity]: nextMine };
+    setPersonalCalendarAddsState(next);
+    try {
+      await window.storage.set("personal-calendar-adds", JSON.stringify(next), true);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -2822,6 +2855,19 @@ export default function App() {
     () => SHIFTS.filter((s) => isJoined(s.id)).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start)),
     [assignments, identity]
   );
+  // Event announcements for "היומן שלי": admin/owner-posted events are
+  // automatic for everyone, member-posted events only show up for people
+  // who explicitly opted in via "הוסף ליומן שלי" on the announcement.
+  const myCalendarEvents = useMemo(() => {
+    const mine = personalCalendarAdds[identity] || [];
+    return announcements
+      .filter((a) => a.isEvent && (a.eventDate || a.eventTime))
+      .filter((a) => {
+        const authorRole = allMembers.find((m) => m.name === a.author)?.role;
+        return authorRole === "admin" || authorRole === "owner" || mine.includes(a.id);
+      })
+      .sort((a, b) => (a.eventDate || "").localeCompare(b.eventDate || ""));
+  }, [announcements, personalCalendarAdds, identity, allMembers]);
   const openShiftsCount = useMemo(
     () => SHIFTS.filter((s) => s.id !== TEARDOWN_ID && (assignments[s.id] || []).length < s.spots).length,
     [assignments]
@@ -3354,50 +3400,6 @@ export default function App() {
                 })}
               </div>
             )}
-
-            <h3 className="text-sm font-bold mt-6 mb-2 flex items-center gap-1.5" style={{ color: COLORS.textMuted }}>
-              <Sparkles size={14} /> יצירת סקר לכולם
-            </h3>
-            {showPollForm ? (
-              <PollForm onCreate={(q, opts) => { createPoll(q, opts); setShowPollForm(false); }} onCancel={() => setShowPollForm(false)} />
-            ) : (
-              <button
-                onClick={() => setShowPollForm(true)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold mb-3"
-                style={{ background: COLORS.accent, color: COLORS.bg }}
-              >
-                <Plus size={14} /> סקר חדש
-              </button>
-            )}
-            {polls.length > 0 && (
-              <div className="space-y-2 mt-2">
-                {polls.map((p) => {
-                  const counts = p.options.map((_, i) => Object.values(p.responses || {}).filter((v) => v === i).length);
-                  const total = counts.reduce((a, b) => a + b, 0) || 1;
-                  return (
-                    <div key={p.id} className="rounded-xl p-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold">{p.question}</span>
-                        <button onClick={() => removePoll(p.id)} style={{ color: COLORS.textMuted }}><Trash2 size={13} /></button>
-                      </div>
-                      <div className="space-y-1 mt-2">
-                        {p.options.map((o, i) => (
-                          <div key={i} className="text-xs">
-                            <div className="flex items-center justify-between mb-0.5">
-                              <span>{o}</span>
-                              <span style={{ color: COLORS.textMuted }}>{counts[i]}</span>
-                            </div>
-                            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: COLORS.divider }}>
-                              <div className="h-full rounded-full" style={{ width: `${(counts[i] / total) * 100}%`, background: COLORS.accent2 }} />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
         )}
 
@@ -3472,25 +3474,37 @@ export default function App() {
               <button
                 onClick={sendTestPush}
                 disabled={sendingTestPush}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold mb-4"
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold mb-2"
                 style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, color: COLORS.textMuted, opacity: sendingTestPush ? 0.6 : 1 }}
               >
                 <Bell size={12} /> {sendingTestPush ? "שולח..." : "שליחת התראת בדיקה לעצמי"}
               </button>
             )}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {pushSubscribed && (
+              <div className="mb-4">
+                <button
+                  onClick={handleResetPush}
+                  disabled={sendingTestPush}
+                  className="text-xs px-3 py-1 rounded-full"
+                  style={{ color: COLORS.textMuted, opacity: sendingTestPush ? 0.6 : 1 }}
+                >
+                  לא מקבל/ת התראות בפועל? אתחול מלא של ההתראות
+                </button>
+              </div>
+            )}
+            <div className="grid grid-cols-3 gap-2 sm:gap-4">
               {[
                 { label: "המשמרות שלי", value: myShifts.length },
                 { label: "משמרות עם מקום פנוי", value: openShiftsCount },
                 { label: "ימים לפתיחת השערים", value: daysUntil() },
               ].map((c) => (
-                <div key={c.label} className="rounded-2xl p-5" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                  <div className="text-3xl font-black mt-1" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
-                  <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                <div key={c.label} className="rounded-2xl p-2.5 sm:p-5" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                  <div className="text-xl sm:text-3xl font-black mt-1" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
+                  <div className="text-[10px] sm:text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
                 </div>
               ))}
               {(campFee > 0 || feeOverrides[identity] !== undefined) && (
-                <div className="col-span-2 sm:col-span-3 rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                <div className="col-span-3 rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                   <div className="text-xs mb-1" style={{ color: COLORS.textMuted }}>דמי הקמפ שלי</div>
                   {(() => {
                     const myList = Array.isArray(memberPayments[identity]) ? memberPayments[identity] : [];
@@ -3512,10 +3526,17 @@ export default function App() {
               <h3 className="text-sm font-bold mb-3 flex items-center gap-2" style={{ color: COLORS.accentDark }}>
                 <CalendarDays size={15} /> היומן שלי
               </h3>
-              {myShifts.length === 0 ? (
-                <p className="text-xs" style={{ color: COLORS.textMuted }}>עדיין לא שיבצת אף משמרת. עבור/י לטאב "שיבוץ עצמי" כדי להצטרף.</p>
+              {myShifts.length === 0 && myCalendarEvents.length === 0 ? (
+                <p className="text-xs" style={{ color: COLORS.textMuted }}>עדיין לא שיבצת אף משמרת, ואין אירועים ביומן. עבור/י לטאב "שיבוץ עצמי" כדי להצטרף למשמרת.</p>
               ) : (
                 <div className="flex gap-3 overflow-x-auto pb-2">
+                  {myCalendarEvents.map((a) => (
+                    <div key={`event-${a.id}`} className="shrink-0 rounded-2xl px-4 py-3 min-w-[150px]" style={{ background: COLORS.accentLight, borderTop: `3px solid ${COLORS.accent2}` }}>
+                      <div className="text-xs font-bold" style={{ color: COLORS.accent2Dark }}>{a.eventDate ? formatDateShort(a.eventDate) : ""}{a.eventTime ? ` · ${a.eventTime}` : ""}</div>
+                      <div className="text-sm font-semibold mt-1">{a.text}</div>
+                      <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>אירוע · {a.author}</div>
+                    </div>
+                  ))}
                   {myShifts.map((s) => (
                     <div key={s.id} className="shrink-0 rounded-2xl px-4 py-3 min-w-[130px]" style={{ background: COLORS.surface, borderTop: `3px solid ${COLORS.accent}` }}>
                       <div className="text-xs font-bold" style={{ color: COLORS.accentDark }}>{formatDateShort(s.date)}</div>
@@ -3571,21 +3592,37 @@ export default function App() {
                   <p className="text-xs" style={{ color: COLORS.textMuted }}>אין עדכונים חדשים.</p>
                 ) : (
                   <div className="space-y-1.5">
-                    {relevantAnnouncements.slice(0, 3).map((a) => (
-                      <div key={a.id} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                        <div className="flex items-center justify-between">
-                          <span><b style={{ color: COLORS.accentDark }}>{a.author}:</b> {a.text}</span>
-                          {a.audience && a.audience !== "all" && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: COLORS.accent2Light, color: COLORS.accent2Dark }}>{a.audience}</span>
+                    {relevantAnnouncements.slice(0, 3).map((a) => {
+                      const authorRole = allMembers.find((m) => m.name === a.author)?.role;
+                      const isAdminEvent = authorRole === "admin" || authorRole === "owner";
+                      const inMyCalendar = (personalCalendarAdds[identity] || []).includes(a.id);
+                      return (
+                        <div key={a.id} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                          <div className="flex items-center justify-between">
+                            <span><b style={{ color: COLORS.accentDark }}>{a.author}:</b> {a.text}</span>
+                            {a.audience && a.audience !== "all" && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: COLORS.accent2Light, color: COLORS.accent2Dark }}>{a.audience}</span>
+                            )}
+                          </div>
+                          {a.isEvent && (a.eventDate || a.eventTime) && (
+                            <div className="mt-1 flex items-center justify-between flex-wrap gap-1">
+                              <div className="font-bold" style={{ color: COLORS.accentDark }}>
+                                📅 {a.eventDate ? formatDate(a.eventDate) : ""}{a.eventTime ? ` · ${a.eventTime}` : ""}
+                              </div>
+                              {!isAdminEvent && (
+                                <button
+                                  onClick={() => toggleMyCalendarAdd(a.id)}
+                                  className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                                  style={{ background: inMyCalendar ? COLORS.accent2Light : COLORS.input, color: inMyCalendar ? COLORS.accent2Dark : COLORS.textMuted }}
+                                >
+                                  {inMyCalendar ? "✓ ביומן שלי" : "הוסף ליומן שלי"}
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
-                        {a.isEvent && (a.eventDate || a.eventTime) && (
-                          <div className="mt-1 font-bold" style={{ color: COLORS.accentDark }}>
-                            📅 {a.eventDate ? formatDate(a.eventDate) : ""}{a.eventTime ? ` · ${a.eventTime}` : ""}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 );
               })()}
@@ -3863,7 +3900,7 @@ export default function App() {
 
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-bold" style={{ color: COLORS.accentDark }}>סקרים</h3>
-              {showPollForm ? null : (
+              {isAdmin && (showPollForm ? null : (
                 <button
                   onClick={() => setShowPollForm(true)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
@@ -3871,9 +3908,9 @@ export default function App() {
                 >
                   <Plus size={13} /> סקר חדש
                 </button>
-              )}
+              ))}
             </div>
-            {showPollForm && (
+            {isAdmin && showPollForm && (
               <PollForm onCreate={(q, opts) => { createPoll(q, opts); setShowPollForm(false); }} onCancel={() => setShowPollForm(false)} />
             )}
             {polls.length > 0 && (
@@ -3966,12 +4003,28 @@ export default function App() {
                       </div>
                       <p className="text-sm whitespace-pre-wrap" style={{ fontFamily: FONT_HEADING, lineHeight: 1.5 }}>{a.text}</p>
 
-                      {a.isEvent && (a.eventDate || a.eventTime) && (
-                        <div className="flex items-center gap-1.5 mt-2 text-xs font-bold px-2 py-1 rounded-lg w-fit" style={{ background: "rgba(255,255,255,0.55)", color: COLORS.accentDark }}>
-                          <CalendarDays size={13} />
-                          {a.eventDate ? formatDate(a.eventDate) : ""}{a.eventTime ? ` · ${a.eventTime}` : ""}
-                        </div>
-                      )}
+                      {a.isEvent && (a.eventDate || a.eventTime) && (() => {
+                        const authorRole = allMembers.find((m) => m.name === a.author)?.role;
+                        const isAdminEvent = authorRole === "admin" || authorRole === "owner";
+                        const inMyCalendar = (personalCalendarAdds[identity] || []).includes(a.id);
+                        return (
+                          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                            <div className="flex items-center gap-1.5 text-xs font-bold px-2 py-1 rounded-lg w-fit" style={{ background: "rgba(255,255,255,0.55)", color: COLORS.accentDark }}>
+                              <CalendarDays size={13} />
+                              {a.eventDate ? formatDate(a.eventDate) : ""}{a.eventTime ? ` · ${a.eventTime}` : ""}
+                            </div>
+                            {!isAdminEvent && (
+                              <button
+                                onClick={() => toggleMyCalendarAdd(a.id)}
+                                className="text-xs font-bold px-2 py-1 rounded-lg"
+                                style={{ background: inMyCalendar ? COLORS.accent2 : "rgba(255,255,255,0.55)", color: inMyCalendar ? "white" : COLORS.accentDark }}
+                              >
+                                {inMyCalendar ? "✓ ביומן שלי" : "הוסף ליומן שלי"}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {(a.replies || []).length > 0 && (
                         <div className="mt-3 space-y-1.5">

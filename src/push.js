@@ -35,6 +35,15 @@ export async function enablePush(memberName) {
   if (!pushSupported()) throw new Error("Push not supported on this device/browser");
 
   const reg = await navigator.serviceWorker.register("/sw.js");
+  // Browsers can keep serving an old cached service worker for a long time
+  // otherwise - force a check against the live file every time someone
+  // (re-)enables push, so a stale worker from before this feature existed
+  // (or before a fix to it) can't silently keep controlling the page.
+  try {
+    await reg.update();
+  } catch {
+    // ignore - not fatal, registration itself still succeeded
+  }
   await navigator.serviceWorker.ready;
 
   const permission = await Notification.requestPermission();
@@ -62,4 +71,17 @@ export async function disablePush(memberName) {
   const sub = reg && (await reg.pushManager.getSubscription());
   if (sub) await sub.unsubscribe();
   await supabase.from("push_subscriptions").delete().eq("member_name", memberName);
+}
+
+// Full reset for troubleshooting: unregisters every service worker
+// controlling this page (clearing out any stale/broken worker that
+// predates this feature or a fix to it), then registers a fresh one and
+// re-subscribes from scratch. Use when push looks "on" in the UI but
+// nothing actually arrives on the device.
+export async function resetPush(memberName) {
+  if (!pushSupported()) throw new Error("Push not supported on this device/browser");
+  const regs = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(regs.map((r) => r.unregister()));
+  await supabase.from("push_subscriptions").delete().eq("member_name", memberName);
+  return enablePush(memberName);
 }
