@@ -3199,6 +3199,20 @@ export default function App() {
   }, [identity, memberPhones, memberEmails, emergencyInfo, rideInfo, allocationInfo, pushStatus, pushDecisionMade]);
   const profileComplete = missingProfileFields.length === 0;
 
+  // One-time "welcome" intro for first-time visitors - dismissed state
+  // lives per-device in localStorage (not shared), so it never reappears
+  // on this device once closed, but a fresh device/browser shows it again.
+  const [welcomeDismissed, setWelcomeDismissed] = useState(true);
+  useEffect(() => {
+    if (identity) {
+      try { setWelcomeDismissed(!!localStorage.getItem(`welcome-seen-${identity}`)); } catch { setWelcomeDismissed(true); }
+    }
+  }, [identity]);
+  function dismissWelcome() {
+    setWelcomeDismissed(true);
+    try { localStorage.setItem(`welcome-seen-${identity}`, "1"); } catch {}
+  }
+
   // Tabs that are safe to browse even with a missing profile field - they're
   // read-only/informational, or (for shifts) the one action inside them that
   // actually needs a field (self-joining a shift needs a phone number) is
@@ -4020,6 +4034,21 @@ export default function App() {
 
         {tab === "dashboard-personal" && (
           <div>
+            {!welcomeDismissed && (
+              <div className="rounded-2xl p-4 mb-4" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
+                <div className="text-sm font-bold mb-1" style={{ color: COLORS.accentDark }}>ברוך/ה הבא/ה ל-Afterglow! 👋</div>
+                <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
+                  כאן מנהלים את כל מה שקשור לקמפ: שיבוץ למשמרות, לוח מודעות, תקציב, צוותים, התניידות ופרטי חירום. קודם צריך למלא כמה פרטים אישיים למטה - זה ייקח דקה, ואז שאר האפליקציה נפתחת.
+                </p>
+                <button
+                  onClick={dismissWelcome}
+                  className="text-xs px-3 py-1.5 rounded-full font-semibold"
+                  style={{ background: COLORS.accent, color: COLORS.bg }}
+                >
+                  הבנתי, בואו נתחיל
+                </button>
+              </div>
+            )}
             {!profileComplete && (
               <div className="rounded-2xl p-4 mb-4" style={{ background: COLORS.accent2Light, border: `1px solid ${COLORS.accent2}55` }}>
                 <div className="text-sm font-bold mb-1" style={{ color: COLORS.accent2Dark }}>יש להשלים פרטים לפני שממשיכים באפליקציה</div>
@@ -5471,7 +5500,27 @@ export default function App() {
         )}
 
         {tab === "teams" && (
-          <div className="grid sm:grid-cols-2 gap-3">
+          <div>
+            {isAdmin && TEAMS.some((t) => TEAM_CHECKLISTS[t.name]) && (
+              <div className="mb-4 rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                <div className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>צ'קליסטים - סטטוס לפי צוות</div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {TEAMS.filter((t) => TEAM_CHECKLISTS[t.name]).map((t) => {
+                    const items = TEAM_CHECKLISTS[t.name];
+                    const state = checklistState[t.name] || {};
+                    const done = items.filter((_, i) => state[i]).length;
+                    const complete = done === items.length;
+                    return (
+                      <div key={t.name} className="rounded-xl px-3 py-2 text-xs flex items-center justify-between" style={{ background: complete ? COLORS.accent2Light : COLORS.input }}>
+                        <span>{t.name}</span>
+                        <span style={{ color: complete ? COLORS.accent2Dark : COLORS.textMuted, fontWeight: 700 }}>{done}/{items.length}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            <div className="grid sm:grid-cols-2 gap-3">
             {TEAMS.map((t) => {
               const leads = teamLeadsOf(t.name);
               const members = teamMembers(t.name);
@@ -5555,6 +5604,7 @@ export default function App() {
                 </div>
               );
             })}
+            </div>
           </div>
         )}
 
