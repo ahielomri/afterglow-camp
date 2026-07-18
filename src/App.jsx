@@ -3785,7 +3785,10 @@ ${cards}
         </div>
       </div>
 
-      {/* Primary nav - "מקובץ למעלה" layout */}
+      {/* Primary nav - "מקובץ למעלה" layout - sticky so the current-page
+          label below it stays visible even after scrolling into content,
+          not just for a moment right after picking a tab. */}
+      <div className="sticky top-0 z-30 pb-2" style={{ background: COLORS.bg, borderBottom: `1px solid ${COLORS.divider}` }}>
       <div className="max-w-4xl mx-auto px-6 pt-4">
         {roleDashboardTab && (
           <button
@@ -3841,10 +3844,11 @@ ${cards}
       </div>
 
       {currentTabLabel && (
-        <div className="max-w-4xl mx-auto px-6 pt-4 text-xs font-bold" style={{ color: COLORS.textMuted }}>
+        <div className="max-w-4xl mx-auto px-6 pt-2 text-xs font-bold" style={{ color: COLORS.textMuted }}>
           כרגע ב: <span style={{ color: COLORS.accentDark }}>{currentTabLabel}</span>
         </div>
       )}
+      </div>
 
       {/* Content */}
       <div className="max-w-4xl mx-auto px-6 py-6">
