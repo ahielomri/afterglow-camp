@@ -3695,7 +3695,7 @@ ${cards}
     { id: "contacts", label: "חברי קמפ", icon: Phone },
     { id: "equipment", label: "ציוד קמפ", icon: Package },
   ];
-  function renderNavItem(t) {
+  function renderNavItem(t, fullWidth) {
     const locked = !profileComplete && !PROFILE_GATE_EXEMPT_TABS.includes(t.id);
     const active = tab === t.id;
     return (
@@ -3709,7 +3709,7 @@ ${cards}
         title={locked ? "יש להשלים קודם את הפרטים האישיים" : undefined}
         className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors relative text-center"
         style={{
-          flex: "1 1 calc(50% - 4px)",
+          flex: fullWidth ? "1 1 100%" : "1 1 calc(50% - 4px)",
           background: active ? COLORS.accent : COLORS.bg,
           color: active ? COLORS.bg : COLORS.text,
           border: `1px solid ${active ? COLORS.accent : COLORS.divider}`,
@@ -3824,7 +3824,9 @@ ${cards}
 
         {expandedNavCategory && (
           <div className="mt-2 rounded-2xl p-3 flex flex-wrap gap-2" style={{ background: COLORS.input, border: `1px solid ${COLORS.divider}` }}>
-            {(expandedNavCategory === "personal" ? navPersonalTabs : navCampTabs).map((t) => renderNavItem(t))}
+            {expandedNavCategory === "personal"
+              ? navPersonalTabs.map((t) => renderNavItem(t, t.id === "dashboard-personal"))
+              : navCampTabs.map((t) => renderNavItem(t))}
           </div>
         )}
       </div>
