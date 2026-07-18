@@ -3481,12 +3481,17 @@ ${cards}
   }, [identity]);
   function dismissWelcome() {
     setWelcomeDismissed(true);
+    setOpenPersonalSection("details");
     try { localStorage.setItem(`welcome-seen-${identity}`, "1"); } catch {}
-    // Scroll to the personal-details section right away instead of just
-    // closing the banner and leaving the person to find it themselves.
-    setTimeout(() => {
-      document.getElementById("personal-details-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 50);
+    // Force the section open (not just relying on it already being
+    // auto-open) and scroll to it - double rAF so this runs after React
+    // has actually committed and painted the DOM change, which a fixed
+    // setTimeout delay isn't guaranteed to wait long enough for.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.getElementById("personal-details-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
   }
 
   // Tabs that are safe to browse even with a missing profile field - they're
