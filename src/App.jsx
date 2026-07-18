@@ -1570,17 +1570,49 @@ function ReactionBar({ reactions, identity, onToggle, children }) {
   );
 }
 
+const EMERGENCY_DIETARY_PRESETS = ["צמחוני", "טבעוני"];
+
 function EmergencyCardForm({ data, onChange }) {
   const d = data || {};
-  const [local, setLocal] = useState({
-    contactName: d.contactName || "",
-    contactPhone: d.contactPhone || "",
-    allergies: d.allergies || "",
-    medical: d.medical || "",
-    dietary: d.dietary || "",
-  });
+  const [contactName, setContactName] = useState(d.contactName || "");
+  const [contactPhone, setContactPhone] = useState(d.contactPhone || "");
+  const [allergiesChoice, setAllergiesChoice] = useState(d.allergies ? "yes" : "none");
+  const [allergiesDetail, setAllergiesDetail] = useState(d.allergies || "");
+  const [medicalChoice, setMedicalChoice] = useState(d.medical ? "yes" : "none");
+  const [medicalDetail, setMedicalDetail] = useState(d.medical || "");
+  const [dietaryChoice, setDietaryChoice] = useState(
+    !d.dietary ? "none" : EMERGENCY_DIETARY_PRESETS.includes(d.dietary) ? d.dietary : "other"
+  );
+  const [dietaryOther, setDietaryOther] = useState(
+    d.dietary && !EMERGENCY_DIETARY_PRESETS.includes(d.dietary) ? d.dietary : ""
+  );
   const [saved, setSaved] = useState(false);
-  const set = (patch) => { setLocal({ ...local, ...patch }); setSaved(false); };
+
+  const selectStyle = { background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` };
+
+  function handleAllergiesChoice(v) {
+    setAllergiesChoice(v); setSaved(false);
+    if (v === "none") setAllergiesDetail("");
+  }
+  function handleMedicalChoice(v) {
+    setMedicalChoice(v); setSaved(false);
+    if (v === "none") setMedicalDetail("");
+  }
+  function handleDietaryChoice(v) {
+    setDietaryChoice(v); setSaved(false);
+    if (v !== "other") setDietaryOther("");
+  }
+
+  function handleSave() {
+    onChange({
+      contactName,
+      contactPhone,
+      allergies: allergiesChoice === "yes" ? allergiesDetail : "",
+      medical: medicalChoice === "yes" ? medicalDetail : "",
+      dietary: dietaryChoice === "none" ? "" : dietaryChoice === "other" ? dietaryOther : dietaryChoice,
+    });
+    setSaved(true);
+  }
 
   return (
     <div className="rounded-2xl p-4 space-y-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
@@ -1588,8 +1620,8 @@ function EmergencyCardForm({ data, onChange }) {
         <div>
           <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>איש קשר לחירום - שם</label>
           <input
-            value={local.contactName}
-            onChange={(e) => set({ contactName: e.target.value })}
+            value={contactName}
+            onChange={(e) => { setContactName(e.target.value); setSaved(false); }}
             placeholder="שם מלא"
             autoComplete="off"
             className="w-full px-3 py-2 rounded-xl text-sm outline-none"
@@ -1599,8 +1631,8 @@ function EmergencyCardForm({ data, onChange }) {
         <div>
           <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>איש קשר לחירום - טלפון</label>
           <input
-            value={local.contactPhone}
-            onChange={(e) => set({ contactPhone: e.target.value })}
+            value={contactPhone}
+            onChange={(e) => { setContactPhone(e.target.value); setSaved(false); }}
             placeholder="טלפון"
             dir="ltr"
             autoComplete="off"
@@ -1611,40 +1643,60 @@ function EmergencyCardForm({ data, onChange }) {
       </div>
       <div>
         <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>אלרגיות</label>
-        <input
-          value={local.allergies}
-          onChange={(e) => set({ allergies: e.target.value })}
-          placeholder="למשל: בוטנים, פניצילין..."
-          autoComplete="off"
-          className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-        />
+        <select value={allergiesChoice} onChange={(e) => handleAllergiesChoice(e.target.value)} className="w-full px-3 py-2 rounded-xl text-sm outline-none" style={selectStyle}>
+          <option value="none">אין</option>
+          <option value="yes">כן</option>
+        </select>
+        {allergiesChoice === "yes" && (
+          <input
+            value={allergiesDetail}
+            onChange={(e) => { setAllergiesDetail(e.target.value); setSaved(false); }}
+            placeholder="למשל: בוטנים, פניצילין..."
+            autoComplete="off"
+            className="w-full px-3 py-2 rounded-xl text-sm outline-none mt-2"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          />
+        )}
       </div>
       <div>
         <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>מגבלות רפואיות / תרופות קבועות</label>
-        <input
-          value={local.medical}
-          onChange={(e) => set({ medical: e.target.value })}
-          placeholder="אופציונלי - רק אם רלוונטי לחירום"
-          autoComplete="off"
-          className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-        />
+        <select value={medicalChoice} onChange={(e) => handleMedicalChoice(e.target.value)} className="w-full px-3 py-2 rounded-xl text-sm outline-none" style={selectStyle}>
+          <option value="none">אין</option>
+          <option value="yes">כן</option>
+        </select>
+        {medicalChoice === "yes" && (
+          <input
+            value={medicalDetail}
+            onChange={(e) => { setMedicalDetail(e.target.value); setSaved(false); }}
+            placeholder="אופציונלי - רק אם רלוונטי לחירום"
+            autoComplete="off"
+            className="w-full px-3 py-2 rounded-xl text-sm outline-none mt-2"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          />
+        )}
       </div>
       <div>
         <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>העדפות תזונה</label>
-        <input
-          value={local.dietary}
-          onChange={(e) => set({ dietary: e.target.value })}
-          placeholder="טבעוני/צמחוני/ללא גלוטן..."
-          autoComplete="off"
-          className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-        />
+        <select value={dietaryChoice} onChange={(e) => handleDietaryChoice(e.target.value)} className="w-full px-3 py-2 rounded-xl text-sm outline-none" style={selectStyle}>
+          <option value="none">אין</option>
+          <option value="צמחוני">צמחוני</option>
+          <option value="טבעוני">טבעוני</option>
+          <option value="other">אחר</option>
+        </select>
+        {dietaryChoice === "other" && (
+          <input
+            value={dietaryOther}
+            onChange={(e) => { setDietaryOther(e.target.value); setSaved(false); }}
+            placeholder="פירוט (למשל: ללא גלוטן)"
+            autoComplete="off"
+            className="w-full px-3 py-2 rounded-xl text-sm outline-none mt-2"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          />
+        )}
       </div>
       <div className="flex items-center gap-3">
         <button
-          onClick={() => { onChange(local); setSaved(true); }}
+          onClick={handleSave}
           className="px-4 py-2 rounded-full text-sm font-semibold"
           style={{ background: COLORS.accent, color: COLORS.bg }}
         >
@@ -2467,7 +2519,7 @@ export default function App() {
 
   async function addEquipment(item) {
     const latest = await getFreshShared("camp-equipment", campEquipment);
-    const next = [...latest, { ...item, id: Date.now().toString() }];
+    const next = [...latest, { ...item, id: Date.now().toString(), addedBy: identity, addedAt: Date.now() }];
     setCampEquipment(next);
     try {
       await window.storage.set("camp-equipment", JSON.stringify(next), true);
@@ -2491,7 +2543,7 @@ export default function App() {
 
   async function updateEquipmentField(id, patch) {
     const latest = await getFreshShared("camp-equipment", campEquipment);
-    const next = latest.map((e) => (e.id === id ? { ...e, ...patch } : e));
+    const next = latest.map((e) => (e.id === id ? { ...e, ...patch, updatedBy: identity, updatedAt: Date.now() } : e));
     setCampEquipment(next);
     try {
       await window.storage.set("camp-equipment", JSON.stringify(next), true);
@@ -3429,6 +3481,11 @@ ${cards}
   function dismissWelcome() {
     setWelcomeDismissed(true);
     try { localStorage.setItem(`welcome-seen-${identity}`, "1"); } catch {}
+    // Scroll to the personal-details section right away instead of just
+    // closing the banner and leaving the person to find it themselves.
+    setTimeout(() => {
+      document.getElementById("personal-details-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
   }
 
   // Tabs that are safe to browse even with a missing profile field - they're
@@ -4302,7 +4359,7 @@ ${cards}
                   className="text-xs px-3 py-1.5 rounded-full font-semibold"
                   style={{ background: COLORS.accent, color: COLORS.bg }}
                 >
-                  הבנתי, בואו נתחיל
+                  קח/י אותי לשם
                 </button>
               </div>
             )}
@@ -4454,7 +4511,7 @@ ${cards}
               // section instead of staying pinned open.
               const detailsOpen = openPersonalSection === "details" || (openPersonalSection === null && !profileComplete);
               return (
-                <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
+                <div id="personal-details-section" className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
                   <button
                     onClick={() => setOpenPersonalSection(detailsOpen ? "closed" : "details")}
                     className="w-full flex items-center justify-between text-sm font-bold"
@@ -5154,6 +5211,9 @@ ${cards}
                               <span style={{ color: e.condition === "תקין" ? COLORS.accent2Dark : COLORS.danger }}>{e.condition}</span>
                               {e.location && <span className="flex items-center gap-1"><MapPin size={11} /> {e.location}</span>}
                               {e.notes && <span>· {e.notes}</span>}
+                            </div>
+                            <div className="text-[10px] mt-0.5" style={{ color: COLORS.textMuted }}>
+                              {e.updatedBy ? `עודכן ע"י ${e.updatedBy}` : e.addedBy ? `נוסף ע"י ${e.addedBy}` : ""}
                             </div>
                           </div>
                           {(isAdmin || myLeadTeam === cat) && (
@@ -6124,9 +6184,20 @@ ${cards}
               return (
                 <div key={m.name} className="rounded-xl px-4 py-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                   <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <span className="text-sm font-semibold">
+                    <span className="text-sm font-semibold flex items-center gap-2">
                       {m.name}
                       {rideInfo[m.name]?.city && <span className="font-normal" style={{ color: COLORS.textMuted }}> · {rideInfo[m.name].city}</span>}
+                      {m.name !== identity && memberPhones[m.name] && (
+                        <a
+                          href={buildWhatsAppLink(memberPhones[m.name], "")}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="הודעה פרטית בוואטסאפ"
+                          style={{ color: "#25D366" }}
+                        >
+                          <MessageCircle size={15} />
+                        </a>
+                      )}
                     </span>
                     <div className="text-sm text-left" dir="ltr" style={{ color: COLORS.textMuted }}>
                       {memberPhones[m.name] || "—"} · {memberEmails[m.name] || "—"}
