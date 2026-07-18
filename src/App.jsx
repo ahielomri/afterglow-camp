@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard } from "lucide-react";
+import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, Menu } from "lucide-react";
 import { pushSupported, pushPermission, enablePush, disablePush, isPushSubscribed, resetPush } from "./push.js";
 import {
   uploadFile,
@@ -324,6 +324,11 @@ function parseCsv(text) {
 // standard .ics file. No server involved: every phone/desktop calendar app
 // (Google Calendar, Apple Calendar, Outlook) can import this directly.
 // ---------------------------------------------------------------------------
+function initialsOf(name) {
+  const parts = String(name || "").trim().split(/\s+/);
+  return (parts[0]?.[0] || "") + (parts[1]?.[0] || "");
+}
+
 function icsEscape(text) {
   return String(text || "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
 }
@@ -2150,6 +2155,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("dashboard-personal");
   const [adminSubTab, setAdminSubTab] = useState("overview");
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
   const [teamFilter, setTeamFilter] = useState("הכל");
   const [shiftsView, setShiftsView] = useState("calendar");
   const [expandedTeam, setExpandedTeam] = useState(null);
@@ -3674,6 +3680,54 @@ ${cards}
     return [{ id: "dashboard-personal", label: "לוח בקרה" }];
   }, [isAdmin, myLeadTeam]);
 
+  // Primary nav: a full-width "לוח בקרה אישי" button (the one screen
+  // everyone always has) plus a hamburger drawer for everything else,
+  // grouped "אישי"/"קמפ" - replaces the old single long row of pills.
+  const personalDashboardTab = dashboardTabs.find((t) => t.id === "dashboard-personal");
+  const roleDashboardTab = dashboardTabs.find((t) => t.id !== "dashboard-personal");
+  const myRoleLabel = isOwner ? "אדריכל" : isAdmin ? "מנהל" : myLeadTeam ? "מנהל צוות" : "חבר קמפ";
+  const navPersonalTabs = [
+    { id: "shifts", label: "שיבוץ עצמי", icon: CalendarDays },
+    { id: "board", label: "לוח מודעות", icon: Megaphone },
+  ];
+  const navCampTabs = [
+    { id: "budget", label: "הוצאות", icon: Wallet },
+    ...(canManageFinances ? [{ id: "finances", label: "כספים", icon: CreditCard }] : []),
+    ...(isAdmin ? [{ id: "allocations", label: "לוח הקצאות", icon: Ticket }] : []),
+    { id: "teams", label: "צוותים", icon: Tent },
+    { id: "rides", label: "התניידות", icon: Car },
+    { id: "contacts", label: "חברי קמפ", icon: Phone },
+    { id: "equipment", label: "ציוד קמפ", icon: Package },
+  ];
+  function renderDrawerItem(t) {
+    const locked = !profileComplete && !PROFILE_GATE_EXEMPT_TABS.includes(t.id);
+    const active = tab === t.id;
+    return (
+      <button
+        key={t.id}
+        onClick={() => {
+          if (locked) { showToast("כדי להמשיך להשתמש באפליקציה צריך קודם למלא את הפרטים החסרים בלוח הבקרה האישי", "error"); return; }
+          setTab(t.id);
+          setNavDrawerOpen(false);
+        }}
+        title={locked ? "יש להשלים קודם את הפרטים האישיים" : undefined}
+        className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold mb-1 transition-colors"
+        style={{
+          background: active ? COLORS.accentLight : "transparent",
+          color: active ? COLORS.accentDark : COLORS.text,
+          opacity: locked ? 0.45 : 1,
+          cursor: locked ? "not-allowed" : "pointer",
+        }}
+      >
+        {locked ? <LockKeyhole size={15} /> : <t.icon size={15} />}
+        {t.label}
+        {t.id === "board" && !locked && hasNewBoardItems && (
+          <span className="rounded-full" style={{ width: 7, height: 7, background: COLORS.danger, display: "inline-block", marginInlineStart: 2 }} />
+        )}
+      </button>
+    );
+  }
+
   const visibleShifts = teamFilter === "הכל" ? SHIFTS : SHIFTS.filter((s) => s.team === teamFilter);
 
   if (loading) {
@@ -3724,50 +3778,82 @@ ${cards}
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="max-w-4xl mx-auto px-6 pt-4 flex gap-2 flex-wrap">
-        {[
-          ...dashboardTabs,
-          { id: "shifts", label: "שיבוץ עצמי", icon: CalendarDays },
-          { id: "board", label: "לוח מודעות", icon: Megaphone },
-          { id: "budget", label: "הוצאות", icon: Wallet },
-          ...(canManageFinances ? [{ id: "finances", label: "כספים", icon: CreditCard }] : []),
-          ...(isAdmin ? [{ id: "allocations", label: "לוח הקצאות", icon: Ticket }] : []),
-          { id: "teams", label: "צוותים", icon: Tent },
-          { id: "rides", label: "התניידות", icon: Car },
-          { id: "contacts", label: "חברי קמפ", icon: Phone },
-          { id: "equipment", label: "ציוד קמפ", icon: Package },
-        ].map((t) => {
-          const locked = !profileComplete && !PROFILE_GATE_EXEMPT_TABS.includes(t.id);
-          return (
+      {/* Primary nav */}
+      <div className="max-w-4xl mx-auto px-6 pt-4 flex items-center gap-2">
+        <button
+          onClick={() => setTab("dashboard-personal")}
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-sm font-bold transition-colors"
+          style={{
+            background: tab === "dashboard-personal" ? COLORS.accent : COLORS.surface,
+            color: tab === "dashboard-personal" ? COLORS.bg : COLORS.accentDark,
+            border: `1px solid ${tab === "dashboard-personal" ? COLORS.accent : COLORS.divider}`,
+          }}
+        >
+          <Home size={16} /> {personalDashboardTab?.label || "לוח בקרה אישי"}
+        </button>
+        <button
+          onClick={() => setNavDrawerOpen(true)}
+          className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+          style={{ position: "relative", background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}
+          aria-label="פתיחת תפריט"
+        >
+          <Menu size={18} />
+          {hasNewBoardItems && (
+            <span className="rounded-full" style={{ position: "absolute", top: 8, insetInlineEnd: 8, width: 8, height: 8, background: COLORS.danger }} />
+          )}
+        </button>
+      </div>
+
+      {navDrawerOpen && (
+        <div className="fixed inset-0 z-40" style={{ background: "rgba(0,0,0,0.35)" }} onClick={() => setNavDrawerOpen(false)} />
+      )}
+      <div
+        className="fixed top-0 bottom-0 z-50 flex flex-col transition-transform"
+        style={{
+          right: 0,
+          width: "82%",
+          maxWidth: 300,
+          background: COLORS.bg,
+          boxShadow: "-6px 0 20px rgba(0,0,0,0.18)",
+          transform: navDrawerOpen ? "translateX(0)" : "translateX(100%)",
+          transitionDuration: "220ms",
+        }}
+      >
+        <div className="flex items-center gap-3 px-4 py-4" style={{ background: COLORS.accentLight, borderBottom: `1px solid ${COLORS.divider}` }}>
+          <div
+            className="rounded-full flex items-center justify-center shrink-0"
+            style={{ width: 42, height: 42, background: `radial-gradient(circle at 32% 28%, ${COLORS.accent2}, ${COLORS.accentDark})`, color: "white", fontWeight: 800, fontSize: 13 }}
+          >
+            {initialsOf(identity)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-bold truncate">{identity}</div>
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full inline-block mt-0.5" style={{ background: "rgba(255,255,255,0.55)", color: COLORS.accentDark }}>
+              {myRoleLabel}
+            </span>
+          </div>
+          <button onClick={() => setNavDrawerOpen(false)} aria-label="סגירה" style={{ color: COLORS.textMuted }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-3 py-3">
+          {roleDashboardTab && (
             <button
-              key={t.id}
-              onClick={() => {
-                if (locked) showToast("כדי להמשיך להשתמש באפליקציה צריך קודם למלא את הפרטים החסרים בלוח הבקרה האישי", "error");
-                else setTab(t.id);
-              }}
-              title={locked ? "יש להשלים קודם את הפרטים האישיים" : undefined}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold transition-colors"
-              style={{
-                position: "relative",
-                background: tab === t.id ? COLORS.accent : COLORS.surface,
-                color: tab === t.id ? COLORS.bg : COLORS.textMuted,
-                border: `1px solid ${tab === t.id ? COLORS.accent : COLORS.divider}`,
-                opacity: locked ? 0.45 : 1,
-                cursor: locked ? "not-allowed" : "pointer",
-              }}
+              onClick={() => { setTab(roleDashboardTab.id); setNavDrawerOpen(false); }}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-2xl text-sm font-bold mb-3"
+              style={{ background: isAdmin ? COLORS.accent : COLORS.accent2, color: "white" }}
             >
-              {locked ? <LockKeyhole size={16} /> : t.icon && <t.icon size={16} />} {t.label}
-              {t.id === "board" && !locked && hasNewBoardItems && (
-                <span
-                  className="rounded-full"
-                  style={{ width: 8, height: 8, background: COLORS.danger, display: "inline-block", marginInlineStart: 2 }}
-                  title="יש חדש בלוח המודעות"
-                />
-              )}
+              <LayoutDashboard size={15} /> {roleDashboardTab.label}
             </button>
-          );
-        })}
+          )}
+
+          <div className="text-[10px] font-bold uppercase tracking-wide mb-1.5 px-1" style={{ color: COLORS.textMuted }}>אישי</div>
+          {navPersonalTabs.map((t) => renderDrawerItem(t))}
+
+          <div className="text-[10px] font-bold uppercase tracking-wide mt-4 mb-1.5 px-1" style={{ color: COLORS.textMuted }}>קמפ</div>
+          {navCampTabs.map((t) => renderDrawerItem(t))}
+        </div>
       </div>
 
       {/* Content */}
