@@ -2009,7 +2009,6 @@ export default function App() {
   const [showFirstLoginStatus, setShowFirstLoginStatus] = useState(false);
   const [extraMembers, setExtraMembers] = useState([]);
   const [removedMembers, setRemovedMembers] = useState([]);
-  const [idOverrides, setIdOverrides] = useState({});
   const [dbRoles, setDbRoles] = useState({});
   const [idOnFileNames, setIdOnFileNames] = useState(null);
   const [pushEnabledNames, setPushEnabledNames] = useState(null);
@@ -2230,9 +2229,10 @@ export default function App() {
     }
   }
 
-  function removeBudgetItem(id) {
+  async function removeBudgetItem(id) {
     const item = budgetItems.find((b) => b.id === id);
-    persistBudget(budgetItems.filter((b) => b.id !== id));
+    const latest = await getFreshShared("budget-items", budgetItems);
+    persistBudget(latest.filter((b) => b.id !== id));
     if (item) logActivity("מחיקת הוצאה", `${item.name} (${item.category})`);
   }
 
@@ -2342,7 +2342,8 @@ export default function App() {
   }
 
   async function removeEquipment(id) {
-    const next = campEquipment.filter((e) => e.id !== id);
+    const latest = await getFreshShared("camp-equipment", campEquipment);
+    const next = latest.filter((e) => e.id !== id);
     setCampEquipment(next);
     try {
       await window.storage.set("camp-equipment", JSON.stringify(next), true);
@@ -2352,7 +2353,8 @@ export default function App() {
   }
 
   async function updateEquipmentField(id, patch) {
-    const next = campEquipment.map((e) => (e.id === id ? { ...e, ...patch } : e));
+    const latest = await getFreshShared("camp-equipment", campEquipment);
+    const next = latest.map((e) => (e.id === id ? { ...e, ...patch } : e));
     setCampEquipment(next);
     try {
       await window.storage.set("camp-equipment", JSON.stringify(next), true);
@@ -2501,7 +2503,8 @@ export default function App() {
 
   async function logActivity(action, details) {
     const entry = { ts: Date.now(), actor: identity || "לא ידוע", action, details: details || "" };
-    const next = [entry, ...activityLog].slice(0, 200);
+    const latest = await getFreshShared("activity-log", activityLog);
+    const next = [entry, ...latest].slice(0, 200);
     setActivityLog(next);
     try {
       await window.storage.set("activity-log", JSON.stringify(next), true);
@@ -2566,9 +2569,10 @@ export default function App() {
   }
 
   async function toggleTeardownTask(task) {
-    const mine = teardownTasks[identity] || [];
+    const latest = await getFreshShared("teardown-tasks", teardownTasks);
+    const mine = latest[identity] || [];
     const nextMine = mine.includes(task) ? mine.filter((t) => t !== task) : [...mine, task];
-    const next = { ...teardownTasks, [identity]: nextMine };
+    const next = { ...latest, [identity]: nextMine };
     setTeardownTasks(next);
     try {
       await window.storage.set("teardown-tasks", JSON.stringify(next), true);
@@ -2591,8 +2595,9 @@ export default function App() {
 
   async function addPayment(name, amount, date) {
     if (!amount) return;
-    const list = Array.isArray(memberPayments[name]) ? memberPayments[name] : [];
-    const next = { ...memberPayments, [name]: [...list, { id: Date.now().toString(), amount: Number(amount), date }] };
+    const latest = await getFreshShared("member-payments", memberPayments);
+    const list = Array.isArray(latest[name]) ? latest[name] : [];
+    const next = { ...latest, [name]: [...list, { id: Date.now().toString(), amount: Number(amount), date }] };
     setMemberPayments(next);
     try {
       await window.storage.set("member-payments", JSON.stringify(next), true);
@@ -2603,8 +2608,9 @@ export default function App() {
   }
 
   async function removePayment(name, id) {
-    const list = Array.isArray(memberPayments[name]) ? memberPayments[name] : [];
-    const next = { ...memberPayments, [name]: list.filter((p) => p.id !== id) };
+    const latest = await getFreshShared("member-payments", memberPayments);
+    const list = Array.isArray(latest[name]) ? latest[name] : [];
+    const next = { ...latest, [name]: list.filter((p) => p.id !== id) };
     setMemberPayments(next);
     try {
       await window.storage.set("member-payments", JSON.stringify(next), true);
@@ -2617,11 +2623,12 @@ export default function App() {
   // slot is 0 or 1 - each team has up to 2 lead slots, set independently so
   // picking the second lead doesn't disturb the first.
   async function setTeamLead(team, name, slot = 0) {
-    const current = teamLeads[team] || [];
+    const latest = await getFreshShared("team-leads", teamLeads);
+    const current = latest[team] || [];
     const nextSlots = [current[0] || "", current[1] || ""];
     nextSlots[slot] = name || "";
     const cleaned = nextSlots.filter(Boolean);
-    const next = { ...teamLeads };
+    const next = { ...latest };
     if (cleaned.length) next[team] = cleaned; else delete next[team];
     setTeamLeadsState(next);
     try {
@@ -2634,7 +2641,8 @@ export default function App() {
   }
 
   async function setPhone(name, phone) {
-    const next = { ...memberPhones, [name]: phone };
+    const latest = await getFreshShared("member-phones", memberPhones);
+    const next = { ...latest, [name]: phone };
     setMemberPhones(next);
     try {
       await window.storage.set("member-phones", JSON.stringify(next), true);
@@ -2644,7 +2652,8 @@ export default function App() {
   }
 
   async function setRideData(name, data) {
-    const next = { ...rideInfo, [name]: data };
+    const latest = await getFreshShared("ride-info", rideInfo);
+    const next = { ...latest, [name]: data };
     setRideInfo(next);
     try {
       await window.storage.set("ride-info", JSON.stringify(next), true);
@@ -2665,7 +2674,8 @@ export default function App() {
   }
 
   async function setFeeOverride(name, amount) {
-    const next = { ...feeOverrides };
+    const latest = await getFreshShared("fee-overrides", feeOverrides);
+    const next = { ...latest };
     if (amount === "" || amount === null) delete next[name];
     else next[name] = Number(amount);
     setFeeOverrides(next);
@@ -2679,7 +2689,8 @@ export default function App() {
   }
 
   async function setEmail(name, email) {
-    const next = { ...memberEmails, [name]: email };
+    const latest = await getFreshShared("member-emails", memberEmails);
+    const next = { ...latest, [name]: email };
     setMemberEmails(next);
     try {
       await window.storage.set("member-emails", JSON.stringify(next), true);
@@ -2693,7 +2704,8 @@ export default function App() {
   // notifications. Admins can still see who's opted in on the dashboard,
   // and the WhatsApp reminder buttons only appear for members who have.
   async function setWhatsappConsent(name, consent) {
-    const next = { ...whatsappConsent, [name]: consent };
+    const latest = await getFreshShared("whatsapp-consent", whatsappConsent);
+    const next = { ...latest, [name]: consent };
     setWhatsappConsentState(next);
     try {
       await window.storage.set("whatsapp-consent", JSON.stringify(next), true);
@@ -2707,9 +2719,10 @@ export default function App() {
   // person opts in individually via this toggle, so the calendar doesn't
   // fill up with events nobody but the poster cares about.
   async function toggleMyCalendarAdd(announcementId) {
-    const mine = personalCalendarAdds[identity] || [];
+    const latest = await getFreshShared("personal-calendar-adds", personalCalendarAdds);
+    const mine = latest[identity] || [];
     const nextMine = mine.includes(announcementId) ? mine.filter((id) => id !== announcementId) : [...mine, announcementId];
-    const next = { ...personalCalendarAdds, [identity]: nextMine };
+    const next = { ...latest, [identity]: nextMine };
     setPersonalCalendarAddsState(next);
     try {
       await window.storage.set("personal-calendar-adds", JSON.stringify(next), true);
@@ -2719,8 +2732,9 @@ export default function App() {
   }
 
   async function toggleChecklistItem(team, index) {
-    const current = checklistState[team] || {};
-    const next = { ...checklistState, [team]: { ...current, [index]: !current[index] } };
+    const latest = await getFreshShared("team-checklists", checklistState);
+    const current = latest[team] || {};
+    const next = { ...latest, [team]: { ...current, [index]: !current[index] } };
     setChecklistState(next);
     try {
       await window.storage.set("team-checklists", JSON.stringify(next), true);
@@ -2890,11 +2904,12 @@ export default function App() {
 
   async function addAnnouncement(text, eventInfo, audience) {
     if (!text.trim()) return;
+    const latest = await getFreshShared("announcements", announcements);
     const next = [{
       id: Date.now().toString(), author: identity, text: text.trim(), ts: Date.now(), replies: [],
       isEvent: !!eventInfo, eventDate: eventInfo?.eventDate || "", eventTime: eventInfo?.eventTime || "",
       audience: audience || "all",
-    }, ...announcements];
+    }, ...latest];
     setAnnouncements(next);
     try {
       await window.storage.set("announcements", JSON.stringify(next), true);
@@ -2904,7 +2919,8 @@ export default function App() {
   }
 
   async function removeAnnouncement(id) {
-    const next = announcements.filter((a) => a.id !== id);
+    const latest = await getFreshShared("announcements", announcements);
+    const next = latest.filter((a) => a.id !== id);
     setAnnouncements(next);
     try {
       await window.storage.set("announcements", JSON.stringify(next), true);
@@ -2915,7 +2931,8 @@ export default function App() {
 
   async function addReply(annId, text) {
     if (!text.trim()) return;
-    const next = announcements.map((a) =>
+    const latest = await getFreshShared("announcements", announcements);
+    const next = latest.map((a) =>
       a.id === annId
         ? { ...a, replies: [...(a.replies || []), { id: Date.now().toString(), author: identity, text: text.trim(), ts: Date.now() }] }
         : a
@@ -2932,7 +2949,8 @@ export default function App() {
   // WhatsApp's message reactions, one emoji-per-person per announcement
   // (picking a different emoji swaps it rather than stacking multiple).
   async function toggleReaction(annId, emoji) {
-    const next = announcements.map((a) => {
+    const latest = await getFreshShared("announcements", announcements);
+    const next = latest.map((a) => {
       if (a.id !== annId) return a;
       const reactions = { ...(a.reactions || {}) };
       const alreadyHasThis = (reactions[emoji] || []).includes(identity);
@@ -2967,7 +2985,8 @@ export default function App() {
     if (!question.trim() || options.filter((o) => o.trim()).length < 2) {
       return showToast("צריך שאלה ולפחות 2 אפשרויות", "error");
     }
-    const next = [{ id: Date.now().toString(), question: question.trim(), options: options.filter((o) => o.trim()), responses: {}, ts: Date.now() }, ...polls];
+    const latest = await getFreshShared("polls", polls);
+    const next = [{ id: Date.now().toString(), question: question.trim(), options: options.filter((o) => o.trim()), responses: {}, ts: Date.now() }, ...latest];
     setPolls(next);
     try {
       await window.storage.set("polls", JSON.stringify(next), true);
@@ -2978,7 +2997,8 @@ export default function App() {
   }
 
   async function removePoll(id) {
-    const next = polls.filter((p) => p.id !== id);
+    const latest = await getFreshShared("polls", polls);
+    const next = latest.filter((p) => p.id !== id);
     setPolls(next);
     try {
       await window.storage.set("polls", JSON.stringify(next), true);
@@ -2988,7 +3008,8 @@ export default function App() {
   }
 
   async function respondToPoll(pollId, optionIndex) {
-    const next = polls.map((p) =>
+    const latest = await getFreshShared("polls", polls);
+    const next = latest.map((p) =>
       p.id === pollId ? { ...p, responses: { ...p.responses, [identity]: optionIndex } } : p
     );
     setPolls(next);
@@ -3033,27 +3054,34 @@ export default function App() {
   function isManualTeamMember(teamName, name) {
     return (manualTeamMembers[teamName] || []).includes(name);
   }
+  // The `team_members` table row is what actually gates budget-write
+  // permission - the kv "manual-team-members" list is just what's shown in
+  // the UI. Writing the table row first (and only updating the UI list once
+  // it succeeds) means the UI never shows someone as a team member with a
+  // permission they don't really have, in either direction.
   async function addManualTeamMember(teamName, name) {
     if (!name) return;
-    const current = manualTeamMembers[teamName] || [];
+    const latest = await getFreshShared("manual-team-members", manualTeamMembers);
+    const current = latest[teamName] || [];
     if (current.includes(name)) return;
-    const next = { ...manualTeamMembers, [teamName]: [...current, name] };
-    setManualTeamMembers(next);
     try {
-      await window.storage.set("manual-team-members", JSON.stringify(next), true);
       await addTeamMemberRow(teamName, name);
+      const next = { ...latest, [teamName]: [...current, name] };
+      setManualTeamMembers(next);
+      await window.storage.set("manual-team-members", JSON.stringify(next), true);
       logActivity("שיוך ידני לצוות", `${name} → ${teamName}`);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
   }
   async function removeManualTeamMember(teamName, name) {
-    const current = manualTeamMembers[teamName] || [];
-    const next = { ...manualTeamMembers, [teamName]: current.filter((n) => n !== name) };
-    setManualTeamMembers(next);
+    const latest = await getFreshShared("manual-team-members", manualTeamMembers);
+    const current = latest[teamName] || [];
     try {
-      await window.storage.set("manual-team-members", JSON.stringify(next), true);
       await removeTeamMemberRow(teamName, name);
+      const next = { ...latest, [teamName]: current.filter((n) => n !== name) };
+      setManualTeamMembers(next);
+      await window.storage.set("manual-team-members", JSON.stringify(next), true);
       logActivity("הסרת שיוך ידני לצוות", `${name} ← ${teamName}`);
     } catch {
       showToast("שמירה נכשלה", "error");
