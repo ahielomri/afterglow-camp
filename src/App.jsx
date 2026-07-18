@@ -3153,7 +3153,14 @@ export default function App() {
     const teamShifts = SHIFTS.filter((s) => s.team === team && s.id !== TEARDOWN_ID);
     const unfilled = teamShifts.reduce((sum, s) => sum + Math.max(s.spots - (assignments[s.id] || []).length, 0), 0);
     const planned = Number(categoryBudgets[team]) || 0;
-    const paid = budgetItems.filter((b) => b.category === team).reduce((s, b) => s + (Number(b.paid) || 0), 0);
+    // Actual spend lives in two places: the legacy budgetItems list (older
+    // planned-line-items, matched by `category`) and budgetExpenses (the
+    // list the team dashboard's own quick-add form writes to, matched by
+    // `allocation`) - both need to be counted or a team lead's own expense
+    // entries silently wouldn't show up in their own "paid so far" stat.
+    const legacyPaid = budgetItems.filter((b) => b.category === team).reduce((s, b) => s + (Number(b.paid) || 0), 0);
+    const expensesPaid = budgetExpenses.filter((e) => e.allocation === team).reduce((s, e) => s + expenseAmounts(e).paid, 0);
+    const paid = legacyPaid + expensesPaid;
     return { totalShifts: teamShifts.length, unfilled, planned, paid };
   }
 
@@ -3305,13 +3312,35 @@ export default function App() {
     () => allMembers.filter((m) => !SHIFTS.some((s) => s.id !== TEARDOWN_ID && (assignments[s.id] || []).includes(m.name))).length,
     [assignments, allMembers]
   );
+  // Same "count both budgetItems and budgetExpenses" fix as teamStats -
+  // this used to only look at the legacy list, so a category whose actual
+  // spend was entered entirely through the current expense form would
+  // never trip the overrun alert no matter how far over it went.
+  const categorySpend = useMemo(() => {
+    const map = {};
+    allBudgetCategories.forEach((cat) => {
+      const legacyPaid = budgetItems.filter((b) => b.category === cat).reduce((s, b) => s + (Number(b.paid) || 0), 0);
+      const expensesPaid = budgetExpenses.filter((e) => e.allocation === cat).reduce((s, e) => s + expenseAmounts(e).paid, 0);
+      map[cat] = legacyPaid + expensesPaid;
+    });
+    return map;
+  }, [budgetItems, budgetExpenses, allBudgetCategories]);
   const overBudgetCategories = useMemo(() => {
     return allBudgetCategories.filter((cat) => {
       const planned = Number(categoryBudgets[cat]) || 0;
-      const paid = budgetItems.filter((b) => b.category === cat).reduce((s, b) => s + (Number(b.paid) || 0), 0);
-      return planned > 0 && paid > planned;
+      return planned > 0 && categorySpend[cat] > planned;
     });
-  }, [categoryBudgets, budgetItems, allBudgetCategories]);
+  }, [categoryBudgets, categorySpend, allBudgetCategories]);
+  // "Approaching" the budget (85%+) but not over it yet - a separate,
+  // softer warning so admins/team leads get a heads-up before it's too late.
+  const nearBudgetCategories = useMemo(() => {
+    return allBudgetCategories.filter((cat) => {
+      const planned = Number(categoryBudgets[cat]) || 0;
+      if (!planned) return false;
+      const ratio = categorySpend[cat] / planned;
+      return ratio >= 0.85 && ratio <= 1;
+    });
+  }, [categoryBudgets, categorySpend, allBudgetCategories]);
 
   const budgetTotals = useMemo(() => {
     const planned = Object.values(categoryBudgets).reduce((sum, v) => sum + (Number(v) || 0), 0);
@@ -3567,7 +3596,7 @@ export default function App() {
                   ))}
                 </div>
 
-                {(paymentTotals.remaining > 0 || unfilledShiftsCount > 0 || membersWithoutShift > 0 || overBudgetCategories.length > 0 || lookingForRide.length > 0) && (
+                {(paymentTotals.remaining > 0 || unfilledShiftsCount > 0 || membersWithoutShift > 0 || overBudgetCategories.length > 0 || nearBudgetCategories.length > 0 || lookingForRide.length > 0) && (
                   <div className="mt-4 rounded-2xl p-4 space-y-2" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
                     <div className="text-xs font-bold mb-1" style={{ color: COLORS.accentDark }}>התרעות חשובות</div>
                     {paymentTotals.remaining > 0 && <div className="text-xs">💰 עוד ₪{paymentTotals.remaining.toLocaleString()} לגבייה מחברי הקמפ</div>}
@@ -3576,6 +3605,9 @@ export default function App() {
                     {lookingForRide.length > 0 && <div className="text-xs">🚗 {lookingForRide.length} חברים מחפשים טרמפ ועדיין לא שובצו</div>}
                     {overBudgetCategories.map((cat) => (
                       <div key={cat} className="text-xs">⚠️ הקטגוריה "{cat}" חרגה מהתקציב המתוכנן</div>
+                    ))}
+                    {nearBudgetCategories.map((cat) => (
+                      <div key={cat} className="text-xs">🟡 הקטגוריה "{cat}" מתקרבת לתקציב המתוכנן (מעל 85%)</div>
                     ))}
                   </div>
                 )}
@@ -3990,6 +4022,13 @@ export default function App() {
                 ));
               })()}
             </div>
+
+            {(overBudgetCategories.includes(myLeadTeam) || nearBudgetCategories.includes(myLeadTeam)) && (
+              <div className="mt-3 rounded-2xl p-3" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
+                {overBudgetCategories.includes(myLeadTeam) && <div className="text-xs">⚠️ תקציב הצוות חרג מהתכנון</div>}
+                {nearBudgetCategories.includes(myLeadTeam) && <div className="text-xs">🟡 תקציב הצוות מתקרב לתכנון (מעל 85%)</div>}
+              </div>
+            )}
 
             <h3 className="text-xs font-bold mt-5 mb-2" style={{ color: COLORS.textMuted }}>המשמרות של הצוות</h3>
             <div className="space-y-1.5">
