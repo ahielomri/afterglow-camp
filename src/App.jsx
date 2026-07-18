@@ -2554,6 +2554,14 @@ export default function App() {
 
   async function join(shift, targetMember) {
     const who = targetMember || identity;
+    // Self-scheduling needs a phone on file (people running the shift need
+    // to be able to reach whoever's assigned) - admins manually assigning
+    // someone aren't blocked by this, since they may already have another
+    // way to reach that person.
+    if (!targetMember && !memberPhones[identity]?.trim()) {
+      showToast("צריך למלא מספר טלפון לפני שיבוץ למשמרת - אפשר להשלים בלוח הבקרה האישי", "error");
+      return;
+    }
     const latest = await getLatestAssignments();
     const names = latest[shift.id] || [];
     if (names.includes(who)) return;
@@ -3176,16 +3184,45 @@ export default function App() {
   }, [identity, memberPhones, memberEmails, emergencyInfo, rideInfo, allocationInfo, pushStatus, pushDecisionMade]);
   const profileComplete = missingProfileFields.length === 0;
 
+  // Tabs that are safe to browse even with a missing profile field - they're
+  // read-only/informational, or (for shifts) the one action inside them that
+  // actually needs a field (self-joining a shift needs a phone number) is
+  // gated on its own in join(), not by blocking the whole tab. Everything
+  // else stays gated since it either shows/collects personal data
+  // (contacts, teams, rides) or needs the profile to be meaningful (finances,
+  // budget, equipment).
+  const PROFILE_GATE_EXEMPT_TABS = ["dashboard-personal", "shifts", "board"];
+
   // Keep anyone with missing profile fields on their personal dashboard
-  // until they've filled everything in - covers both landing there after
-  // login and trying to tab away mid-setup.
+  // until they've filled everything in - except the exempt tabs above,
+  // which they can browse right away.
   useEffect(() => {
-    if (!loading && identity && !profileComplete && tab !== "dashboard-personal") {
+    if (!loading && identity && !profileComplete && tab !== "dashboard-personal" && !PROFILE_GATE_EXEMPT_TABS.includes(tab)) {
       setTab("dashboard-personal");
       showToast("כדי להמשיך להשתמש באפליקציה צריך קודם למלא את הפרטים החסרים כאן", "error");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, identity, profileComplete, tab]);
+
+  // "New on the board" indicator - per-device (not shared), so it doesn't
+  // need a new table: just remembers when this browser last had the board
+  // tab open and compares that against the newest announcement/poll.
+  const [lastViewedBoard, setLastViewedBoard] = useState(() => {
+    try { return Number(localStorage.getItem("board-last-viewed")) || 0; } catch { return 0; }
+  });
+  useEffect(() => {
+    if (tab === "board") {
+      const now = Date.now();
+      setLastViewedBoard(now);
+      try { localStorage.setItem("board-last-viewed", String(now)); } catch {}
+    }
+  }, [tab]);
+  const hasNewBoardItems = useMemo(() => {
+    if (!identity) return false;
+    const unansweredPoll = polls.some((pl) => pl.responses[identity] === undefined);
+    const latestTs = Math.max(0, ...announcements.map((a) => a.ts || 0), ...polls.map((p) => p.ts || 0));
+    return unansweredPoll || latestTs > lastViewedBoard;
+  }, [polls, announcements, identity, lastViewedBoard]);
 
   const myShifts = useMemo(
     () => SHIFTS.filter((s) => isJoined(s.id)).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start)),
@@ -3375,7 +3412,7 @@ export default function App() {
           { id: "contacts", label: "חברי קמפ", icon: Phone },
           { id: "equipment", label: "ציוד קמפ", icon: Package },
         ].map((t) => {
-          const locked = !profileComplete && t.id !== "dashboard-personal";
+          const locked = !profileComplete && !PROFILE_GATE_EXEMPT_TABS.includes(t.id);
           return (
             <button
               key={t.id}
@@ -3386,6 +3423,7 @@ export default function App() {
               title={locked ? "יש להשלים קודם את הפרטים האישיים" : undefined}
               className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold transition-colors"
               style={{
+                position: "relative",
                 background: tab === t.id ? COLORS.accent : COLORS.surface,
                 color: tab === t.id ? COLORS.bg : COLORS.textMuted,
                 border: `1px solid ${tab === t.id ? COLORS.accent : COLORS.divider}`,
@@ -3394,6 +3432,13 @@ export default function App() {
               }}
             >
               {locked ? <LockKeyhole size={16} /> : t.icon && <t.icon size={16} />} {t.label}
+              {t.id === "board" && !locked && hasNewBoardItems && (
+                <span
+                  className="rounded-full"
+                  style={{ width: 8, height: 8, background: COLORS.danger, display: "inline-block", marginInlineStart: 2 }}
+                  title="יש חדש בלוח המודעות"
+                />
+              )}
             </button>
           );
         })}
