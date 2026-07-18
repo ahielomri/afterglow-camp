@@ -2036,6 +2036,7 @@ export default function App() {
   const [teamLeads, setTeamLeadsState] = useState({});
   const [memberPhones, setMemberPhones] = useState({});
   const [rideInfo, setRideInfo] = useState({});
+  const [rideMatches, setRideMatches] = useState({});
   const [allocationInfo, setAllocationInfo] = useState({});
   const [feeOverrides, setFeeOverrides] = useState({});
   const [memberEmails, setMemberEmails] = useState({});
@@ -2127,7 +2128,7 @@ export default function App() {
         rawAssignments, rawBudget, rawCatBudget, rawTeardown, rawPayments, rawFee,
         rawLeads, rawPhones, rawRides, rawFeeOv, rawEmails, rawWhatsappConsent, rawPersonalCalendarAdds, rawChecklists,
         rawManualTeam, rawLog, rawLogins, rawExtra, rawRemoved,
-        rawAnn, rawPolls, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories,
+        rawAnn, rawPolls, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories, rawRideMatches,
       ] = await Promise.all([
         safeGet("shift-assignments", true),
         safeGet("budget-items", true),
@@ -2154,6 +2155,7 @@ export default function App() {
         safeGet("budget-expenses", true),
         safeGet("camp-equipment", true),
         safeGet("extra-budget-categories", true),
+        safeGet("ride-matches", true),
       ]);
 
       async function safeCall(fn, fallback) {
@@ -2192,6 +2194,7 @@ export default function App() {
 
       setMemberPhones(rawPhones ? JSON.parse(rawPhones) : {});
       setRideInfo(rawRides ? JSON.parse(rawRides) : {});
+      setRideMatches(rawRideMatches ? JSON.parse(rawRideMatches) : {});
       setFeeOverrides(rawFeeOv ? JSON.parse(rawFeeOv) : {});
       setMemberEmails(rawEmails ? JSON.parse(rawEmails) : {});
       setWhatsappConsentState(rawWhatsappConsent ? JSON.parse(rawWhatsappConsent) : {});
@@ -2810,6 +2813,38 @@ export default function App() {
     setRideInfo(next);
     try {
       await window.storage.set("ride-info", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  // Manual driver<->rider pairing, admin-only - keyed by driver name, each
+  // holding the list of riders matched to them. Contact itself already
+  // happens via the existing private-message button on each ride row; this
+  // just keeps a persistent record so a match doesn't get lost/forgotten
+  // once the conversation moves off-app (e.g. to a WhatsApp thread).
+  async function matchRide(driverName, riderName) {
+    if (!riderName) return;
+    const latest = await getFreshShared("ride-matches", rideMatches);
+    const current = latest[driverName] || [];
+    if (current.includes(riderName)) return;
+    const next = { ...latest, [driverName]: [...current, riderName] };
+    setRideMatches(next);
+    try {
+      await window.storage.set("ride-matches", JSON.stringify(next), true);
+      logActivity("שיוך טרמפ", `${riderName} → ${driverName}`);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function unmatchRide(driverName, riderName) {
+    const latest = await getFreshShared("ride-matches", rideMatches);
+    const current = latest[driverName] || [];
+    const next = { ...latest, [driverName]: current.filter((n) => n !== riderName) };
+    setRideMatches(next);
+    try {
+      await window.storage.set("ride-matches", JSON.stringify(next), true);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -5936,14 +5971,57 @@ ${cards}
               ))}
             </div>
 
+            {isAdmin && offeringRides.length > 0 && (
+              <div className="mb-4 rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                <div className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>שיוך נוסעים לנהגים (מנהל)</div>
+                <div className="space-y-2">
+                  {offeringRides.map((driver) => {
+                    const matched = rideMatches[driver.name] || [];
+                    const unmatchedSeekers = lookingForRide.filter((s) => !matched.includes(s.name));
+                    const seats = rideInfo[driver.name]?.seats;
+                    return (
+                      <div key={driver.name} className="rounded-xl px-3 py-2" style={{ background: COLORS.input }}>
+                        <div className="text-xs font-bold mb-1">{driver.name}{seats ? ` · ${matched.length}/${seats} מקומות` : ""}</div>
+                        {matched.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-1">
+                            {matched.map((n) => (
+                              <span key={n} className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1" style={{ background: COLORS.accent2Light }}>
+                                {n}
+                                <button onClick={() => unmatchRide(driver.name, n)} style={{ color: COLORS.textMuted }}><X size={10} /></button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {unmatchedSeekers.length > 0 ? (
+                          <select
+                            defaultValue=""
+                            onChange={(e) => { if (e.target.value) { matchRide(driver.name, e.target.value); e.target.value = ""; } }}
+                            className="text-xs px-2 py-1 rounded-lg"
+                            style={{ background: COLORS.bg, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                          >
+                            <option value="">+ שיוך נוסע/ת...</option>
+                            {unmatchedSeekers.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+                          </select>
+                        ) : (
+                          matched.length === 0 && <div className="text-xs" style={{ color: COLORS.textMuted }}>אין כרגע נוסעים שמחפשים טרמפ לשייך</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="grid sm:grid-cols-2 gap-4">
               <RideCategoryCard icon={Car} title="מציעים טרמפ" count={offeringRides.length} headerColor={COLORS.accent2} emptyText="אף אחד עדיין לא הציע טרמפ">
                 {offeringRides.map((m, i) => {
                   const d = rideInfo[m.name];
+                  const matchedRiders = rideMatches[m.name] || [];
                   const detail = [
                     d.arrivalDay ? formatDate(d.arrivalDay) : "יום לא צוין",
                     d.seats ? `${d.seats} מקומות פנויים` : null,
                     d.city || null,
+                    matchedRiders.length > 0 ? `שויכו: ${matchedRiders.join(", ")}` : null,
                   ].filter(Boolean).join(" · ");
                   return (
                     <RouteRow
@@ -5964,9 +6042,11 @@ ${cards}
               <RideCategoryCard icon={Users} title="מחפשים טרמפ" count={lookingForRide.length} headerColor={COLORS.accent} emptyText="אף אחד עדיין לא מחפש טרמפ">
                 {lookingForRide.map((m, i) => {
                   const d = rideInfo[m.name];
+                  const matchedDriver = Object.keys(rideMatches).find((driver) => (rideMatches[driver] || []).includes(m.name));
                   const detail = [
                     d.arrivalDay ? `מתכנן/ת להגיע ${formatDate(d.arrivalDay)}` : null,
                     d.city || null,
+                    matchedDriver ? `✓ שויך/ה ל-${matchedDriver}` : null,
                   ].filter(Boolean).join(" · ");
                   return (
                     <RouteRow
