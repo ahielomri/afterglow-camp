@@ -157,6 +157,26 @@ export async function getMemberRole(name) {
   return data.role;
 }
 
+// Records that this member had the app open just now - lets admins tell
+// "never logged in" (already tracked separately via login-history) apart
+// from "logged in once and hasn't opened it since". RLS + a column-level
+// grant restrict this to updating only the caller's own last_seen.
+export async function touchLastSeen(name) {
+  const { error } = await supabase
+    .from("members")
+    .update({ last_seen: new Date().toISOString() })
+    .eq("name", name);
+  if (error) throw error;
+}
+
+export async function listLastSeen() {
+  const { data, error } = await supabase.from("members").select("name, last_seen");
+  if (error || !data) return {};
+  const map = {};
+  data.forEach((r) => { map[r.name] = r.last_seen; });
+  return map;
+}
+
 // Bulk version used once per login to populate every member's role for
 // the roster/admin views.
 export async function getAllMemberRoles() {

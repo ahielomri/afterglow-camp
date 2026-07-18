@@ -25,6 +25,8 @@ import {
   adminRenameMember,
   listMembersWithPushEnabled,
   sendEventReminderPush,
+  touchLastSeen,
+  listLastSeen,
 } from "./storage.js";
 
 // ---------------------------------------------------------------------------
@@ -2007,6 +2009,8 @@ export default function App() {
   const [showActivityLog, setShowActivityLog] = useState(false);
   const [showLoginHistory, setShowLoginHistory] = useState(false);
   const [showFirstLoginStatus, setShowFirstLoginStatus] = useState(false);
+  const [lastSeenMap, setLastSeenMap] = useState(null);
+  const [showLastSeenList, setShowLastSeenList] = useState(false);
   const [extraMembers, setExtraMembers] = useState([]);
   const [removedMembers, setRemovedMembers] = useState([]);
   const [dbRoles, setDbRoles] = useState({});
@@ -2413,6 +2417,17 @@ export default function App() {
         await window.storage.set("login-history", JSON.stringify(next), true);
       } catch {}
     }
+    // Throttled to once an hour per device - runs on every app open (fresh
+    // login or a restored session), not just first-time logins, so it
+    // actually reflects recent activity rather than just first-ever login.
+    try {
+      const touchKey = `last-seen-touched-${name}`;
+      const lastTouch = Number(localStorage.getItem(touchKey)) || 0;
+      if (Date.now() - lastTouch > 60 * 60 * 1000) {
+        await touchLastSeen(name);
+        localStorage.setItem(touchKey, String(Date.now()));
+      }
+    } catch {}
   }
 
   async function handleLogin(name, password) {
@@ -3840,6 +3855,39 @@ export default function App() {
                           <span style={{ color: COLORS.textMuted }}>{new Date(l.ts).toLocaleString("he-IL")}</span>
                         </div>
                       ))
+                    )}
+                  </div>
+                )}
+
+                <button
+                  onClick={async () => {
+                    const next = !showLastSeenList;
+                    setShowLastSeenList(next);
+                    if (next && lastSeenMap === null) {
+                      try { setLastSeenMap(await listLastSeen()); } catch { setLastSeenMap({}); }
+                    }
+                  }}
+                  className="w-full flex items-center justify-between mt-4 mb-2 text-sm font-bold"
+                  style={{ color: COLORS.textMuted }}
+                >
+                  <span className="flex items-center gap-1.5"><History size={14} /> מי חוזר לאפליקציה (רק אתה רואה)</span>
+                  <ChevronDown size={15} style={{ transform: showLastSeenList ? "rotate(180deg)" : "none" }} />
+                </button>
+                {showLastSeenList && (
+                  <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
+                    {lastSeenMap === null ? (
+                      <p className="text-xs" style={{ color: COLORS.textMuted }}>טוען...</p>
+                    ) : (
+                      [...allMembers]
+                        .sort((a, b) => new Date(lastSeenMap[a.name] || 0) - new Date(lastSeenMap[b.name] || 0))
+                        .map((m) => (
+                          <div key={m.name} className="text-xs rounded-lg px-3 py-1.5 flex items-center justify-between" style={{ background: COLORS.surface }}>
+                            <b>{m.name}</b>
+                            <span style={{ color: lastSeenMap[m.name] ? COLORS.textMuted : COLORS.danger }}>
+                              {lastSeenMap[m.name] ? new Date(lastSeenMap[m.name]).toLocaleString("he-IL") : "מעולם לא נראה פעיל"}
+                            </span>
+                          </div>
+                        ))
                     )}
                   </div>
                 )}
