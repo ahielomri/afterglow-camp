@@ -1948,7 +1948,7 @@ function runBudgetEngine(p, N, budgetExpenses, paymentTotals) {
   const pendingPayments = num(p.cashflow.pendingPayments);
   const knownCommitments = num(p.cashflow.knownCommitments);
   const cashflowGap = totalCampCost - channelsTotal;
-  const projectedBalance = cashflowGap + vatRefund - knownCommitments;
+  const projectedBalance = cashflowGap + vatRefund - knownCommitments + pendingPayments;
 
   return {
     N, eventDays,
