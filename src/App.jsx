@@ -327,6 +327,19 @@ function parseCsv(text) {
 function icsEscape(text) {
   return String(text || "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
 }
+
+// Escapes text dropped into a raw HTML string built for a print/PDF window
+// (document.write, not JSX - React's normal auto-escaping doesn't apply
+// there, so this is the only thing standing between free-text fields like
+// emergency notes and injected markup).
+function escapeHtml(text) {
+  return String(text ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 function icsDateTime(dateStr, timeStr) {
   const [y, m, d] = dateStr.split("-");
   const [hh, mm] = (timeStr || "00:00").split(":");
@@ -3141,6 +3154,41 @@ export default function App() {
     }
   }
 
+  // Prints (or "saves as PDF" via the browser's print dialog) every
+  // member's emergency card in one document - for the medical team to
+  // print out before the event, since the desert site itself has no signal
+  // to load the app live in an emergency.
+  function exportEmergencyCardsPdf() {
+    const win = window.open("", "_blank");
+    if (!win) return showToast("נחסמה פתיחת חלון - יש לאפשר חלונות קופצים לאתר", "error");
+    const cards = allMembers.map((m) => {
+      const d = emergencyInfo[m.name] || {};
+      return `<div class="card">
+        <h3>${escapeHtml(m.name)}</h3>
+        <div><b>איש קשר לחירום:</b> ${escapeHtml(d.contactName || "—")}${d.contactPhone ? ` · ${escapeHtml(d.contactPhone)}` : ""}</div>
+        <div><b>אלרגיות:</b> ${escapeHtml(d.allergies || "—")}</div>
+        <div><b>מגבלות רפואיות:</b> ${escapeHtml(d.medical || "—")}</div>
+        <div><b>תזונה:</b> ${escapeHtml(d.dietary || "—")}</div>
+      </div>`;
+    }).join("");
+    win.document.write(`<!doctype html>
+<html dir="rtl" lang="he"><head><meta charset="UTF-8"><title>כרטיסי חירום - Afterglow</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #222; }
+  h1 { font-size: 18px; margin: 0 0 16px; }
+  .card { border: 1px solid #ccc; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; break-inside: avoid; page-break-inside: avoid; }
+  .card h3 { margin: 0 0 6px; font-size: 15px; }
+  .card div { font-size: 13px; margin-bottom: 2px; line-height: 1.5; }
+</style>
+</head><body>
+<h1>כרטיסי חירום - Afterglow (${escapeHtml(new Date().toLocaleDateString("he-IL"))})</h1>
+${cards}
+</body></html>`);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 300);
+  }
+
   async function createPoll(question, options) {
     if (!question.trim() || options.filter((o) => o.trim()).length < 2) {
       return showToast("צריך שאלה ולפחות 2 אפשרויות", "error");
@@ -4071,8 +4119,15 @@ export default function App() {
             {adminSubTab === "emergency" && (
               <>
             <button
+              onClick={exportEmergencyCardsPdf}
+              className="text-xs px-3 py-1.5 rounded-full font-semibold mb-3"
+              style={{ background: COLORS.surface, color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}
+            >
+              ייצוא הכל ל-PDF/הדפסה (לצוות הרפואי, למקרה שאין קליטה בשטח)
+            </button>
+            <button
               onClick={() => setShowEmergencyList(!showEmergencyList)}
-              className="w-full flex items-center justify-between mt-6 mb-2 text-sm font-bold"
+              className="w-full flex items-center justify-between mt-2 mb-2 text-sm font-bold"
               style={{ color: COLORS.textMuted }}
             >
               <span className="flex items-center gap-1.5"><HeartPulse size={14} /> כרטיסי חירום של חברי הקמפ</span>
