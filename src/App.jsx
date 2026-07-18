@@ -3800,6 +3800,50 @@ export default function App() {
                 );
               })}
             </div>
+
+            <h3 className="text-xs font-bold mt-5 mb-2" style={{ color: COLORS.textMuted }}>חברי הצוות ({teamMembers(myLeadTeam).length})</h3>
+            <div className="flex flex-wrap gap-1.5 mb-1">
+              {teamMembers(myLeadTeam).length === 0 ? (
+                <p className="text-xs" style={{ color: COLORS.textMuted }}>עדיין אף אחד לא שיבץ משמרת בצוות הזה.</p>
+              ) : (
+                teamMembers(myLeadTeam).map((n) => (
+                  <span key={n} className="text-xs px-2.5 py-1 rounded-full" style={{ background: COLORS.surface }} dir="ltr">
+                    <span dir="rtl">{n}</span>{memberPhones[n] ? ` · ${memberPhones[n]}` : ""}
+                  </span>
+                ))
+              )}
+            </div>
+
+            {TEAM_CHECKLISTS[myLeadTeam] && (() => {
+              const items = TEAM_CHECKLISTS[myLeadTeam];
+              const state = checklistState[myLeadTeam] || {};
+              const doneCount = items.filter((_, i) => state[i]).length;
+              return (
+                <div className="mt-5 pt-4 border-t" style={{ borderColor: COLORS.divider }}>
+                  <div className="text-xs font-bold mb-1.5 flex items-center justify-between" style={{ color: COLORS.textMuted }}>
+                    <span>צ'קליסט בטיחות ותפעול</span>
+                    <span>{doneCount}/{items.length}</span>
+                  </div>
+                  <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
+                    {items.map((item, i) => (
+                      <label key={i} className="flex items-center gap-2 text-xs cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!state[i]}
+                          onChange={() => toggleChecklistItem(myLeadTeam, i)}
+                        />
+                        <span style={{ textDecoration: state[i] ? "line-through" : "none", opacity: state[i] ? 0.6 : 1 }}>{item}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="mt-5 pt-4 border-t" style={{ borderColor: COLORS.divider }}>
+              <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>הוספת הוצאה לצוות</h3>
+              <BudgetExpenseForm onAdd={addBudgetExpense} lockedAllocation={myLeadTeam} categories={allBudgetCategories} />
+            </div>
           </div>
         )}
 
