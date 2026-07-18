@@ -3700,6 +3700,10 @@ ${cards}
     { id: "contacts", label: "חברי קמפ", icon: Phone },
     { id: "equipment", label: "ציוד קמפ", icon: Package },
   ];
+  // The category panel closes again once you pick something inside it, so
+  // without this there'd be no visible sign of where you ended up until
+  // you scroll into the content itself.
+  const currentTabLabel = [...dashboardTabs, ...navPersonalTabs, ...navCampTabs].find((t) => t.id === tab)?.label || "";
   function renderNavItem(t, fullWidth) {
     const locked = !profileComplete && !PROFILE_GATE_EXEMPT_TABS.includes(t.id);
     const active = tab === t.id;
@@ -3835,6 +3839,12 @@ ${cards}
           </div>
         )}
       </div>
+
+      {currentTabLabel && (
+        <div className="max-w-4xl mx-auto px-6 pt-4 text-xs font-bold" style={{ color: COLORS.textMuted }}>
+          כרגע ב: <span style={{ color: COLORS.accentDark }}>{currentTabLabel}</span>
+        </div>
+      )}
 
       {/* Content */}
       <div className="max-w-4xl mx-auto px-6 py-6">
