@@ -274,6 +274,52 @@ function expenseAmounts(e) {
 }
 
 // ---------------------------------------------------------------------------
+// Budget expenses <-> CSV (Excel opens CSV natively, so this avoids pulling
+// in a whole spreadsheet-parsing library just for import/export).
+// ---------------------------------------------------------------------------
+const EXPENSE_CSV_HEADERS = ["allocation", "vendor", "description", "amount", "purchaseDate", "paymentStatus", "paidAmount", "dueDate", "vatIncluded", "isRefund", "enteredBy"];
+
+function csvEscape(value) {
+  const s = String(value ?? "");
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function expensesToCsv(list) {
+  const rows = [EXPENSE_CSV_HEADERS.join(",")];
+  list.forEach((e) => rows.push(EXPENSE_CSV_HEADERS.map((h) => csvEscape(e[h])).join(",")));
+  return "\uFEFF" + rows.join("\r\n"); // BOM so Excel renders Hebrew correctly
+}
+
+// Minimal CSV parser - handles quoted fields with embedded commas/newlines,
+// which a naive text.split(",") would break on.
+function parseCsv(text) {
+  const rows = [];
+  let row = [], field = "", inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ",") {
+      row.push(field); field = "";
+    } else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(field); field = "";
+      if (row.length > 1 || row[0] !== "") rows.push(row);
+      row = [];
+    } else {
+      field += c;
+    }
+  }
+  if (field !== "" || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+// ---------------------------------------------------------------------------
 // "היומן שלי" phone-calendar sync - exports shifts + calendar events as a
 // standard .ics file. No server involved: every phone/desktop calendar app
 // (Google Calendar, Apple Calendar, Outlook) can import this directly.
@@ -2310,6 +2356,68 @@ export default function App() {
       await window.storage.set("budget-expenses", JSON.stringify(next), true);
       showToast("ההוצאה נרשמה", "ok");
       logActivity("רישום הוצאה בפועל", `${exp.vendor || exp.subcategory || ""} ₪${exp.amount}`);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  function downloadBudgetExpensesCsv() {
+    const csv = expensesToCsv(budgetExpenses);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `הוצאות-קמפ-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Admin-only: bulk-imports expense rows from a CSV (e.g. exported from
+  // Excel) instead of entering each one by hand. Restricted to admins
+  // rather than any budget-team member since a CSV lets the importer set
+  // `allocation` freely per row, which would otherwise let a team lead
+  // bulk-add expenses under a different team than the one they're scoped to.
+  async function importBudgetExpensesCsv(file) {
+    const text = await file.text();
+    const rows = parseCsv(text.replace(/^\uFEFF/, ""));
+    if (rows.length < 2) return showToast("הקובץ ריק", "error");
+    const headers = rows[0].map((h) => h.trim());
+    const col = (name) => headers.indexOf(name);
+    const iAlloc = col("allocation"), iVendor = col("vendor"), iDesc = col("description"),
+      iAmount = col("amount"), iDate = col("purchaseDate"), iStatus = col("paymentStatus"),
+      iPaid = col("paidAmount"), iDue = col("dueDate"), iVat = col("vatIncluded"), iRefund = col("isRefund");
+    if (iAmount === -1) return showToast('לא נמצאה עמודת "amount" בקובץ - יש להוריד קובץ לדוגמה מכפתור הייצוא כדי לראות את הפורמט הנכון', "error");
+    const truthy = (v) => v === "true" || v === "1" || v === "כן";
+    const newRows = rows.slice(1)
+      .filter((r) => r.some((c) => c.trim() !== ""))
+      .map((r) => {
+        const amount = Number(r[iAmount]) || 0;
+        const paymentStatus = iStatus !== -1 && r[iStatus] === "partial" ? "partial" : "paid";
+        const paidAmount = paymentStatus === "partial" ? (Number(r[iPaid]) || 0) : amount;
+        return {
+          id: Date.now().toString() + Math.random().toString(36).slice(2, 7),
+          allocation: iAlloc !== -1 ? r[iAlloc] : "",
+          vendor: iVendor !== -1 ? r[iVendor] : "",
+          description: iDesc !== -1 ? r[iDesc] : "",
+          amount,
+          purchaseDate: iDate !== -1 ? r[iDate] : "",
+          paymentStatus,
+          paidAmount,
+          remainingAmount: paymentStatus === "partial" ? Math.max(amount - paidAmount, 0) : 0,
+          dueDate: iDue !== -1 ? r[iDue] : "",
+          vatIncluded: iVat !== -1 ? truthy(r[iVat]) : true,
+          isRefund: iRefund !== -1 ? truthy(r[iRefund]) : false,
+          enteredBy: identity,
+        };
+      });
+    if (newRows.length === 0) return showToast("לא נמצאו שורות תקינות בקובץ", "error");
+    const latest = await getFreshShared("budget-expenses", budgetExpenses);
+    const next = [...newRows, ...latest];
+    setBudgetExpenses(next);
+    try {
+      await window.storage.set("budget-expenses", JSON.stringify(next), true);
+      showToast(`יובאו ${newRows.length} הוצאות`, "ok");
+      logActivity("ייבוא הוצאות מקובץ", `${newRows.length} שורות`);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -5469,6 +5577,35 @@ export default function App() {
                   </button>
                   {open && (
                     <div className="space-y-3">
+                      {canEditBudget && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <button
+                            onClick={downloadBudgetExpensesCsv}
+                            className="text-xs px-3 py-1.5 rounded-full font-semibold"
+                            style={{ background: COLORS.surface, color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}
+                          >
+                            ייצוא ל-CSV (נפתח באקסל)
+                          </button>
+                          {isAdmin && (
+                            <label
+                              className="text-xs px-3 py-1.5 rounded-full font-semibold cursor-pointer"
+                              style={{ background: COLORS.surface, color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}
+                            >
+                              ייבוא מ-CSV
+                              <input
+                                type="file"
+                                accept=".csv,text/csv"
+                                hidden
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) importBudgetExpensesCsv(file);
+                                  e.target.value = "";
+                                }}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      )}
                       {canEditBudget && <BudgetExpenseForm onAdd={addBudgetExpense} lockedAllocation={isAdmin ? null : myLeadTeam} categories={allBudgetCategories} />}
                       <div className="space-y-1.5">
                         {budgetExpenses.map((e) => {
