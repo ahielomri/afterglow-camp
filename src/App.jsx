@@ -4994,6 +4994,13 @@ export default function App() {
               >
                 תקציב
               </button>
+              <button
+                onClick={() => setFinancesView("receipts")}
+                className="px-4 py-2 rounded-full text-sm font-semibold"
+                style={{ background: financesView === "receipts" ? COLORS.accent : COLORS.surface, color: financesView === "receipts" ? COLORS.bg : COLORS.textMuted }}
+              >
+                קבלות
+              </button>
             </div>
 
             {financesView === "dues" && (
@@ -5519,6 +5526,36 @@ export default function App() {
             })()}
             </div>
             )}
+
+            {financesView === "receipts" && (() => {
+              const withReceipts = budgetExpenses.filter((e) => e.receiptUrl).sort((a, b) => (b.purchaseDate || "").localeCompare(a.purchaseDate || ""));
+              return (
+                <div>
+                  {withReceipts.length === 0 ? (
+                    <p className="text-xs" style={{ color: COLORS.textMuted }}>עדיין אין קבלות מצורפות. אפשר לצרף קבלה בעת רישום הוצאה בטאב "הוצאות".</p>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {withReceipts.map((e) => (
+                        <a
+                          key={e.id}
+                          href={e.receiptUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-2xl overflow-hidden block"
+                          style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}
+                        >
+                          <img src={e.receiptUrl} alt="קבלה" className="w-full h-24 object-cover" />
+                          <div className="px-2 py-1.5 text-xs">
+                            <div className="font-semibold truncate">{e.vendor || e.subcategory || e.allocation || "הוצאה"}</div>
+                            <div style={{ color: COLORS.textMuted }}>₪{Number(e.amount).toLocaleString()}{e.purchaseDate ? ` · ${formatDateShort(e.purchaseDate)}` : ""}</div>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 
