@@ -1940,7 +1940,7 @@ function runBudgetEngine(p, N, budgetExpenses, paymentTotals) {
   const duesCollected = paymentTotals.paid;
   const vatRefund = num(p.income.vatRefund);
   const externalNet = num(p.income.externalNet);
-  const totalIncome = duesCollected + vatRefund + externalNet;
+  const totalIncome = duesCollected + vatRefund + externalNet + oneTimeIncomeTotal;
   const gapToRaise = totalCampCost - totalIncome;
 
   // 11 - תזרים מזומנים
@@ -2182,21 +2182,30 @@ export default function App() {
       // there's an active Supabase Auth session. If someone already has
       // one (returning visit), pick it back up here; otherwise this
       // just loads harmless empty defaults and the login screen shows.
-      const restoredName = await getSignedInMemberName().catch(() => null);
-      await Promise.all([
-        loadSharedData(),
-        // Needed before any login attempt, not just after one: the login
-        // screen's "first-time signup needs ID" check reads idOnFileNames,
-        // so a first-time visitor who was never logged in on this device
-        // must still see fresh DB truth here - otherwise it falls back to
-        // the stale static idOnFile flag baked into extra-members and can
-        // wrongly tell a member with a freshly-added ID that they have none.
-        listMembersWithIdOnFile().then(setIdOnFileNames).catch(() => {}),
-      ]);
-      if (restoredName) {
-        await applyIdentity(restoredName, false);
+      // Wrapped in try/finally so a single corrupted kv_store blob (a
+      // JSON.parse throw anywhere inside loadSharedData) can't leave the
+      // whole app stuck on the loading screen forever - worst case it now
+      // loads in a degraded state instead of never loading at all.
+      try {
+        const restoredName = await getSignedInMemberName().catch(() => null);
+        await Promise.all([
+          loadSharedData(),
+          // Needed before any login attempt, not just after one: the login
+          // screen's "first-time signup needs ID" check reads idOnFileNames,
+          // so a first-time visitor who was never logged in on this device
+          // must still see fresh DB truth here - otherwise it falls back to
+          // the stale static idOnFile flag baked into extra-members and can
+          // wrongly tell a member with a freshly-added ID that they have none.
+          listMembersWithIdOnFile().then(setIdOnFileNames).catch(() => {}),
+        ]);
+        if (restoredName) {
+          await applyIdentity(restoredName, false);
+        }
+      } catch (err) {
+        showToast("חלק מהנתונים לא נטענו כמו שצריך - נסה/י לרענן את הדף", "error");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     })();
   }, []);
 
