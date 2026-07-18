@@ -2763,6 +2763,26 @@ export default function App() {
     }
   }
 
+  // RSVP on event announcements - "yes"/"no", click again to clear. Separate
+  // from toggleMyCalendarAdd, which just controls whether it shows up in
+  // "היומן שלי" - this is about who's actually planning to show up.
+  async function rsvpEvent(annId, status) {
+    const latest = await getFreshShared("announcements", announcements);
+    const next = latest.map((a) => {
+      if (a.id !== annId) return a;
+      const rsvps = { ...(a.rsvps || {}) };
+      if (rsvps[identity] === status) delete rsvps[identity];
+      else rsvps[identity] = status;
+      return { ...a, rsvps };
+    });
+    setAnnouncements(next);
+    try {
+      await window.storage.set("announcements", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
   async function toggleChecklistItem(team, index) {
     const latest = await getFreshShared("team-checklists", checklistState);
     const current = latest[team] || {};
@@ -4673,6 +4693,9 @@ export default function App() {
                         const authorRole = allMembers.find((m) => m.name === a.author)?.role;
                         const isAdminEvent = authorRole === "admin" || authorRole === "owner";
                         const inMyCalendar = (personalCalendarAdds[identity] || []).includes(a.id);
+                        const rsvps = a.rsvps || {};
+                        const myRsvp = rsvps[identity];
+                        const goingCount = Object.values(rsvps).filter((v) => v === "yes").length;
                         return (
                           <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                             <div className="flex items-center gap-1.5 text-xs font-bold px-2 py-1 rounded-lg w-fit" style={{ background: "rgba(255,255,255,0.55)", color: COLORS.accentDark }}>
@@ -4687,6 +4710,23 @@ export default function App() {
                               >
                                 {inMyCalendar ? "✓ ביומן שלי" : "הוסף ליומן שלי"}
                               </button>
+                            )}
+                            <button
+                              onClick={() => rsvpEvent(a.id, "yes")}
+                              className="text-xs font-bold px-2 py-1 rounded-lg"
+                              style={{ background: myRsvp === "yes" ? COLORS.accent2 : "rgba(255,255,255,0.55)", color: myRsvp === "yes" ? "white" : COLORS.accentDark }}
+                            >
+                              {myRsvp === "yes" ? "✓ מגיע/ה" : "מגיע/ה"}
+                            </button>
+                            <button
+                              onClick={() => rsvpEvent(a.id, "no")}
+                              className="text-xs font-bold px-2 py-1 rounded-lg"
+                              style={{ background: myRsvp === "no" ? COLORS.divider : "rgba(255,255,255,0.55)", color: COLORS.accentDark }}
+                            >
+                              {myRsvp === "no" ? "✓ לא מגיע/ה" : "לא מגיע/ה"}
+                            </button>
+                            {goingCount > 0 && (
+                              <span className="text-xs" style={{ color: COLORS.textMuted }}>{goingCount} מגיעים</span>
                             )}
                           </div>
                         );
