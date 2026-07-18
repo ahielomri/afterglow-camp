@@ -3700,10 +3700,6 @@ ${cards}
     { id: "contacts", label: "חברי קמפ", icon: Phone },
     { id: "equipment", label: "ציוד קמפ", icon: Package },
   ];
-  // The category panel closes again once you pick something inside it, so
-  // without this there'd be no visible sign of where you ended up until
-  // you scroll into the content itself.
-  const currentTabLabel = [...dashboardTabs, ...navPersonalTabs, ...navCampTabs].find((t) => t.id === tab)?.label || "";
   function renderNavItem(t, fullWidth) {
     const locked = !profileComplete && !PROFILE_GATE_EXEMPT_TABS.includes(t.id);
     const active = tab === t.id;
@@ -3810,7 +3806,7 @@ ${cards}
             { key: "camp", label: "קמפ", tabs: navCampTabs },
           ].map((cat) => {
             const open = expandedNavCategory === cat.key;
-            const hasActiveTab = cat.tabs.some((t) => t.id === tab);
+            const activeTabInCat = cat.tabs.find((t) => t.id === tab);
             const showBadge = cat.key === "personal" && hasNewBoardItems;
             return (
               <button
@@ -3819,13 +3815,13 @@ ${cards}
                 className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl text-sm font-bold transition-colors"
                 style={{
                   position: "relative",
-                  background: open || hasActiveTab ? COLORS.accentLight : COLORS.surface,
-                  color: open || hasActiveTab ? COLORS.accentDark : COLORS.textMuted,
+                  background: open || activeTabInCat ? COLORS.accentLight : COLORS.surface,
+                  color: open || activeTabInCat ? COLORS.accentDark : COLORS.textMuted,
                   border: `1px solid ${open ? COLORS.accent : COLORS.divider}`,
                 }}
               >
-                {cat.label}
-                <ChevronDown size={13} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+                <span className="truncate">{activeTabInCat ? `${cat.label} | ${activeTabInCat.label}` : cat.label}</span>
+                <ChevronDown size={13} style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
                 {showBadge && (
                   <span className="rounded-full" style={{ position: "absolute", top: 6, insetInlineEnd: 10, width: 7, height: 7, background: COLORS.danger }} />
                 )}
@@ -3842,12 +3838,6 @@ ${cards}
           </div>
         )}
       </div>
-
-      {currentTabLabel && (
-        <div className="max-w-4xl mx-auto px-6 pt-2 text-xs font-bold" style={{ color: COLORS.textMuted }}>
-          כרגע ב: <span style={{ color: COLORS.accentDark }}>{currentTabLabel}</span>
-        </div>
-      )}
       </div>
 
       {/* Content */}
