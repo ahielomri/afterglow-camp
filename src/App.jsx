@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole } from "lucide-react";
+import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard } from "lucide-react";
 import { pushSupported, pushPermission, enablePush, disablePush, isPushSubscribed, resetPush } from "./push.js";
 import {
   uploadFile,
@@ -2034,6 +2034,7 @@ export default function App() {
   const [expandedMember, setExpandedMember] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("dashboard-personal");
+  const [adminSubTab, setAdminSubTab] = useState("overview");
   const [teamFilter, setTeamFilter] = useState("הכל");
   const [shiftsView, setShiftsView] = useState("calendar");
   const [expandedTeam, setExpandedTeam] = useState(null);
@@ -3366,64 +3367,94 @@ export default function App() {
         {tab === "dashboard-admin" && isAdmin && (
           <div>
             <h2 className="text-sm font-bold mb-3" style={{ color: COLORS.accentDark }}>לוח בקרה למנהל</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+
+            <div className="flex gap-1.5 flex-wrap mb-4">
               {[
-                { label: "חברי קמפ", value: allMembers.length },
-                { label: "נגבה", value: `₪${paymentTotals.paid.toLocaleString()}` },
-                { label: "יתרה לגבייה", value: `₪${paymentTotals.remaining.toLocaleString()}` },
-                { label: "תקציב מתוכנן", value: `₪${budgetTotals.planned.toLocaleString()}` },
-                { label: "הוצאות בפועל", value: `₪${budgetTotals.paid.toLocaleString()}` },
-                { label: "מקומות פנויים במשמרות", value: unfilledShiftsCount },
-                { label: "חברים ללא משמרת", value: membersWithoutShift },
-                { label: "ימים לפתיחת השערים", value: daysUntil() },
-              ].map((c) => (
-                <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                  <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
-                  <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
-                </div>
+                { id: "overview", label: "סקירה", icon: LayoutDashboard },
+                { id: "members", label: "חברי קמפ", icon: Users },
+                { id: "comms", label: "תקשורת", icon: MessageCircle },
+                ...(isOwner ? [{ id: "logs", label: "יומנים", icon: History }] : []),
+                { id: "emergency", label: "חירום", icon: HeartPulse },
+              ].map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setAdminSubTab(s.id)}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors"
+                  style={{
+                    background: adminSubTab === s.id ? COLORS.accent2 : COLORS.surface,
+                    color: adminSubTab === s.id ? COLORS.bg : COLORS.textMuted,
+                    border: `1px solid ${adminSubTab === s.id ? COLORS.accent2 : COLORS.divider}`,
+                  }}
+                >
+                  <s.icon size={13} /> {s.label}
+                </button>
               ))}
             </div>
 
-            <h3 className="text-xs font-bold mt-5 mb-2" style={{ color: COLORS.textMuted }}>מוכנות התניידות</h3>
-            <div className="grid grid-cols-3 gap-3 mb-3">
-              {[
-                { label: "טרם מילאו פרטי הגעה", value: membersWithoutRideInfo },
-                { label: "מציעים טרמפ", value: offeringRides.length },
-                { label: "מחפשים טרמפ", value: lookingForRide.length },
-              ].map((c) => (
-                <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                  <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
-                  <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+            {adminSubTab === "overview" && (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: "חברי קמפ", value: allMembers.length },
+                    { label: "נגבה", value: `₪${paymentTotals.paid.toLocaleString()}` },
+                    { label: "יתרה לגבייה", value: `₪${paymentTotals.remaining.toLocaleString()}` },
+                    { label: "תקציב מתוכנן", value: `₪${budgetTotals.planned.toLocaleString()}` },
+                    { label: "הוצאות בפועל", value: `₪${budgetTotals.paid.toLocaleString()}` },
+                    { label: "מקומות פנויים במשמרות", value: unfilledShiftsCount },
+                    { label: "חברים ללא משמרת", value: membersWithoutShift },
+                    { label: "ימים לפתיחת השערים", value: daysUntil() },
+                  ].map((c) => (
+                    <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                      <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
+                      <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { label: "יש להם מקום לציוד", value: offeringCargoSpace.length },
-                { label: "יכולת גרירה (וו/עגלה)", value: towingCapable.length },
-              ].map((c) => (
-                <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                  <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accent2Dark }}>{c.value}</div>
-                  <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
-                </div>
-              ))}
-            </div>
 
-            {(paymentTotals.remaining > 0 || unfilledShiftsCount > 0 || membersWithoutShift > 0 || overBudgetCategories.length > 0 || lookingForRide.length > 0) && (
-              <div className="mt-4 rounded-2xl p-4 space-y-2" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
-                <div className="text-xs font-bold mb-1" style={{ color: COLORS.accentDark }}>התרעות חשובות</div>
-                {paymentTotals.remaining > 0 && <div className="text-xs">💰 עוד ₪{paymentTotals.remaining.toLocaleString()} לגבייה מחברי הקמפ</div>}
-                {unfilledShiftsCount > 0 && <div className="text-xs">📋 עוד {unfilledShiftsCount} מקומות פנויים במשמרות</div>}
-                {membersWithoutShift > 0 && <div className="text-xs">🙋 {membersWithoutShift} חברים עדיין לא שיבצו אף משמרת</div>}
-                {lookingForRide.length > 0 && <div className="text-xs">🚗 {lookingForRide.length} חברים מחפשים טרמפ ועדיין לא שובצו</div>}
-                {overBudgetCategories.map((cat) => (
-                  <div key={cat} className="text-xs">⚠️ הקטגוריה "{cat}" חרגה מהתקציב המתוכנן</div>
-                ))}
-              </div>
+                <h3 className="text-xs font-bold mt-5 mb-2" style={{ color: COLORS.textMuted }}>מוכנות התניידות</h3>
+                <div className="grid grid-cols-3 gap-3 mb-3">
+                  {[
+                    { label: "טרם מילאו פרטי הגעה", value: membersWithoutRideInfo },
+                    { label: "מציעים טרמפ", value: offeringRides.length },
+                    { label: "מחפשים טרמפ", value: lookingForRide.length },
+                  ].map((c) => (
+                    <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                      <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
+                      <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: "יש להם מקום לציוד", value: offeringCargoSpace.length },
+                    { label: "יכולת גרירה (וו/עגלה)", value: towingCapable.length },
+                  ].map((c) => (
+                    <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                      <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accent2Dark }}>{c.value}</div>
+                      <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {(paymentTotals.remaining > 0 || unfilledShiftsCount > 0 || membersWithoutShift > 0 || overBudgetCategories.length > 0 || lookingForRide.length > 0) && (
+                  <div className="mt-4 rounded-2xl p-4 space-y-2" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
+                    <div className="text-xs font-bold mb-1" style={{ color: COLORS.accentDark }}>התרעות חשובות</div>
+                    {paymentTotals.remaining > 0 && <div className="text-xs">💰 עוד ₪{paymentTotals.remaining.toLocaleString()} לגבייה מחברי הקמפ</div>}
+                    {unfilledShiftsCount > 0 && <div className="text-xs">📋 עוד {unfilledShiftsCount} מקומות פנויים במשמרות</div>}
+                    {membersWithoutShift > 0 && <div className="text-xs">🙋 {membersWithoutShift} חברים עדיין לא שיבצו אף משמרת</div>}
+                    {lookingForRide.length > 0 && <div className="text-xs">🚗 {lookingForRide.length} חברים מחפשים טרמפ ועדיין לא שובצו</div>}
+                    {overBudgetCategories.map((cat) => (
+                      <div key={cat} className="text-xs">⚠️ הקטגוריה "{cat}" חרגה מהתקציב המתוכנן</div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
 
-            <h3 className="text-sm font-bold mt-6 mb-2" style={{ color: COLORS.textMuted }}>הוספת חבר קמפ</h3>
-            <AddMemberForm onAdd={addMember} />
+            {adminSubTab === "members" && (
+              <>
+                <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.textMuted }}>הוספת חבר קמפ</h3>
+                <AddMemberForm onAdd={addMember} />
 
             <button
               onClick={() => setShowMemberList(!showMemberList)}
@@ -3566,7 +3597,11 @@ export default function App() {
                 )}
               </div>
             )}
+              </>
+            )}
 
+            {adminSubTab === "comms" && (
+              <>
             <button
               onClick={() => setShowPushStatusList(!showPushStatusList)}
               className="w-full flex items-center justify-between mt-5 mb-2 text-sm font-bold"
@@ -3637,8 +3672,10 @@ export default function App() {
                 </button>
               </div>
             )}
+              </>
+            )}
 
-            {isOwner && (
+            {adminSubTab === "logs" && isOwner && (
               <>
                 <button
                   onClick={() => setShowActivityLog(!showActivityLog)}
@@ -3727,6 +3764,8 @@ export default function App() {
               </>
             )}
 
+            {adminSubTab === "emergency" && (
+              <>
             <button
               onClick={() => setShowEmergencyList(!showEmergencyList)}
               className="w-full flex items-center justify-between mt-6 mb-2 text-sm font-bold"
@@ -3762,6 +3801,8 @@ export default function App() {
                   );
                 })}
               </div>
+            )}
+              </>
             )}
           </div>
         )}
