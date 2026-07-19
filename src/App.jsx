@@ -277,7 +277,18 @@ function expenseAmounts(e) {
 // Budget expenses <-> CSV (Excel opens CSV natively, so this avoids pulling
 // in a whole spreadsheet-parsing library just for import/export).
 // ---------------------------------------------------------------------------
-const EXPENSE_CSV_HEADERS = ["allocation", "vendor", "description", "amount", "purchaseDate", "paymentStatus", "paidAmount", "dueDate", "vatIncluded", "isRefund", "enteredBy"];
+const EXPENSE_CSV_HEADERS = ["allocation", "vendor", "description", "amount", "purchaseDate", "paymentStatus", "paidAmount", "dueDate", "paymentMethod", "vatIncluded", "isRefund", "enteredBy"];
+
+const PAYMENT_METHODS = [
+  { value: "cash", label: "מזומן" },
+  { value: "credit_card", label: "כרטיס אשראי" },
+  { value: "bank_transfer", label: "העברה בנקאית" },
+  { value: "bit", label: "ביט" },
+  { value: "other", label: "אחר" },
+];
+function paymentMethodLabel(value) {
+  return PAYMENT_METHODS.find((m) => m.value === value)?.label || value || "";
+}
 
 function csvEscape(value) {
   const s = String(value ?? "");
@@ -788,7 +799,7 @@ function EquipmentForm({ onAdd, lockedCategory, initial, onCancel }) {
   );
 }
 
-function BudgetExpenseForm({ onAdd, lockedAllocation, categories, initial, onCancel }) {
+function BudgetExpenseForm({ onAdd, lockedAllocation, categories, initial, onCancel, onError }) {
   const [allocation, setAllocation] = useState(initial?.allocation || lockedAllocation || "");
   const [description, setDescription] = useState(initial?.description || "");
   const [vendor, setVendor] = useState(initial?.vendor || "");
@@ -797,6 +808,7 @@ function BudgetExpenseForm({ onAdd, lockedAllocation, categories, initial, onCan
   const [paymentStatus, setPaymentStatus] = useState(initial?.paymentStatus || "paid"); // "paid" | "partial"
   const [paidAmount, setPaidAmount] = useState(initial?.paidAmount ?? "");
   const [dueDate, setDueDate] = useState(initial?.dueDate || "");
+  const [paymentMethod, setPaymentMethod] = useState(initial?.paymentMethod || "");
   const [vatIncluded, setVatIncluded] = useState(initial ? !!initial.vatIncluded : true);
   const [isRefund, setIsRefund] = useState(initial?.isRefund || false);
   const [receiptFile, setReceiptFile] = useState(null);
@@ -818,8 +830,13 @@ function BudgetExpenseForm({ onAdd, lockedAllocation, categories, initial, onCan
       setUploading(true);
       try {
         receiptUrl = await uploadFile(receiptFile, allocation || "כללי");
-      } catch {
+      } catch (err) {
         setUploading(false);
+        onError?.(
+          err?.message === "upload_timeout"
+            ? "העלאת הקבלה נתקעה - אפשר לנסות שוב, או לשמור בלי קבלה ולהוסיף אותה אחר כך"
+            : "העלאת הקבלה נכשלה - אפשר לנסות שוב, או לשמור בלי קבלה"
+        );
         return;
       }
       setUploading(false);
@@ -830,12 +847,13 @@ function BudgetExpenseForm({ onAdd, lockedAllocation, categories, initial, onCan
       paidAmount: paymentStatus === "partial" ? paidAmount : amount,
       remainingAmount: paymentStatus === "partial" ? remaining : 0,
       dueDate: paymentStatus === "partial" ? dueDate : "",
+      paymentMethod,
       vatIncluded, isRefund, receiptUrl,
     });
     if (!initial) {
       setDescription(""); setVendor(""); setAmount(""); setPurchaseDate("");
       setPaymentStatus("paid"); setPaidAmount(""); setDueDate(""); setIsRefund(false);
-      setReceiptFile(null); setReceiptPreview("");
+      setPaymentMethod(""); setReceiptFile(null); setReceiptPreview("");
     }
   }
 
@@ -920,6 +938,18 @@ function BudgetExpenseForm({ onAdd, lockedAllocation, categories, initial, onCan
             </div>
           </div>
         )}
+      </div>
+
+      <div>
+        <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>איך שולם</label>
+        <select
+          value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        >
+          <option value="">אמצעי תשלום - בחר/י</option>
+          {PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+        </select>
       </div>
 
       <div className="flex items-center gap-4">
@@ -2454,7 +2484,8 @@ export default function App() {
     const col = (name) => headers.indexOf(name);
     const iAlloc = col("allocation"), iVendor = col("vendor"), iDesc = col("description"),
       iAmount = col("amount"), iDate = col("purchaseDate"), iStatus = col("paymentStatus"),
-      iPaid = col("paidAmount"), iDue = col("dueDate"), iVat = col("vatIncluded"), iRefund = col("isRefund");
+      iPaid = col("paidAmount"), iDue = col("dueDate"), iMethod = col("paymentMethod"),
+      iVat = col("vatIncluded"), iRefund = col("isRefund");
     if (iAmount === -1) return showToast('לא נמצאה עמודת "amount" בקובץ - יש להוריד קובץ לדוגמה מכפתור הייצוא כדי לראות את הפורמט הנכון', "error");
     const truthy = (v) => v === "true" || v === "1" || v === "כן";
     const newRows = rows.slice(1)
@@ -2474,6 +2505,7 @@ export default function App() {
           paidAmount,
           remainingAmount: paymentStatus === "partial" ? Math.max(amount - paidAmount, 0) : 0,
           dueDate: iDue !== -1 ? r[iDue] : "",
+          paymentMethod: iMethod !== -1 ? r[iMethod] : "",
           vatIncluded: iVat !== -1 ? truthy(r[iVat]) : true,
           isRefund: iRefund !== -1 ? truthy(r[iRefund]) : false,
           enteredBy: identity,
@@ -4411,7 +4443,7 @@ ${cards}
 
             <div className="mt-5 pt-4 border-t" style={{ borderColor: COLORS.divider }}>
               <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>הוספת הוצאה לצוות</h3>
-              <BudgetExpenseForm onAdd={addBudgetExpense} lockedAllocation={myLeadTeam} categories={allBudgetCategories} />
+              <BudgetExpenseForm onAdd={addBudgetExpense} onError={(msg) => showToast(msg, "error")} lockedAllocation={myLeadTeam} categories={allBudgetCategories} />
             </div>
           </div>
         )}
@@ -5149,6 +5181,7 @@ ${cards}
                         setShowQuickAddExpense(false);
                         setShowBudgetSection("expenses");
                       }}
+                      onError={(msg) => showToast(msg, "error")}
                       lockedAllocation={isAdmin ? null : myLeadTeam}
                       categories={allBudgetCategories}
                     />
@@ -5197,6 +5230,7 @@ ${cards}
                                 <div className="mt-0.5" style={{ color: COLORS.textMuted }}>
                                   {e.isRefund ? "זיכוי: " : ""}₪{Number(e.amount).toLocaleString()}
                                   {e.paymentStatus === "partial" ? ` · שולם ₪${Number(e.paidAmount || 0).toLocaleString()}, נותר ₪${Number(e.remainingAmount || 0).toLocaleString()}` : ""}
+                                  {e.paymentMethod ? ` · ${paymentMethodLabel(e.paymentMethod)}` : ""}
                                   {e.purchaseDate ? ` · ${formatDateShort(e.purchaseDate)}` : ""}
                                 </div>
                                 <div className="mt-0.5" style={{ color: COLORS.textMuted, opacity: 0.7 }}>הוזן ע"י {e.enteredBy}</div>
@@ -5826,7 +5860,7 @@ ${cards}
                           )}
                         </div>
                       )}
-                      {canEditBudget && <BudgetExpenseForm onAdd={addBudgetExpense} lockedAllocation={isAdmin ? null : myLeadTeam} categories={allBudgetCategories} />}
+                      {canEditBudget && <BudgetExpenseForm onAdd={addBudgetExpense} onError={(msg) => showToast(msg, "error")} lockedAllocation={isAdmin ? null : myLeadTeam} categories={allBudgetCategories} />}
                       <div className="space-y-1.5">
                         {budgetExpenses.map((e) => {
                           const canManageThis = isAdmin || myLeadTeam === e.allocation;
@@ -5838,6 +5872,7 @@ ${cards}
                                 categories={allBudgetCategories}
                                 lockedAllocation={isAdmin ? null : myLeadTeam}
                                 onCancel={() => setEditingExpenseId(null)}
+                                onError={(msg) => showToast(msg, "error")}
                                 onAdd={(patch) => {
                                   updateBudgetExpense(e.id, patch);
                                   setEditingExpenseId(null);
@@ -5857,6 +5892,7 @@ ${cards}
                                   <div className="font-semibold">{e.allocation || "ללא שיוך תקציבי"}{(e.description || e.subcategory) ? ` · ${e.description || e.subcategory}` : ""}{e.vendor ? ` · ${e.vendor}` : ""}</div>
                                   <div style={{ color: COLORS.textMuted }}>
                                     {e.isRefund ? "זיכוי: " : ""}₪{Number(e.amount).toLocaleString()} · {e.vatIncluded ? "כולל מע\"מ" : "לא כולל מע\"מ"}
+                                    {e.paymentMethod ? ` · ${paymentMethodLabel(e.paymentMethod)}` : ""}
                                     {e.purchaseDate ? ` · נקנה ${formatDateShort(e.purchaseDate)}` : ""}
                                   </div>
                                   <div style={{ color: e.paymentStatus === "partial" ? COLORS.danger : COLORS.accent2Dark }}>
