@@ -69,13 +69,23 @@ window.storage = {
 // Real file storage (receipts, future attachments) via a Supabase Storage bucket.
 // Requires a public bucket named "receipts" to be created once in the Supabase
 // dashboard (Storage -> New bucket -> name "receipts" -> Public bucket: on).
+//
+// Uploads need an authenticated session, and the underlying supabase-js
+// client serializes session reads through a browser lock - if that lock is
+// ever left held (e.g. the tab was backgrounded while the phone's camera/
+// photo picker was open, which is exactly what happens when someone taps
+// "add receipt"), the upload call can hang forever instead of failing. Race
+// it against a timeout so the UI always comes back to life either way.
 export async function uploadFile(file, folder = "receipts") {
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
   const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const { error } = await supabase.storage.from("receipts").upload(path, file, {
-    cacheControl: "3600",
-    upsert: false,
-  });
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("upload_timeout")), 20000)
+  );
+  const { error } = await Promise.race([
+    supabase.storage.from("receipts").upload(path, file, { cacheControl: "3600", upsert: false }),
+    timeout,
+  ]);
   if (error) throw error;
   const { data } = supabase.storage.from("receipts").getPublicUrl(path);
   return data.publicUrl;
