@@ -5240,14 +5240,19 @@ ${cards}
                 const expensesPaid = catExpenses.reduce((s, e) => s + expenseAmounts(e).paid, 0);
                 const paid = legacyPaid + expensesPaid;
                 const toPay = planned - paid;
+                const owedToMembers = catExpenses.filter((e) => e.refundToMember).reduce((s, e) => s + (Number(e.amount) || 0), 0);
                 const pct = planned > 0 ? Math.min(paid / planned, 1) * 100 : 0;
+                const canManageThis = isAdmin || myLeadTeam === cat;
                 return (
                   <div key={cat} className="rounded-2xl px-4 py-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <span className="font-bold">{cat}</span>
-                      <div className="flex items-center gap-4 text-xs">
+                      <div className="flex items-center gap-4 text-xs flex-wrap">
                         <span>סכום לתשלום: <b style={{ color: toPay > 0 ? COLORS.danger : COLORS.accent2Dark }}>₪{toPay.toLocaleString()}</b></span>
                         <span>סה"כ שולם: <b style={{ color: COLORS.accent2Dark }}>₪{paid.toLocaleString()}</b></span>
+                        {owedToMembers > 0 && (
+                          <span>תשלום לחברי קמפ: <b style={{ color: COLORS.danger }}>₪{owedToMembers.toLocaleString()}</b></span>
+                        )}
                       </div>
                     </div>
                     <div className="h-1.5 rounded-full mt-2 overflow-hidden" style={{ background: COLORS.divider }}>
@@ -5257,37 +5262,61 @@ ${cards}
 
                     {catExpenses.length > 0 && (
                       <div className="mt-3 space-y-1.5">
-                        {catExpenses.map((e) => (
-                          <div key={e.id} className="flex items-center justify-between text-xs rounded-xl px-3 py-2 gap-2" style={{ background: COLORS.input }}>
-                            <div className="flex items-center gap-2 min-w-0">
-                              {e.receiptUrl && (
-                                <a href={e.receiptUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                                  <img src={e.receiptUrl} alt="קבלה" className="h-8 w-8 object-cover rounded-lg" style={{ border: `1px solid ${COLORS.divider}` }} />
-                                </a>
-                              )}
-                              <div className="min-w-0">
-                                <div className="font-semibold">{e.description || e.subcategory || "הוצאה"}{e.vendor ? ` · ${e.vendor}` : ""}</div>
-                                <div className="mt-0.5" style={{ color: COLORS.textMuted }}>
-                                  {e.isRefund ? "זיכוי: " : ""}₪{Number(e.amount).toLocaleString()}
-                                  {e.paymentStatus === "partial" ? ` · שולם ₪${Number(e.paidAmount || 0).toLocaleString()}, נותר ₪${Number(e.remainingAmount || 0).toLocaleString()}` : ""}
-                                  {e.paymentMethod ? ` · ${paymentMethodLabel(e.paymentMethod)}` : ""}
-                                  {e.purchaseDate ? ` · ${formatDateShort(e.purchaseDate)}` : ""}
-                                </div>
-                                {e.refundToMember && (
-                                  <div className="mt-0.5" style={{ color: COLORS.accentDark }}>
-                                    מגיע החזר ל{e.refundMemberName ? `: ${e.refundMemberName}` : "חבר/ת קמפ"}
-                                  </div>
+                        {catExpenses.map((e) => {
+                          if (editingExpenseId === e.id) {
+                            return (
+                              <BudgetExpenseForm
+                                key={e.id}
+                                initial={e}
+                                categories={allBudgetCategories}
+                                lockedAllocation={isAdmin ? null : myLeadTeam}
+                                allMembers={allMembers}
+                                onCancel={() => setEditingExpenseId(null)}
+                                onError={(msg) => showToast(msg, "error")}
+                                onAdd={(patch) => {
+                                  updateBudgetExpense(e.id, patch);
+                                  setEditingExpenseId(null);
+                                }}
+                              />
+                            );
+                          }
+                          return (
+                            <div key={e.id} className="flex items-center justify-between text-xs rounded-xl px-3 py-2 gap-2" style={{ background: COLORS.input }}>
+                              <div className="flex items-center gap-2 min-w-0">
+                                {e.receiptUrl && (
+                                  <a href={e.receiptUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                                    <img src={e.receiptUrl} alt="קבלה" className="h-8 w-8 object-cover rounded-lg" style={{ border: `1px solid ${COLORS.divider}` }} />
+                                  </a>
                                 )}
-                                <div className="mt-0.5" style={{ color: COLORS.textMuted, opacity: 0.7 }}>הוזן ע"י {e.enteredBy}</div>
+                                <div className="min-w-0">
+                                  <div className="font-semibold">{e.description || e.subcategory || "הוצאה"}{e.vendor ? ` · ${e.vendor}` : ""}</div>
+                                  <div className="mt-0.5" style={{ color: COLORS.textMuted }}>
+                                    {e.isRefund ? "זיכוי: " : ""}₪{Number(e.amount).toLocaleString()}
+                                    {e.paymentStatus === "partial" ? ` · שולם ₪${Number(e.paidAmount || 0).toLocaleString()}, נותר ₪${Number(e.remainingAmount || 0).toLocaleString()}` : ""}
+                                    {e.paymentMethod ? ` · ${paymentMethodLabel(e.paymentMethod)}` : ""}
+                                    {e.purchaseDate ? ` · ${formatDateShort(e.purchaseDate)}` : ""}
+                                  </div>
+                                  {e.refundToMember && (
+                                    <div className="mt-0.5" style={{ color: COLORS.accentDark }}>
+                                      מגיע החזר ל{e.refundMemberName ? `: ${e.refundMemberName}` : "חבר/ת קמפ"}
+                                    </div>
+                                  )}
+                                  <div className="mt-0.5" style={{ color: COLORS.textMuted, opacity: 0.7 }}>הוזן ע"י {e.enteredBy}</div>
+                                </div>
                               </div>
+                              {canManageThis && (
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button onClick={() => setEditingExpenseId(e.id)} style={{ color: COLORS.textMuted }}>
+                                    <Pencil size={14} />
+                                  </button>
+                                  <button onClick={() => removeBudgetExpense(e.id)} style={{ color: COLORS.textMuted }}>
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                            {(isAdmin || myLeadTeam === cat) && (
-                              <button onClick={() => removeBudgetExpense(e.id)} style={{ color: COLORS.textMuted }} className="shrink-0">
-                                <Trash2 size={14} />
-                              </button>
-                            )}
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                     {items.length > 0 && (
