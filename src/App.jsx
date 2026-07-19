@@ -5972,28 +5972,48 @@ ${cards}
             )}
 
             {financesView === "receipts" && (() => {
-              const withReceipts = budgetExpenses.filter((e) => e.receiptUrl).sort((a, b) => (b.purchaseDate || "").localeCompare(a.purchaseDate || ""));
+              const withReceipts = budgetExpenses.filter((e) => e.receiptUrl);
+              const NO_ALLOCATION = "ללא שיוך תקציבי";
+              const groups = {};
+              withReceipts.forEach((e) => {
+                const key = e.allocation || NO_ALLOCATION;
+                (groups[key] = groups[key] || []).push(e);
+              });
+              const orderedCategories = [
+                ...allBudgetCategories.filter((c) => groups[c]),
+                ...Object.keys(groups).filter((c) => c !== NO_ALLOCATION && !allBudgetCategories.includes(c)),
+                ...(groups[NO_ALLOCATION] ? [NO_ALLOCATION] : []),
+              ];
               return (
                 <div>
                   {withReceipts.length === 0 ? (
                     <p className="text-xs" style={{ color: COLORS.textMuted }}>עדיין אין קבלות מצורפות. אפשר לצרף קבלה בעת רישום הוצאה בטאב "הוצאות".</p>
                   ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {withReceipts.map((e) => (
-                        <a
-                          key={e.id}
-                          href={e.receiptUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="rounded-2xl overflow-hidden block"
-                          style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}
-                        >
-                          <img src={e.receiptUrl} alt="קבלה" className="w-full h-24 object-cover" />
-                          <div className="px-2 py-1.5 text-xs">
-                            <div className="font-semibold truncate">{e.vendor || e.subcategory || e.allocation || "הוצאה"}</div>
-                            <div style={{ color: COLORS.textMuted }}>₪{Number(e.amount).toLocaleString()}{e.purchaseDate ? ` · ${formatDateShort(e.purchaseDate)}` : ""}</div>
+                    <div className="space-y-5">
+                      {orderedCategories.map((cat) => (
+                        <div key={cat}>
+                          <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.accentDark }}>{cat} ({groups[cat].length})</h3>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {groups[cat]
+                              .sort((a, b) => (b.purchaseDate || "").localeCompare(a.purchaseDate || ""))
+                              .map((e) => (
+                                <a
+                                  key={e.id}
+                                  href={e.receiptUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="rounded-2xl overflow-hidden block"
+                                  style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}
+                                >
+                                  <img src={e.receiptUrl} alt="קבלה" className="w-full h-24 object-cover" />
+                                  <div className="px-2 py-1.5 text-xs">
+                                    <div className="font-semibold truncate">{e.vendor || e.subcategory || e.allocation || "הוצאה"}</div>
+                                    <div style={{ color: COLORS.textMuted }}>₪{Number(e.amount).toLocaleString()}{e.purchaseDate ? ` · ${formatDateShort(e.purchaseDate)}` : ""}</div>
+                                  </div>
+                                </a>
+                              ))}
                           </div>
-                        </a>
+                        </div>
                       ))}
                     </div>
                   )}
