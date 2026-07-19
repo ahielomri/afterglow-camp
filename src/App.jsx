@@ -277,7 +277,7 @@ function expenseAmounts(e) {
 // Budget expenses <-> CSV (Excel opens CSV natively, so this avoids pulling
 // in a whole spreadsheet-parsing library just for import/export).
 // ---------------------------------------------------------------------------
-const EXPENSE_CSV_HEADERS = ["allocation", "vendor", "description", "amount", "purchaseDate", "paymentStatus", "paidAmount", "dueDate", "paymentMethod", "vatIncluded", "isRefund", "refundToMember", "refundMemberName", "enteredBy"];
+const EXPENSE_CSV_HEADERS = ["allocation", "vendor", "description", "amount", "purchaseDate", "paymentStatus", "paidAmount", "dueDate", "paymentMethod", "vatIncluded", "isRefund", "refundToMember", "refundMemberName", "refundPaid", "enteredBy"];
 
 const PAYMENT_METHODS = [
   { value: "cash", label: "מזומן" },
@@ -813,6 +813,7 @@ function BudgetExpenseForm({ onAdd, lockedAllocation, categories, initial, onCan
   const [isRefund, setIsRefund] = useState(initial?.isRefund || false);
   const [refundToMember, setRefundToMember] = useState(initial?.refundToMember || false);
   const [refundMemberName, setRefundMemberName] = useState(initial?.refundMemberName || "");
+  const [refundPaid, setRefundPaid] = useState(initial?.refundPaid || false);
   const [receiptFile, setReceiptFile] = useState(null);
   const [receiptPreview, setReceiptPreview] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -853,12 +854,13 @@ function BudgetExpenseForm({ onAdd, lockedAllocation, categories, initial, onCan
       vatIncluded, isRefund, receiptUrl,
       refundToMember,
       refundMemberName: refundToMember ? refundMemberName : "",
+      refundPaid: refundToMember ? refundPaid : false,
     });
     if (!initial) {
       setDescription(""); setVendor(""); setAmount(""); setPurchaseDate("");
       setPaymentStatus("paid"); setPaidAmount(""); setDueDate(""); setIsRefund(false);
       setPaymentMethod(""); setReceiptFile(null); setReceiptPreview("");
-      setRefundToMember(false); setRefundMemberName("");
+      setRefundToMember(false); setRefundMemberName(""); setRefundPaid(false);
     }
   }
 
@@ -988,13 +990,34 @@ function BudgetExpenseForm({ onAdd, lockedAllocation, categories, initial, onCan
           </button>
         </div>
         {refundToMember && (
-          <div className="mt-2">
+          <div className="mt-2 space-y-2">
             <MemberSearchPicker
               members={allMembers || []}
               value={refundMemberName}
               onSelect={setRefundMemberName}
               placeholder="הקלד/י או בחר/י חבר/ת קמפ..."
             />
+            <div>
+              <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>האם הוחזר הכסף לחבר הקמפ</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRefundPaid(false)}
+                  className="px-3 py-1.5 rounded-full text-xs font-semibold"
+                  style={{ background: !refundPaid ? COLORS.accent : COLORS.input, color: !refundPaid ? COLORS.bg : COLORS.textMuted }}
+                >
+                  לא
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRefundPaid(true)}
+                  className="px-3 py-1.5 rounded-full text-xs font-semibold"
+                  style={{ background: refundPaid ? COLORS.accent : COLORS.input, color: refundPaid ? COLORS.bg : COLORS.textMuted }}
+                >
+                  כן
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -2522,7 +2545,8 @@ export default function App() {
       iAmount = col("amount"), iDate = col("purchaseDate"), iStatus = col("paymentStatus"),
       iPaid = col("paidAmount"), iDue = col("dueDate"), iMethod = col("paymentMethod"),
       iVat = col("vatIncluded"), iRefund = col("isRefund"),
-      iRefundToMember = col("refundToMember"), iRefundMemberName = col("refundMemberName");
+      iRefundToMember = col("refundToMember"), iRefundMemberName = col("refundMemberName"),
+      iRefundPaid = col("refundPaid");
     if (iAmount === -1) return showToast('לא נמצאה עמודת "amount" בקובץ - יש להוריד קובץ לדוגמה מכפתור הייצוא כדי לראות את הפורמט הנכון', "error");
     const truthy = (v) => v === "true" || v === "1" || v === "כן";
     const newRows = rows.slice(1)
@@ -2547,6 +2571,7 @@ export default function App() {
           isRefund: iRefund !== -1 ? truthy(r[iRefund]) : false,
           refundToMember: iRefundToMember !== -1 ? truthy(r[iRefundToMember]) : false,
           refundMemberName: iRefundMemberName !== -1 ? r[iRefundMemberName] : "",
+          refundPaid: iRefundPaid !== -1 ? truthy(r[iRefundPaid]) : false,
           enteredBy: identity,
         };
       });
@@ -5240,7 +5265,7 @@ ${cards}
                 const expensesPaid = catExpenses.reduce((s, e) => s + expenseAmounts(e).paid, 0);
                 const paid = legacyPaid + expensesPaid;
                 const toPay = planned - paid;
-                const owedToMembers = catExpenses.filter((e) => e.refundToMember).reduce((s, e) => s + (Number(e.amount) || 0), 0);
+                const owedToMembers = catExpenses.filter((e) => e.refundToMember && !e.refundPaid).reduce((s, e) => s + (Number(e.amount) || 0), 0);
                 const pct = planned > 0 ? Math.min(paid / planned, 1) * 100 : 0;
                 const canManageThis = isAdmin || myLeadTeam === cat;
                 return (
@@ -5297,8 +5322,21 @@ ${cards}
                                     {e.purchaseDate ? ` · ${formatDateShort(e.purchaseDate)}` : ""}
                                   </div>
                                   {e.refundToMember && (
-                                    <div className="mt-0.5" style={{ color: COLORS.accentDark }}>
-                                      מגיע החזר ל{e.refundMemberName ? `: ${e.refundMemberName}` : "חבר/ת קמפ"}
+                                    <div className="mt-0.5 flex items-center gap-1.5 flex-wrap" style={{ color: e.refundPaid ? COLORS.accent2Dark : COLORS.danger }}>
+                                      <span>
+                                        מגיע החזר ל{e.refundMemberName ? `: ${e.refundMemberName}` : "חבר/ת קמפ"}
+                                        {" · "}{e.refundPaid ? "הוחזר" : "טרם הוחזר"}
+                                      </span>
+                                      {canManageThis && (
+                                        <button
+                                          type="button"
+                                          onClick={() => updateBudgetExpense(e.id, { refundPaid: !e.refundPaid })}
+                                          className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                                          style={{ background: COLORS.input, color: COLORS.textMuted }}
+                                        >
+                                          {e.refundPaid ? "סמן כטרם הוחזר" : "סמן כהוחזר"}
+                                        </button>
+                                      )}
                                     </div>
                                   )}
                                   <div className="mt-0.5" style={{ color: COLORS.textMuted, opacity: 0.7 }}>הוזן ע"י {e.enteredBy}</div>
@@ -5976,8 +6014,21 @@ ${cards}
                                       : (e.paymentStatus ? "שולם במלואו" : "")}
                                   </div>
                                   {e.refundToMember && (
-                                    <div style={{ color: COLORS.accentDark }}>
-                                      מגיע החזר ל{e.refundMemberName ? `: ${e.refundMemberName}` : "חבר/ת קמפ"}
+                                    <div className="flex items-center gap-1.5 flex-wrap" style={{ color: e.refundPaid ? COLORS.accent2Dark : COLORS.danger }}>
+                                      <span>
+                                        מגיע החזר ל{e.refundMemberName ? `: ${e.refundMemberName}` : "חבר/ת קמפ"}
+                                        {" · "}{e.refundPaid ? "הוחזר" : "טרם הוחזר"}
+                                      </span>
+                                      {canManageThis && (
+                                        <button
+                                          type="button"
+                                          onClick={() => updateBudgetExpense(e.id, { refundPaid: !e.refundPaid })}
+                                          className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                                          style={{ background: COLORS.input, color: COLORS.textMuted }}
+                                        >
+                                          {e.refundPaid ? "סמן כטרם הוחזר" : "סמן כהוחזר"}
+                                        </button>
+                                      )}
                                     </div>
                                   )}
                                 </div>
