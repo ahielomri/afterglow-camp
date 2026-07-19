@@ -76,9 +76,20 @@ window.storage = {
 // photo picker was open, which is exactly what happens when someone taps
 // "add receipt"), the upload call can hang forever instead of failing. Race
 // it against a timeout so the UI always comes back to life either way.
+// Supabase Storage object keys only allow ASCII letters/digits plus a small
+// punctuation set (see https://supabase.com/docs/guides/storage/uploads/file-limits#file-name-restrictions) -
+// Hebrew (or any other non-ASCII) folder name gets the whole upload rejected
+// with a 400 before it even reaches the database. Budget category names in
+// this app are Hebrew, so strip anything outside that allowed set here
+// rather than at every call site.
+function sanitizeStorageSegment(s) {
+  const cleaned = String(s || "").replace(/[^A-Za-z0-9 _\-.',!*&$@=;:+?()]/g, "").trim();
+  return cleaned || "misc";
+}
+
 export async function uploadFile(file, folder = "receipts") {
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-  const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const path = `${sanitizeStorageSegment(folder)}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
   const timeout = new Promise((_, reject) =>
     setTimeout(() => reject(new Error("upload_timeout")), 20000)
   );
