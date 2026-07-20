@@ -2689,11 +2689,15 @@ export default function App() {
         setLoginHistory(next);
         await window.storage.set("login-history", JSON.stringify(next), true);
       } catch {}
-      // Only for an actual credential-based login (not every silent PWA
-      // session restore, which would be a push every time anyone reopens
-      // the app - this fires on the same events login-history above does.
-      notifyOwner("login");
     }
+    // applyIdentity() only runs once per page load/app open (either a fresh
+    // password login or the PWA silently restoring an already-authenticated
+    // session via its refresh token) - not repeatedly during an open
+    // session - so this fires once per "X opened the app", which is what
+    // was actually asked for. Almost every real-world open of an installed
+    // PWA is the silent-restore path, not a password re-entry, so gating
+    // this on logHistory (like login-history is) meant it almost never fired.
+    notifyOwner("login");
     // Throttled to once an hour per device - runs on every app open (fresh
     // login or a restored session), not just first-time logins, so it
     // actually reflects recent activity rather than just first-ever login.
