@@ -364,6 +364,18 @@ export async function sendEventReminderPush(title, message, targetName) {
   return data;
 }
 
+// Fire-and-forget push notification to the camp owner(s) only, for events
+// they've asked to be pushed about (a member logging in, someone picking a
+// shift). Never throws - a failure here must never block the caller's own
+// action (their login, their shift join) from completing.
+export async function notifyOwner(type, extra = {}) {
+  try {
+    await supabase.functions.invoke("notify-owner", { body: { type, ...extra } });
+  } catch {
+    // ignore - side notification only
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Per-row tables (added by security migration part 2). RLS on each of
 // these enforces "only the owner (and admins where noted) can read this

@@ -27,6 +27,7 @@ import {
   sendEventReminderPush,
   touchLastSeen,
   listLastSeen,
+  notifyOwner,
 } from "./storage.js";
 
 // ---------------------------------------------------------------------------
@@ -2688,6 +2689,10 @@ export default function App() {
         setLoginHistory(next);
         await window.storage.set("login-history", JSON.stringify(next), true);
       } catch {}
+      // Only for an actual credential-based login (not every silent PWA
+      // session restore, which would be a push every time anyone reopens
+      // the app - this fires on the same events login-history above does.
+      notifyOwner("login");
     }
     // Throttled to once an hour per device - runs on every app open (fresh
     // login or a restored session), not just first-time logins, so it
@@ -2881,7 +2886,11 @@ export default function App() {
 
     persistAssignments({ ...latest, [shift.id]: [...names, who] });
     showToast(targetMember ? `${who} שובץ/ה ל-${shift.title}` : `שובצת ל-${shift.title}`, "ok");
-    if (targetMember) logActivity("שיבוץ ידני", `${who} → ${shift.title} (${formatDate(shift.date)})`);
+    if (targetMember) {
+      logActivity("שיבוץ ידני", `${who} → ${shift.title} (${formatDate(shift.date)})`);
+    } else {
+      notifyOwner("shift_join", { shiftTitle: shift.title, spotsRemaining: shift.spots - names.length - 1 });
+    }
   }
 
   async function leave(shift, targetMember) {
