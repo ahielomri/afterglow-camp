@@ -680,28 +680,6 @@ function NewCategoryForm({ onAdd }) {
   );
 }
 
-function NewVendorForm({ onAdd }) {
-  const [name, setName] = useState("");
-  return (
-    <div className="flex items-center gap-2 mb-4">
-      <input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder='שם ספק חדש (למשל: "רמי לוי")'
-        className="flex-1 px-3 py-2 rounded-xl text-sm outline-none"
-        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-      />
-      <button
-        onClick={() => { onAdd(name); setName(""); }}
-        className="px-4 py-2 rounded-full text-sm font-semibold shrink-0"
-        style={{ background: COLORS.accent2, color: COLORS.bg }}
-      >
-        הוספת ספק
-      </button>
-    </div>
-  );
-}
-
 function CategoryBudgetForm({ onSet, categories }) {
   const [cat, setCat] = useState(categories[0]);
   const [amount, setAmount] = useState("");
@@ -822,13 +800,10 @@ function EquipmentForm({ onAdd, lockedCategory, initial, onCancel }) {
   );
 }
 
-function BudgetExpenseForm({ onAdd, lockedAllocation, categories, initial, onCancel, onError, allMembers, vendors }) {
+function BudgetExpenseForm({ onAdd, lockedAllocation, categories, initial, onCancel, onError, allMembers }) {
   const [allocation, setAllocation] = useState(initial?.allocation || lockedAllocation || "");
   const [description, setDescription] = useState(initial?.description || "");
   const [vendor, setVendor] = useState(initial?.vendor || "");
-  const [vendorMode, setVendorMode] = useState(
-    initial?.vendor && !(vendors || []).includes(initial.vendor) ? "custom" : "select"
-  );
   const [amount, setAmount] = useState(initial?.amount ?? "");
   const [purchaseDate, setPurchaseDate] = useState(initial?.purchaseDate || "");
   const [paymentStatus, setPaymentStatus] = useState(initial?.paymentStatus || "paid"); // "paid" | "partial"
@@ -883,7 +858,7 @@ function BudgetExpenseForm({ onAdd, lockedAllocation, categories, initial, onCan
       refundPaid: refundToMember ? refundPaid : false,
     });
     if (!initial) {
-      setDescription(""); setVendor(""); setVendorMode("select"); setAmount(""); setPurchaseDate("");
+      setDescription(""); setVendor(""); setAmount(""); setPurchaseDate("");
       setPaymentStatus("paid"); setPaidAmount(""); setDueDate(""); setIsRefund(false);
       setPaymentMethod(""); setReceiptFile(null); setReceiptPreview("");
       setRefundToMember(false); setRefundMemberName(""); setRefundPaid(false);
@@ -908,40 +883,12 @@ function BudgetExpenseForm({ onAdd, lockedAllocation, categories, initial, onCan
           className="px-3 py-2 rounded-xl text-sm outline-none"
           style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
         />
-        {vendorMode === "select" ? (
-          <select
-            value={(vendors || []).includes(vendor) ? vendor : ""}
-            onChange={(e) => {
-              if (e.target.value === "__other__") { setVendorMode("custom"); setVendor(""); }
-              else setVendor(e.target.value);
-            }}
-            className="px-3 py-2 rounded-xl text-sm outline-none"
-            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-          >
-            <option value="">שם העסק - בחר/י ספק</option>
-            {(vendors || []).map((v) => <option key={v} value={v}>{v}</option>)}
-            <option value="__other__">ספק אחר (הקלדה)</option>
-          </select>
-        ) : (
-          <div className="flex items-center gap-1.5">
-            <input
-              value={vendor} onChange={(e) => setVendor(e.target.value)}
-              placeholder="שם העסק"
-              className="flex-1 min-w-0 px-3 py-2 rounded-xl text-sm outline-none"
-              style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-            />
-            {(vendors || []).length > 0 && (
-              <button
-                type="button"
-                onClick={() => { setVendorMode("select"); setVendor(""); }}
-                className="text-xs shrink-0 underline"
-                style={{ color: COLORS.textMuted }}
-              >
-                בחירה מרשימה
-              </button>
-            )}
-          </div>
-        )}
+        <input
+          value={vendor} onChange={(e) => setVendor(e.target.value)}
+          placeholder="שם העסק"
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
         <input
           type="number" value={amount} onChange={(e) => setAmount(e.target.value)}
           placeholder="סכום"
@@ -2256,7 +2203,6 @@ export default function App() {
   const [editingEquipmentId, setEditingEquipmentId] = useState(null);
   const [editingExpenseId, setEditingExpenseId] = useState(null);
   const [extraBudgetCategories, setExtraBudgetCategories] = useState([]);
-  const [vendors, setVendors] = useState([]);
   const [showBudgetSection, setShowBudgetSection] = useState(null);
   const [showQuickAddExpense, setShowQuickAddExpense] = useState(false);
   const [financesView, setFinancesView] = useState("dues");
@@ -2325,7 +2271,6 @@ export default function App() {
         rawLeads, rawPhones, rawRides, rawFeeOv, rawEmails, rawWhatsappConsent, rawPersonalCalendarAdds, rawChecklists,
         rawManualTeam, rawLog, rawLogins, rawExtra, rawRemoved,
         rawAnn, rawPolls, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories, rawRideMatches,
-        rawVendors,
       ] = await Promise.all([
         safeGet("shift-assignments", true),
         safeGet("budget-items", true),
@@ -2353,7 +2298,6 @@ export default function App() {
         safeGet("camp-equipment", true),
         safeGet("extra-budget-categories", true),
         safeGet("ride-matches", true),
-        safeGet("camp-vendors", true),
       ]);
 
       async function safeCall(fn, fallback) {
@@ -2437,7 +2381,6 @@ export default function App() {
       setBudgetExpenses(rawBudgetExpenses ? JSON.parse(rawBudgetExpenses) : []);
       setCampEquipment(rawEquipment ? JSON.parse(rawEquipment) : []);
       setExtraBudgetCategories(rawExtraCategories ? JSON.parse(rawExtraCategories) : []);
-      setVendors(rawVendors ? JSON.parse(rawVendors) : []);
     }
     loadSharedDataRef.current = loadSharedData;
 
@@ -2718,23 +2661,6 @@ export default function App() {
       await window.storage.set("extra-budget-categories", JSON.stringify(next), true);
       showToast(`הקטגוריה "${trimmed}" נוספה`, "ok");
       logActivity("הוספת קטגוריית הוצאה חדשה", trimmed);
-    } catch {
-      showToast("שמירה נכשלה", "error");
-    }
-  }
-
-  async function addVendor(name) {
-    const trimmed = (name || "").trim();
-    if (!trimmed) return;
-    if (vendors.includes(trimmed)) return showToast("הספק כבר קיים ברשימה", "error");
-    const latest = await getFreshShared("camp-vendors", vendors);
-    if (latest.includes(trimmed)) return showToast("הספק כבר קיים ברשימה", "error");
-    const next = [...latest, trimmed];
-    setVendors(next);
-    try {
-      await window.storage.set("camp-vendors", JSON.stringify(next), true);
-      showToast(`הספק "${trimmed}" נוסף לרשימה`, "ok");
-      logActivity("הוספת ספק קבוע", trimmed);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -4589,7 +4515,7 @@ ${cards}
 
             <div className="mt-5 pt-4 border-t" style={{ borderColor: COLORS.divider }}>
               <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>הוספת הוצאה לצוות</h3>
-              <BudgetExpenseForm onAdd={addBudgetExpense} onError={(msg) => showToast(msg, "error")} lockedAllocation={myLeadTeam} categories={allBudgetCategories} allMembers={allMembers} vendors={vendors} />
+              <BudgetExpenseForm onAdd={addBudgetExpense} onError={(msg) => showToast(msg, "error")} lockedAllocation={myLeadTeam} categories={allBudgetCategories} allMembers={allMembers} />
             </div>
           </div>
         )}
@@ -5331,7 +5257,6 @@ ${cards}
                       lockedAllocation={isAdmin ? null : myLeadTeam}
                       categories={allBudgetCategories}
                       allMembers={allMembers}
-                      vendors={vendors}
                     />
                   </div>
                 )}
@@ -5379,7 +5304,6 @@ ${cards}
                                 categories={allBudgetCategories}
                                 lockedAllocation={isAdmin ? null : myLeadTeam}
                                 allMembers={allMembers}
-                                vendors={vendors}
                                 onCancel={() => setEditingExpenseId(null)}
                                 onError={(msg) => showToast(msg, "error")}
                                 onAdd={(patch) => {
@@ -5693,18 +5617,6 @@ ${cards}
                 אם יש הוצאה שלא שייכת לשום צוות קיים - אפשר לפתוח קטגוריה חדשה שתופיע גם בטאב "הוצאות". רק צוות תקציב/מנהלים יכולים לפתוח קטגוריה חדשה.
               </p>
               <NewCategoryForm onAdd={addBudgetCategory} />
-              <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.textMuted }}>ניהול רשימת ספקים קבועים</h3>
-              <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
-                ספק שנוסף כאן יופיע לבחירה בטופס רישום הוצאה, במקום להקליד את שם העסק בכל פעם מחדש.
-              </p>
-              <NewVendorForm onAdd={addVendor} />
-              {vendors.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-4">
-                  {vendors.map((v) => (
-                    <span key={v} className="text-xs px-2.5 py-1 rounded-full" style={{ background: COLORS.input, color: COLORS.textMuted }}>{v}</span>
-                  ))}
-                </div>
-              )}
               <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.textMuted }}>הגדרת תקציב למחלקה</h3>
               <CategoryBudgetForm onSet={setCategoryBudget} categories={allBudgetCategories} />
             </div>
@@ -6068,7 +5980,7 @@ ${cards}
                           )}
                         </div>
                       )}
-                      {canEditBudget && <BudgetExpenseForm onAdd={addBudgetExpense} onError={(msg) => showToast(msg, "error")} lockedAllocation={isAdmin ? null : myLeadTeam} categories={allBudgetCategories} allMembers={allMembers} vendors={vendors} />}
+                      {canEditBudget && <BudgetExpenseForm onAdd={addBudgetExpense} onError={(msg) => showToast(msg, "error")} lockedAllocation={isAdmin ? null : myLeadTeam} categories={allBudgetCategories} allMembers={allMembers} />}
                       <div className="space-y-1.5">
                         {budgetExpenses.map((e) => {
                           const canManageThis = isAdmin || myLeadTeam === e.allocation;
@@ -6082,7 +5994,6 @@ ${cards}
                                 onCancel={() => setEditingExpenseId(null)}
                                 onError={(msg) => showToast(msg, "error")}
                                 allMembers={allMembers}
-                                vendors={vendors}
                                 onAdd={(patch) => {
                                   updateBudgetExpense(e.id, patch);
                                   setEditingExpenseId(null);
