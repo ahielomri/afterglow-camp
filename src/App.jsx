@@ -2888,12 +2888,20 @@ export default function App() {
     );
     if (conflict) return showToast(`יש חפיפה עם "${conflict.title}" באותו יום`, "error");
 
-    persistAssignments({ ...latest, [shift.id]: [...names, who] });
+    const nextAssignments = { ...latest, [shift.id]: [...names, who] };
+    persistAssignments(nextAssignments);
     showToast(targetMember ? `${who} שובץ/ה ל-${shift.title}` : `שובצת ל-${shift.title}`, "ok");
     if (targetMember) {
       logActivity("שיבוץ ידני", `${who} → ${shift.title} (${formatDate(shift.date)})`);
     } else {
-      notifyOwner("shift_join", { shiftTitle: shift.title, spotsRemaining: shift.spots - names.length - 1 });
+      // Total unfilled shifts left across the whole schedule (same formula
+      // as unfilledShiftsCount in the admin overview) - not just spots left
+      // in this one shift, which is what was there before.
+      const shiftsRemaining = SHIFTS.reduce(
+        (sum, s) => (s.id === TEARDOWN_ID ? sum : sum + Math.max(s.spots - (nextAssignments[s.id] || []).length, 0)),
+        0
+      );
+      notifyOwner("shift_join", { shiftTitle: shift.title, shiftsRemaining });
     }
   }
 
