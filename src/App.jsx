@@ -3614,10 +3614,24 @@ ${cards}
     [extraBudgetCategories]
   );
 
-  // A name showing up in login-history (any entry) means they've completed
-  // at least one login - which for someone who never had an account can only
-  // happen via "כניסה ראשונה". Everyone else in the roster hasn't onboarded yet.
-  const membersEverLoggedIn = useMemo(() => new Set(loginHistory.map((l) => l.name)), [loginHistory]);
+  // login-history only ever gets a new entry from an explicit credential
+  // login (first-time setup or a password re-entry) - once a member's PWA
+  // session is just silently restored from then on (the normal case for
+  // almost everyone, since nothing ever forces a fresh password entry),
+  // they never get a second entry there even though they're actively using
+  // the app. last_seen (in lastSeenMap) updates on every single app open,
+  // restore included, so anyone with a last-seen timestamp has definitely
+  // logged in before regardless of what login-history shows - without this,
+  // an active member could still show as "never entered the app".
+  const membersEverLoggedIn = useMemo(() => {
+    const names = new Set(loginHistory.map((l) => l.name));
+    if (lastSeenMap) {
+      Object.keys(lastSeenMap).forEach((name) => {
+        if (lastSeenMap[name]) names.add(name);
+      });
+    }
+    return names;
+  }, [loginHistory, lastSeenMap]);
   const membersNotYetLoggedIn = useMemo(
     () => allMembers.filter((m) => !membersEverLoggedIn.has(m.name)),
     [allMembers, membersEverLoggedIn]
