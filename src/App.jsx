@@ -2701,12 +2701,17 @@ export default function App() {
     // Throttled to once an hour per device - runs on every app open (fresh
     // login or a restored session), not just first-time logins, so it
     // actually reflects recent activity rather than just first-ever login.
+    // Also logged to the activity feed itself (with the same throttle) so
+    // logins show up in "היסטוריית שינויים" too, not only in the separate
+    // "כניסות לאפליקציה" last-seen table - actorOverride is required here
+    // since identity's closure value can still be stale at this point.
     try {
       const touchKey = `last-seen-touched-${name}`;
       const lastTouch = Number(localStorage.getItem(touchKey)) || 0;
       if (Date.now() - lastTouch > 60 * 60 * 1000) {
         await touchLastSeen(name);
         localStorage.setItem(touchKey, String(Date.now()));
+        logActivity("כניסה לאפליקציה", "", name);
       }
     } catch {}
   }
@@ -2806,8 +2811,8 @@ export default function App() {
     }
   }
 
-  async function logActivity(action, details) {
-    const entry = { ts: Date.now(), actor: identity || "לא ידוע", action, details: details || "" };
+  async function logActivity(action, details, actorOverride) {
+    const entry = { ts: Date.now(), actor: actorOverride || identity || "לא ידוע", action, details: details || "" };
     const latest = await getFreshShared("activity-log", activityLog);
     const next = [entry, ...latest].slice(0, 200);
     setActivityLog(next);
