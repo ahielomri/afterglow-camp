@@ -2208,10 +2208,9 @@ export default function App() {
   const [activityLog, setActivityLog] = useState([]);
   const [loginHistory, setLoginHistory] = useState([]);
   const [showActivityLog, setShowActivityLog] = useState(false);
-  const [showLoginHistory, setShowLoginHistory] = useState(false);
-  const [showFirstLoginStatus, setShowFirstLoginStatus] = useState(false);
+  const [showMemberActivity, setShowMemberActivity] = useState(false);
   const [lastSeenMap, setLastSeenMap] = useState(null);
-  const [showLastSeenList, setShowLastSeenList] = useState(false);
+  const [logsRefreshing, setLogsRefreshing] = useState(false);
   const [extraMembers, setExtraMembers] = useState([]);
   const [removedMembers, setRemovedMembers] = useState([]);
   const [dbRoles, setDbRoles] = useState({});
@@ -2837,6 +2836,26 @@ export default function App() {
       return fresh && fresh.value ? JSON.parse(fresh.value) : fallback;
     } catch {
       return fallback;
+    }
+  }
+
+  // The owner-only "יומנים" tab used to load these three lists once at page
+  // load and never again, so anything another member did (log in, take an
+  // admin action) while the owner sat on that screen just never appeared
+  // until a full page refresh. Re-fetch all of them fresh instead.
+  async function refreshLogs() {
+    setLogsRefreshing(true);
+    try {
+      const [freshActivity, freshLogins, freshLastSeen] = await Promise.all([
+        getFreshShared("activity-log", activityLog),
+        getFreshShared("login-history", loginHistory),
+        listLastSeen().catch(() => lastSeenMap || {}),
+      ]);
+      setActivityLog(freshActivity);
+      setLoginHistory(freshLogins);
+      setLastSeenMap(freshLastSeen);
+    } finally {
+      setLogsRefreshing(false);
     }
   }
 
@@ -3610,6 +3629,16 @@ ${cards}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, identity, profileComplete, tab]);
 
+  // Pull fresh activity/login/last-seen data every time the owner opens the
+  // "יומנים" tab, so it reflects what's happened since the page was loaded
+  // instead of a stale snapshot from then.
+  useEffect(() => {
+    if (adminSubTab === "logs" && isOwner) {
+      refreshLogs();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminSubTab, isOwner]);
+
   // "New on the board" indicator - per-device (not shared), so it doesn't
   // need a new table: just remembers when this browser last had the board
   // tab open and compares that against the newest announcement/poll.
@@ -4254,12 +4283,24 @@ ${cards}
 
             {adminSubTab === "logs" && isOwner && (
               <>
+                <div className="flex items-center justify-between mt-6 mb-2">
+                  <p className="text-xs" style={{ color: COLORS.textMuted }}>הכל כאן מתעדכן עם הכניסה לטאב, ורק אתה רואה את זה.</p>
+                  <button
+                    onClick={refreshLogs}
+                    disabled={logsRefreshing}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold shrink-0"
+                    style={{ background: COLORS.surface, color: COLORS.textMuted, border: `1px solid ${COLORS.divider}`, opacity: logsRefreshing ? 0.6 : 1 }}
+                  >
+                    <History size={13} /> {logsRefreshing ? "מרענן..." : "רענון"}
+                  </button>
+                </div>
+
                 <button
                   onClick={() => setShowActivityLog(!showActivityLog)}
-                  className="w-full flex items-center justify-between mt-6 mb-2 text-sm font-bold"
+                  className="w-full flex items-center justify-between mt-2 mb-2 text-sm font-bold"
                   style={{ color: COLORS.textMuted }}
                 >
-                  <span className="flex items-center gap-1.5"><History size={14} /> היסטוריית שינויים (רק אתה רואה)</span>
+                  <span className="flex items-center gap-1.5"><History size={14} /> היסטוריית שינויים</span>
                   <ChevronDown size={15} style={{ transform: showActivityLog ? "rotate(180deg)" : "none" }} />
                 </button>
                 {showActivityLog && (
@@ -4279,95 +4320,41 @@ ${cards}
                 )}
 
                 <button
-                  onClick={() => setShowFirstLoginStatus(!showFirstLoginStatus)}
+                  onClick={() => setShowMemberActivity(!showMemberActivity)}
                   className="w-full flex items-center justify-between mt-4 mb-2 text-sm font-bold"
                   style={{ color: COLORS.textMuted }}
                 >
                   <span className="flex items-center gap-1.5">
-                    <UserPlus size={14} /> מי נכנס לאפליקציה (רק אתה רואה) - {membersNotYetLoggedIn.length} עדיין לא
+                    <UserPlus size={14} /> כניסות לאפליקציה - {membersNotYetLoggedIn.length} עדיין לא נכנסו
                   </span>
-                  <ChevronDown size={15} style={{ transform: showFirstLoginStatus ? "rotate(180deg)" : "none" }} />
+                  <ChevronDown size={15} style={{ transform: showMemberActivity ? "rotate(180deg)" : "none" }} />
                 </button>
-                {showFirstLoginStatus && (
-                  <div className="space-y-1 max-h-72 overflow-y-auto pr-1 mb-2">
-                    <p className="text-xs mb-1.5" style={{ color: COLORS.textMuted }}>
-                      עדיין לא נכנסו ({membersNotYetLoggedIn.length}):
-                    </p>
-                    {membersNotYetLoggedIn.length === 0 ? (
-                      <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>כולם כבר נכנסו לפחות פעם אחת 🎉</p>
-                    ) : (
-                      membersNotYetLoggedIn.map((m) => (
-                        <div key={m.name} className="text-xs rounded-lg px-3 py-1.5 flex items-center justify-between" style={{ background: COLORS.surface }}>
-                          <b>{m.name}</b>
-                          <span style={{ color: m.idOnFile ? COLORS.textMuted : COLORS.danger }}>
-                            {m.idOnFile ? "יש ת.ז - יכול/ה להיכנס" : "אין ת.ז רשומה"}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                    <p className="text-xs mt-3 mb-1.5" style={{ color: COLORS.textMuted }}>
-                      כבר נכנסו ({allMembers.length - membersNotYetLoggedIn.length}):
-                    </p>
-                    {allMembers.filter((m) => membersEverLoggedIn.has(m.name)).map((m) => (
-                      <div key={m.name} className="text-xs rounded-lg px-3 py-1.5" style={{ background: COLORS.surface, color: COLORS.textMuted }}>
-                        {m.name}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <button
-                  onClick={() => setShowLoginHistory(!showLoginHistory)}
-                  className="w-full flex items-center justify-between mt-4 mb-2 text-sm font-bold"
-                  style={{ color: COLORS.textMuted }}
-                >
-                  <span className="flex items-center gap-1.5"><History size={14} /> היסטוריית כניסות (רק אתה רואה)</span>
-                  <ChevronDown size={15} style={{ transform: showLoginHistory ? "rotate(180deg)" : "none" }} />
-                </button>
-                {showLoginHistory && (
-                  <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
-                    {loginHistory.length === 0 ? (
-                      <p className="text-xs" style={{ color: COLORS.textMuted }}>אין עדיין כניסות רשומות.</p>
-                    ) : (
-                      loginHistory.map((l, i) => (
-                        <div key={i} className="text-xs rounded-lg px-3 py-1.5 flex items-center justify-between" style={{ background: COLORS.surface }}>
-                          <b style={{ color: COLORS.accentDark }}>{l.name}</b>
-                          <span style={{ color: COLORS.textMuted }}>{new Date(l.ts).toLocaleString("he-IL")}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-
-                <button
-                  onClick={async () => {
-                    const next = !showLastSeenList;
-                    setShowLastSeenList(next);
-                    if (next && lastSeenMap === null) {
-                      try { setLastSeenMap(await listLastSeen()); } catch { setLastSeenMap({}); }
-                    }
-                  }}
-                  className="w-full flex items-center justify-between mt-4 mb-2 text-sm font-bold"
-                  style={{ color: COLORS.textMuted }}
-                >
-                  <span className="flex items-center gap-1.5"><History size={14} /> מי חוזר לאפליקציה (רק אתה רואה)</span>
-                  <ChevronDown size={15} style={{ transform: showLastSeenList ? "rotate(180deg)" : "none" }} />
-                </button>
-                {showLastSeenList && (
-                  <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
+                {showMemberActivity && (
+                  <div className="space-y-1 max-h-96 overflow-y-auto pr-1">
                     {lastSeenMap === null ? (
                       <p className="text-xs" style={{ color: COLORS.textMuted }}>טוען...</p>
                     ) : (
                       [...allMembers]
                         .sort((a, b) => new Date(lastSeenMap[a.name] || 0) - new Date(lastSeenMap[b.name] || 0))
-                        .map((m) => (
-                          <div key={m.name} className="text-xs rounded-lg px-3 py-1.5 flex items-center justify-between" style={{ background: COLORS.surface }}>
-                            <b>{m.name}</b>
-                            <span style={{ color: lastSeenMap[m.name] ? COLORS.textMuted : COLORS.danger }}>
-                              {lastSeenMap[m.name] ? new Date(lastSeenMap[m.name]).toLocaleString("he-IL") : "מעולם לא נראה פעיל"}
-                            </span>
-                          </div>
-                        ))
+                        .map((m) => {
+                          const everLoggedIn = membersEverLoggedIn.has(m.name);
+                          const seen = lastSeenMap[m.name];
+                          return (
+                            <div key={m.name} className="text-xs rounded-lg px-3 py-1.5" style={{ background: COLORS.surface }}>
+                              <div className="flex items-center justify-between">
+                                <b>{m.name}</b>
+                                <span style={{ color: seen ? COLORS.textMuted : COLORS.danger }}>
+                                  {seen ? new Date(seen).toLocaleString("he-IL") : "מעולם לא נראה/תה פעיל/ה"}
+                                </span>
+                              </div>
+                              {!everLoggedIn && (
+                                <div className="mt-0.5" style={{ color: m.idOnFile ? COLORS.textMuted : COLORS.danger }}>
+                                  עדיין לא נכנס/ה לאפליקציה · {m.idOnFile ? "יש ת.ז - יכול/ה להיכנס" : "אין ת.ז רשומה"}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
                     )}
                   </div>
                 )}
