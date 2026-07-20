@@ -2894,6 +2894,7 @@ export default function App() {
     if (targetMember) {
       logActivity("שיבוץ ידני", `${who} → ${shift.title} (${formatDate(shift.date)})`);
     } else {
+      logActivity("שיבוץ עצמי למשמרת", `${who} → ${shift.title} (${formatDate(shift.date)})`);
       // Total unfilled shifts left across the whole schedule (same formula
       // as unfilledShiftsCount in the admin overview) - not just spots left
       // in this one shift, which is what was there before.
@@ -2910,17 +2911,22 @@ export default function App() {
     const latest = await getLatestAssignments();
     const names = latest[shift.id] || [];
     persistAssignments({ ...latest, [shift.id]: names.filter((n) => n !== who) });
-    if (targetMember) logActivity("ביטול שיבוץ ידני", `${who} ← ${shift.title} (${formatDate(shift.date)})`);
+    logActivity(
+      targetMember ? "ביטול שיבוץ ידני" : "ביטול שיבוץ עצמי",
+      `${who} ← ${shift.title} (${formatDate(shift.date)})`
+    );
   }
 
   async function toggleTeardownTask(task) {
     const latest = await getFreshShared("teardown-tasks", teardownTasks);
     const mine = latest[identity] || [];
-    const nextMine = mine.includes(task) ? mine.filter((t) => t !== task) : [...mine, task];
+    const wasChecked = mine.includes(task);
+    const nextMine = wasChecked ? mine.filter((t) => t !== task) : [...mine, task];
     const next = { ...latest, [identity]: nextMine };
     setTeardownTasks(next);
     try {
       await window.storage.set("teardown-tasks", JSON.stringify(next), true);
+      logActivity(wasChecked ? "ביטול משימת פירוק" : "סימון משימת פירוק", task);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -2987,10 +2993,12 @@ export default function App() {
 
   async function setPhone(name, phone) {
     const latest = await getFreshShared("member-phones", memberPhones);
+    const changed = (latest[name] || "") !== (phone || "");
     const next = { ...latest, [name]: phone };
     setMemberPhones(next);
     try {
       await window.storage.set("member-phones", JSON.stringify(next), true);
+      if (changed) logActivity("עדכון מספר טלפון", name);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3002,6 +3010,7 @@ export default function App() {
     setRideInfo(next);
     try {
       await window.storage.set("ride-info", JSON.stringify(next), true);
+      logActivity("עדכון פרטי טרמפ", name);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3034,6 +3043,7 @@ export default function App() {
     setRideMatches(next);
     try {
       await window.storage.set("ride-matches", JSON.stringify(next), true);
+      logActivity("ביטול שיוך טרמפ", `${riderName} ← ${driverName}`);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3067,10 +3077,12 @@ export default function App() {
 
   async function setEmail(name, email) {
     const latest = await getFreshShared("member-emails", memberEmails);
+    const changed = (latest[name] || "") !== (email || "");
     const next = { ...latest, [name]: email };
     setMemberEmails(next);
     try {
       await window.storage.set("member-emails", JSON.stringify(next), true);
+      if (changed) logActivity("עדכון אימייל", name);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3086,6 +3098,7 @@ export default function App() {
     setWhatsappConsentState(next);
     try {
       await window.storage.set("whatsapp-consent", JSON.stringify(next), true);
+      logActivity(consent ? "הצטרפות לתזכורות וואטסאפ" : "הסרה מתזכורות וואטסאפ", name);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3098,11 +3111,13 @@ export default function App() {
   async function toggleMyCalendarAdd(announcementId) {
     const latest = await getFreshShared("personal-calendar-adds", personalCalendarAdds);
     const mine = latest[identity] || [];
-    const nextMine = mine.includes(announcementId) ? mine.filter((id) => id !== announcementId) : [...mine, announcementId];
+    const wasAdded = mine.includes(announcementId);
+    const nextMine = wasAdded ? mine.filter((id) => id !== announcementId) : [...mine, announcementId];
     const next = { ...latest, [identity]: nextMine };
     setPersonalCalendarAddsState(next);
     try {
       await window.storage.set("personal-calendar-adds", JSON.stringify(next), true);
+      logActivity(wasAdded ? "הסרת אירוע מהיומן האישי" : "הוספת אירוע ליומן האישי", identity);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3113,16 +3128,20 @@ export default function App() {
   // "היומן שלי" - this is about who's actually planning to show up.
   async function rsvpEvent(annId, status) {
     const latest = await getFreshShared("announcements", announcements);
+    let resultStatus = null;
     const next = latest.map((a) => {
       if (a.id !== annId) return a;
       const rsvps = { ...(a.rsvps || {}) };
       if (rsvps[identity] === status) delete rsvps[identity];
       else rsvps[identity] = status;
+      resultStatus = rsvps[identity] || "בוטל";
       return { ...a, rsvps };
     });
     setAnnouncements(next);
     try {
       await window.storage.set("announcements", JSON.stringify(next), true);
+      const ann = next.find((a) => a.id === annId);
+      logActivity("אישור הגעה לאירוע", `${ann?.title || annId}: ${resultStatus}`);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3131,10 +3150,13 @@ export default function App() {
   async function toggleChecklistItem(team, index) {
     const latest = await getFreshShared("team-checklists", checklistState);
     const current = latest[team] || {};
-    const next = { ...latest, [team]: { ...current, [index]: !current[index] } };
+    const nowChecked = !current[index];
+    const next = { ...latest, [team]: { ...current, [index]: nowChecked } };
     setChecklistState(next);
     try {
       await window.storage.set("team-checklists", JSON.stringify(next), true);
+      const itemLabel = TEAM_CHECKLISTS[team]?.[index] || `פריט ${index + 1}`;
+      logActivity(nowChecked ? "סימון פריט צ׳ק-ליסט" : "ביטול סימון פריט צ׳ק-ליסט", `${team}: ${itemLabel}`);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3310,6 +3332,7 @@ export default function App() {
     setAnnouncements(next);
     try {
       await window.storage.set("announcements", JSON.stringify(next), true);
+      logActivity("פרסום מודעה", text.trim().slice(0, 80));
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3317,10 +3340,12 @@ export default function App() {
 
   async function removeAnnouncement(id) {
     const latest = await getFreshShared("announcements", announcements);
+    const removed = latest.find((a) => a.id === id);
     const next = latest.filter((a) => a.id !== id);
     setAnnouncements(next);
     try {
       await window.storage.set("announcements", JSON.stringify(next), true);
+      logActivity("מחיקת מודעה", (removed?.text || "").slice(0, 80));
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3337,6 +3362,7 @@ export default function App() {
     setAnnouncements(next);
     try {
       await window.storage.set("announcements", JSON.stringify(next), true);
+      logActivity("תגובה למודעה", text.trim().slice(0, 80));
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3366,6 +3392,8 @@ export default function App() {
     } catch {
       showToast("שמירה נכשלה", "error");
     }
+    // Deliberately not logged to activity history - emoji reactions are
+    // too frequent/low-signal to be useful in an audit log.
   }
 
   async function setEmergencyData(name, data) {
@@ -3373,6 +3401,7 @@ export default function App() {
     setEmergencyInfo(next);
     try {
       await setMyEmergencyInfo(name, data);
+      logActivity("עדכון פרטי חירום", name);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3423,6 +3452,7 @@ ${cards}
     try {
       await window.storage.set("polls", JSON.stringify(next), true);
       showToast("הסקר פורסם", "ok");
+      logActivity("פרסום סקר", question.trim());
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3430,10 +3460,12 @@ ${cards}
 
   async function removePoll(id) {
     const latest = await getFreshShared("polls", polls);
+    const removed = latest.find((p) => p.id === id);
     const next = latest.filter((p) => p.id !== id);
     setPolls(next);
     try {
       await window.storage.set("polls", JSON.stringify(next), true);
+      logActivity("מחיקת סקר", removed?.question || "");
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3447,6 +3479,8 @@ ${cards}
     setPolls(next);
     try {
       await window.storage.set("polls", JSON.stringify(next), true);
+      const poll = next.find((p) => p.id === pollId);
+      logActivity("מענה לסקר", `${poll?.question || pollId}: ${poll?.options?.[optionIndex] ?? optionIndex}`);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3459,6 +3493,10 @@ ${cards}
       const fresh = await listMyPrivateMessages();
       setPrivateMessages(fresh);
       showToast(`ההודעה נשלחה ל-${to}`, "ok");
+      // Logs that a message was sent, never the content - private_messages
+      // RLS restricts the text itself to sender/recipient only, and the
+      // activity log shouldn't be a backdoor around that.
+      logActivity("שליחת הודעה פרטית", `${identity} → ${to}`);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
