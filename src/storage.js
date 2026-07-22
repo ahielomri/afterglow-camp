@@ -340,6 +340,17 @@ export async function listMembersWithPushEnabled() {
   return new Set((data || []).map((r) => r.name));
 }
 
+// Kitchen shopping list: how many members marked vegetarian/vegan, as plain
+// counts with no names attached - emergency_info itself (where dietary
+// preference lives) is RLS-restricted to the member's own row unless you're
+// an admin, so any non-admin kitchen-team member needs this aggregate
+// instead of reading emergency_info directly.
+export async function getDietaryPreferenceCounts() {
+  const { data, error } = await supabase.rpc("dietary_preference_counts").single();
+  if (error) throw error;
+  return { vegetarian: Number(data?.vegetarian_count) || 0, vegan: Number(data?.vegan_count) || 0 };
+}
+
 // Admin/owner-only: sends an ad-hoc push notification (e.g. an event
 // reminder) to every subscribed device right now, separate from the
 // automatic push that fires when a new announcement/poll is posted.

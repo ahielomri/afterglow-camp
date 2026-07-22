@@ -28,6 +28,7 @@ import {
   touchLastSeen,
   listLastSeen,
   notifyOwner,
+  getDietaryPreferenceCounts,
 } from "./storage.js";
 
 // ---------------------------------------------------------------------------
@@ -2294,6 +2295,7 @@ export default function App() {
   const [shoppingList, setShoppingList] = useState([]);
   const [editingShoppingItemId, setEditingShoppingItemId] = useState(null);
   const [shoppingRequests, setShoppingRequests] = useState([]);
+  const [dietaryCounts, setDietaryCounts] = useState(null);
   const [editingExpenseId, setEditingExpenseId] = useState(null);
   const [extraBudgetCategories, setExtraBudgetCategories] = useState([]);
   const [showBudgetSection, setShowBudgetSection] = useState(null);
@@ -3890,6 +3892,16 @@ ${cards}
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminSubTab, isOwner]);
+
+  // Fetch the vegetarian/vegan aggregate counts whenever the shopping list
+  // tab is opened - fresh every visit rather than caching it forever, since
+  // dietary preferences can change as members fill in emergency info.
+  useEffect(() => {
+    if (tab === "shopping" && identity) {
+      getDietaryPreferenceCounts().then(setDietaryCounts).catch(() => setDietaryCounts(null));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, identity]);
 
   // "New on the board" indicator - per-device (not shared), so it doesn't
   // need a new table: just remembers when this browser last had the board
@@ -5697,9 +5709,19 @@ ${cards}
           const sortedList = [...shoppingList].sort((a, b) => (a.bought === b.bought ? 0 : a.bought ? 1 : -1));
           return (
             <div>
-              <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>
-                רשימת הקניות של צוות המטבח - כל הקמפ יכול לראות, רק צוות המטבח והמנהלים יכולים לערוך.
-              </p>
+              {/* Aggregate-only, on purpose: the kitchen needs to know how many
+                  portions to plan for, not who specifically - dietary info itself
+                  stays visible only where it already was (emergency info, gated
+                  to the member themselves/admins). Comes from a count-only RPC
+                  since emergency_info's own RLS wouldn't give a non-admin kitchen
+                  member the full picture. */}
+              {dietaryCounts && (dietaryCounts.vegetarian > 0 || dietaryCounts.vegan > 0) && (
+                <div className="rounded-2xl p-3 mb-4 flex items-center gap-4 text-xs" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>
+                  <span className="font-bold">העדפות תזונה בקמפ:</span>
+                  {dietaryCounts.vegetarian > 0 && <span>{dietaryCounts.vegetarian} צמחונים</span>}
+                  {dietaryCounts.vegan > 0 && <span>{dietaryCounts.vegan} טבעונים</span>}
+                </div>
+              )}
 
               {canManageShopping && (
                 <div className="mb-4">
