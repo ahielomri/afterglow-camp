@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home } from "lucide-react";
+import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart } from "lucide-react";
 import { pushSupported, pushPermission, enablePush, disablePush, isPushSubscribed, resetPush } from "./push.js";
 import {
   uploadFile,
@@ -793,6 +793,99 @@ function EquipmentForm({ onAdd, lockedCategory, initial, onCancel }) {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+function ShoppingItemForm({ onAdd, initial, onCancel }) {
+  const [name, setName] = useState(initial?.name || "");
+  const [qty, setQty] = useState(initial?.qty ?? "");
+  const [unit, setUnit] = useState(initial?.unit || "");
+  const [price, setPrice] = useState(initial?.price ?? "");
+  const [notes, setNotes] = useState(initial?.notes || "");
+
+  function submit() {
+    if (!name.trim() || !qty) return;
+    onAdd({ name: name.trim(), qty, unit: unit.trim(), price, notes: notes.trim() });
+    if (!initial) {
+      setName(""); setQty(""); setUnit(""); setPrice(""); setNotes("");
+    }
+  }
+
+  return (
+    <div className="rounded-2xl p-4 space-y-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <div className="grid sm:grid-cols-2 gap-2">
+        <input
+          value={name} onChange={(e) => setName(e.target.value)}
+          placeholder="שם המוצר"
+          className="px-3 py-2 rounded-xl text-sm outline-none sm:col-span-2"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        <input
+          type="number" value={qty} onChange={(e) => setQty(e.target.value)}
+          placeholder="כמות"
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        <input
+          value={unit} onChange={(e) => setUnit(e.target.value)}
+          placeholder='יחידה (אופציונלי, למשל "ק"ג")'
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        <input
+          type="number" value={price} onChange={(e) => setPrice(e.target.value)}
+          placeholder="מחיר משוער (₪, אופציונלי)"
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        <input
+          value={notes} onChange={(e) => setNotes(e.target.value)}
+          placeholder="הערות (אופציונלי)"
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={submit}
+          className="px-4 py-2 rounded-full text-sm font-semibold"
+          style={{ background: COLORS.accent, color: COLORS.bg }}
+        >
+          {initial ? "שמירת שינויים" : "הוספת מוצר"}
+        </button>
+        {onCancel && (
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 rounded-full text-sm font-semibold"
+            style={{ background: COLORS.surface2, color: COLORS.textMuted }}
+          >
+            ביטול
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ShoppingRequestForm({ onAdd }) {
+  const [text, setText] = useState("");
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder='למשל: "אני צמחוני/ת, אפשר טופו?"'
+        className="flex-1 px-3 py-2 rounded-xl text-sm outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      />
+      <button
+        onClick={() => { onAdd(text); setText(""); }}
+        className="px-4 py-2 rounded-full text-sm font-semibold shrink-0"
+        style={{ background: COLORS.accent2, color: COLORS.bg }}
+      >
+        שליחת בקשה
+      </button>
     </div>
   );
 }
@@ -2198,6 +2291,9 @@ export default function App() {
   const [budgetExpenses, setBudgetExpenses] = useState([]);
   const [campEquipment, setCampEquipment] = useState([]);
   const [editingEquipmentId, setEditingEquipmentId] = useState(null);
+  const [shoppingList, setShoppingList] = useState([]);
+  const [editingShoppingItemId, setEditingShoppingItemId] = useState(null);
+  const [shoppingRequests, setShoppingRequests] = useState([]);
   const [editingExpenseId, setEditingExpenseId] = useState(null);
   const [extraBudgetCategories, setExtraBudgetCategories] = useState([]);
   const [showBudgetSection, setShowBudgetSection] = useState(null);
@@ -2268,6 +2364,7 @@ export default function App() {
         rawLeads, rawPhones, rawRides, rawFeeOv, rawEmails, rawWhatsappConsent, rawPersonalCalendarAdds, rawChecklists,
         rawManualTeam, rawLog, rawLogins, rawExtra, rawRemoved,
         rawAnn, rawPolls, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories, rawRideMatches,
+        rawShoppingList, rawShoppingRequests,
       ] = await Promise.all([
         safeGet("shift-assignments", true),
         safeGet("budget-items", true),
@@ -2295,6 +2392,8 @@ export default function App() {
         safeGet("camp-equipment", true),
         safeGet("extra-budget-categories", true),
         safeGet("ride-matches", true),
+        safeGet("kitchen-shopping-list", true),
+        safeGet("kitchen-shopping-requests", true),
       ]);
 
       async function safeCall(fn, fallback) {
@@ -2378,6 +2477,8 @@ export default function App() {
       setBudgetExpenses(rawBudgetExpenses ? JSON.parse(rawBudgetExpenses) : []);
       setCampEquipment(rawEquipment ? JSON.parse(rawEquipment) : []);
       setExtraBudgetCategories(rawExtraCategories ? JSON.parse(rawExtraCategories) : []);
+      setShoppingList(rawShoppingList ? JSON.parse(rawShoppingList) : []);
+      setShoppingRequests(rawShoppingRequests ? JSON.parse(rawShoppingRequests) : []);
     }
     loadSharedDataRef.current = loadSharedData;
 
@@ -2641,6 +2742,82 @@ export default function App() {
     setCampEquipment(next);
     try {
       await window.storage.set("camp-equipment", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  // Kitchen shopping list - editable by kitchen-team members/admins only
+  // (enforced client-side, same trust model as camp-equipment above), but
+  // visible to everyone so the whole camp can see what's already planned.
+  async function addShoppingItem(item) {
+    const latest = await getFreshShared("kitchen-shopping-list", shoppingList);
+    const next = [...latest, { ...item, id: Date.now().toString(), bought: false, addedBy: identity, addedAt: Date.now() }];
+    setShoppingList(next);
+    try {
+      await window.storage.set("kitchen-shopping-list", JSON.stringify(next), true);
+      showToast("הפריט נוסף לרשימת הקניות", "ok");
+      logActivity("הוספת פריט לרשימת קניות", `${item.name} × ${item.qty}`);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function updateShoppingItem(id, patch) {
+    const latest = await getFreshShared("kitchen-shopping-list", shoppingList);
+    const next = latest.map((it) => (it.id === id ? { ...it, ...patch, updatedBy: identity, updatedAt: Date.now() } : it));
+    setShoppingList(next);
+    try {
+      await window.storage.set("kitchen-shopping-list", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function toggleShoppingItemBought(id) {
+    const latest = await getFreshShared("kitchen-shopping-list", shoppingList);
+    const next = latest.map((it) => (it.id === id ? { ...it, bought: !it.bought } : it));
+    setShoppingList(next);
+    try {
+      await window.storage.set("kitchen-shopping-list", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function removeShoppingItem(id) {
+    const latest = await getFreshShared("kitchen-shopping-list", shoppingList);
+    const next = latest.filter((it) => it.id !== id);
+    setShoppingList(next);
+    try {
+      await window.storage.set("kitchen-shopping-list", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  // Anyone (not just kitchen team) can leave a special request - e.g. an
+  // allergy or a specific product they'd like added to the shopping trip.
+  async function addShoppingRequest(text) {
+    if (!text.trim()) return;
+    const latest = await getFreshShared("kitchen-shopping-requests", shoppingRequests);
+    const next = [{ id: Date.now().toString(), text: text.trim(), author: identity, ts: Date.now() }, ...latest];
+    setShoppingRequests(next);
+    try {
+      await window.storage.set("kitchen-shopping-requests", JSON.stringify(next), true);
+      showToast("הבקשה נשלחה לצוות המטבח", "ok");
+      logActivity("בקשה מיוחדת לקניות מטבח", text.trim().slice(0, 80));
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function removeShoppingRequest(id) {
+    const latest = await getFreshShared("kitchen-shopping-requests", shoppingRequests);
+    const next = latest.filter((r) => r.id !== id);
+    setShoppingRequests(next);
+    try {
+      await window.storage.set("kitchen-shopping-requests", JSON.stringify(next), true);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3899,6 +4076,7 @@ ${cards}
     { id: "rides", label: "התניידות", icon: Car },
     { id: "contacts", label: "חברי קמפ", icon: Phone },
     { id: "equipment", label: "ציוד קמפ", icon: Package },
+    { id: "shopping", label: "קניות מטבח", icon: ShoppingCart },
   ];
   function renderNavItem(t, fullWidth) {
     const locked = !profileComplete && !PROFILE_GATE_EXEMPT_TABS.includes(t.id);
@@ -5512,6 +5690,109 @@ ${cards}
             )}
           </div>
         )}
+
+        {tab === "shopping" && (() => {
+          const canManageShopping = isAdmin || teamMembers("צוות המטבח").includes(identity);
+          const totalPrice = shoppingList.reduce((s, it) => s + (Number(it.price) || 0), 0);
+          const sortedList = [...shoppingList].sort((a, b) => (a.bought === b.bought ? 0 : a.bought ? 1 : -1));
+          return (
+            <div>
+              <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>
+                רשימת הקניות של צוות המטבח - כל הקמפ יכול לראות, רק צוות המטבח והמנהלים יכולים לערוך.
+              </p>
+
+              {canManageShopping && (
+                <div className="mb-4">
+                  <ShoppingItemForm onAdd={addShoppingItem} />
+                </div>
+              )}
+
+              {shoppingList.length > 0 && (
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-bold" style={{ color: COLORS.textMuted }}>רשימת מוצרים ({shoppingList.length})</h3>
+                  {totalPrice > 0 && (
+                    <span className="text-xs font-bold" style={{ color: COLORS.accentDark }}>סה"כ משוער: ₪{totalPrice.toLocaleString()}</span>
+                  )}
+                </div>
+              )}
+              <div className="space-y-1.5 mb-6">
+                {sortedList.map((it) =>
+                  editingShoppingItemId === it.id ? (
+                    <ShoppingItemForm
+                      key={it.id}
+                      initial={it}
+                      onCancel={() => setEditingShoppingItemId(null)}
+                      onAdd={(patch) => {
+                        updateShoppingItem(it.id, patch);
+                        setEditingShoppingItemId(null);
+                      }}
+                    />
+                  ) : (
+                    <div
+                      key={it.id}
+                      className="rounded-xl px-3 py-2 flex items-center justify-between gap-2"
+                      style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, opacity: it.bought ? 0.55 : 1 }}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {canManageShopping && (
+                          <input
+                            type="checkbox"
+                            checked={!!it.bought}
+                            onChange={() => toggleShoppingItemBought(it.id)}
+                            className="shrink-0"
+                          />
+                        )}
+                        <div className="min-w-0 text-xs">
+                          <div className="font-semibold text-sm" style={{ textDecoration: it.bought ? "line-through" : "none" }}>
+                            {it.name} <span style={{ color: COLORS.accentDark }}>× {it.qty}{it.unit ? ` ${it.unit}` : ""}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap" style={{ color: COLORS.textMuted }}>
+                            {it.price ? <span>₪{Number(it.price).toLocaleString()}</span> : null}
+                            {it.notes && <span>{it.price ? " · " : ""}{it.notes}</span>}
+                          </div>
+                          <div className="text-[10px] mt-0.5" style={{ color: COLORS.textMuted }}>
+                            {it.updatedBy ? `עודכן ע"י ${it.updatedBy}` : it.addedBy ? `נוסף ע"י ${it.addedBy}` : ""}
+                          </div>
+                        </div>
+                      </div>
+                      {canManageShopping && (
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button onClick={() => setEditingShoppingItemId(it.id)} style={{ color: COLORS.textMuted }}><Pencil size={14} /></button>
+                          <button onClick={() => removeShoppingItem(it.id)} style={{ color: COLORS.textMuted }}><Trash2 size={14} /></button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                )}
+                {shoppingList.length === 0 && (
+                  <p className="text-xs text-center py-6" style={{ color: COLORS.textMuted }}>עדיין לא נוסף שום דבר לרשימת הקניות.</p>
+                )}
+              </div>
+
+              <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>בקשות מיוחדות</h3>
+              <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
+                יש אלרגיה, העדפה תזונתית, או משהו ספציפי שתרצו שיוסיפו לקניות? אפשר לכתוב כאן, וצוות המטבח יראה את זה.
+              </p>
+              <ShoppingRequestForm onAdd={addShoppingRequest} />
+              <div className="space-y-1.5 mt-2">
+                {shoppingRequests.map((r) => (
+                  <div key={r.id} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                    <div className="min-w-0">
+                      <div>{r.text}</div>
+                      <div className="mt-0.5" style={{ color: COLORS.textMuted }}>{r.author} · {new Date(r.ts).toLocaleDateString("he-IL")}</div>
+                    </div>
+                    {(canManageShopping || r.author === identity) && (
+                      <button onClick={() => removeShoppingRequest(r.id)} style={{ color: COLORS.textMuted }} className="shrink-0"><Trash2 size={14} /></button>
+                    )}
+                  </div>
+                ))}
+                {shoppingRequests.length === 0 && (
+                  <p className="text-xs text-center py-4" style={{ color: COLORS.textMuted }}>אין עדיין בקשות מיוחדות.</p>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {tab === "finances" && canManageFinances && (
           <div>
