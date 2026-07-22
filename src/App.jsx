@@ -206,18 +206,15 @@ function buildShifts() {
   const lastDay = "2026-11-07";
   const firstDay = eventDays[0];
   eventDays.forEach((d) => {
-    // Arrival day (first event day): people are still arriving through the
-    // morning, so there's no one there yet for breakfast, morning cleaning,
-    // or LNT/trash duty - only lunch, dinner, and ice.
-    if (d !== firstDay) {
-      shifts.push({ id: `kitchen-am-${d}`, phase: "ימי האירוע", title: "משמרת בישול - בוקר", team: "צוות המטבח", date: d, start: "06:30", end: "09:00", spots: 3, desc: "הכנה והגשה של ארוחת בוקר" });
-    }
+    // Morning and noon kitchen shifts were dropped - one evening shift per
+    // day now covers all meal prep, with more people on it to compensate.
     if (d !== lastDay) {
-      shifts.push({ id: `kitchen-noon-${d}`, phase: "ימי האירוע", title: "משמרת בישול - צהריים", team: "צוות המטבח", date: d, start: "11:30", end: "14:00", spots: 3, desc: "הכנה והגשה של ארוחת צהריים" });
-      shifts.push({ id: `kitchen-eve-${d}`, phase: "ימי האירוע", title: "משמרת בישול - ערב", team: "צוות המטבח", date: d, start: "17:30", end: "20:00", spots: 3, desc: "הכנה והגשה של ארוחת ערב" });
+      shifts.push({ id: `kitchen-eve-${d}`, phase: "ימי האירוע", title: "משמרת בישול - ערב", team: "צוות המטבח", date: d, start: "17:30", end: "20:00", spots: 5, desc: "הכנה והגשה של ארוחות היום" });
     }
     if (d === lastDay) return;
     shifts.push({ id: `ice-${d}`, phase: "ימי האירוע", title: "הבאת קרח", team: "אחראי קרח", date: d, start: "10:00", end: "11:00", spots: 1, desc: "רכישת קרח יומי מנקודת המכירה הרשמית" });
+    // Arrival day (first event day): people are still arriving through the
+    // morning, so there's no one there yet for morning cleaning or LNT/trash duty.
     if (d !== firstDay) {
       shifts.push({ id: `clean-${d}`, phase: "ימי האירוע", title: "ניקיון שירותים ומקלחות", team: "שירותים ומקלחות", date: d, start: "09:00", end: "10:00", spots: 2, desc: "ניקיון ותחזוקה יומית" });
       shifts.push({ id: `moop-${d}`, phase: "ימי האירוע", title: "חשל\"ש ופינוי פסולת", team: "צוות חשל\"ש", date: d, start: "16:00", end: "17:00", spots: 2, desc: "מיחזור, פינוי פחים ובדיקת MOOP" });
