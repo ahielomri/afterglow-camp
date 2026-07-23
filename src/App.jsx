@@ -214,7 +214,13 @@ function buildShifts() {
       shifts.push({ id: `kitchen-eve-${d}`, phase: "ימי האירוע", title: "משמרת בישול - ערב", team: "צוות המטבח", date: d, start: "17:30", end: "20:00", spots: 5, desc: "הכנה והגשה של ארוחות היום" });
     }
     if (d === lastDay) return;
-    shifts.push({ id: `ice-${d}`, phase: "ימי האירוע", title: "הבאת קרח", team: "אחראי קרח", date: d, start: "10:00", end: "11:00", spots: 3, desc: "רכישת קרח יומי מנקודת המכירה הרשמית - 2-3 אנשים שיכולים לעשות אותה" });
+    // First ice run (arrival day) is later and needs one more person than
+    // the rest of the week's runs.
+    shifts.push(
+      d === firstDay
+        ? { id: `ice-${d}`, phase: "ימי האירוע", title: "הבאת קרח", team: "אחראי קרח", date: d, start: "13:00", end: "14:00", spots: 3, desc: "רכישת קרח יומי מנקודת המכירה הרשמית" }
+        : { id: `ice-${d}`, phase: "ימי האירוע", title: "הבאת קרח", team: "אחראי קרח", date: d, start: "10:00", end: "11:00", spots: 2, desc: "רכישת קרח יומי מנקודת המכירה הרשמית" }
+    );
     // Arrival day (first event day): people are still arriving through the
     // morning, so there's no one there yet for morning cleaning or LNT/trash duty.
     if (d !== firstDay) {
