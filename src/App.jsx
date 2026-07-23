@@ -229,7 +229,9 @@ function buildShifts() {
       shifts.push({ id: `moop-${d}`, phase: "ימי האירוע", title: "חשל\"ש ופינוי פסולת", team: "צוות חשל\"ש", date: d, start: "16:00", end: "17:00", spots: 2, desc: "מיחזור, פינוי פחים ובדיקת MOOP" });
       // No fixed clock time - can be done whenever during the day, so it
       // doesn't block/get blocked by other shifts that day.
-      shifts.push({ id: `salon-${d}`, phase: "ימי האירוע", title: "סידור סלון הקמפ וסלון הגיפט", team: "עיצוב המחנה ותפאורה", date: d, start: "09:00", end: "18:00", spots: 2, noTime: true, desc: "סידור והצגה של סלון הקמפ וסלון הגיפט - ללא שעה קבועה, בכל שעה נוחה במהלך היום" });
+      // start/end are nominal (just placing it mid-list among that day's
+      // shifts) - noTime means no clock time is ever shown or enforced.
+      shifts.push({ id: `salon-${d}`, phase: "ימי האירוע", title: "סידור סלון הקמפ וסלון הגיפט", team: "עיצוב המחנה ותפאורה", date: d, start: "12:00", end: "12:00", spots: 2, noTime: true, desc: "סידור והצגה של סלון הקמפ וסלון הגיפט" });
     }
   });
 
@@ -3686,7 +3688,7 @@ ${cards}
           return `<tr>
             <td>${escapeHtml(s.title)}</td>
             <td>${escapeHtml(s.team)}</td>
-            <td>${s.noTime ? "ללא שעה קבועה" : `${s.start}–${s.end}`}</td>
+            <td>${s.noTime ? "" : `${s.start}–${s.end}`}</td>
             <td>${s.noLimit ? `${names.length} (ללא הגבלה)` : `${names.length}/${s.spots}`}</td>
             <td>${namesHtml}</td>
           </tr>`;
@@ -4818,7 +4820,7 @@ ${sections}
                 const spots = isTeardownRow ? allMembers.length : s.spots;
                 return (
                   <div key={s.id} className="rounded-xl px-3 py-2 flex items-center justify-between text-xs" style={{ background: COLORS.surface }}>
-                    <span>{s.title} · {formatDate(s.date)}{isTeardownRow ? "" : s.noTime ? " · ללא שעה קבועה" : ` · ${s.start}–${s.end}`}</span>
+                    <span>{s.title} · {formatDate(s.date)}{isTeardownRow || s.noTime ? "" : ` · ${s.start}–${s.end}`}</span>
                     <span className="px-2 py-0.5 rounded-full" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>{s.noLimit ? `${names.length} (ללא הגבלה)` : `${names.length}/${spots}`}</span>
                   </div>
                 );
@@ -4953,8 +4955,8 @@ ${sections}
                     <div key={s.id} className="shrink-0 rounded-2xl px-4 py-3 min-w-[130px]" style={{ background: COLORS.surface, borderTop: `3px solid ${COLORS.accent}` }}>
                       <div className="text-xs font-bold" style={{ color: COLORS.accentDark }}>{formatDateShort(s.date)}</div>
                       <div className="text-sm font-semibold mt-1">{s.title}</div>
-                      {s.id !== TEARDOWN_ID && (
-                        <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{s.noTime ? "ללא שעה קבועה" : `${s.start}–${s.end}`}</div>
+                      {s.id !== TEARDOWN_ID && !s.noTime && (
+                        <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{s.start}–{s.end}</div>
                       )}
                       <button
                         onClick={() => downloadMyCalendarIcs([s], [])}
@@ -5247,9 +5249,9 @@ ${sections}
                         const full = !s.noLimit && names.length >= spots && !joined;
                         return (
                           <div key={s.id} className="rounded-2xl p-3" style={{ background: COLORS.input, borderRight: `3px solid ${joined ? COLORS.accent2 : COLORS.accent}` }}>
-                            {!isTeardown && (
+                            {!isTeardown && !s.noTime && (
                               <div className="text-xs flex items-center gap-1" style={{ color: COLORS.accentDark, fontFamily: FONT_NUM }}>
-                                <Clock size={11} /> {s.noTime ? "ללא שעה קבועה" : `${s.start}–${s.end}`}
+                                <Clock size={11} /> {s.start}–{s.end}
                               </div>
                             )}
                             <div className="text-sm font-bold mt-1">{s.title}</div>
@@ -5321,7 +5323,7 @@ ${sections}
                       </div>
                       <div className="text-xs mt-1 flex items-center gap-3 flex-wrap" style={{ color: COLORS.textMuted }}>
                         <span className="flex items-center gap-1"><CalendarDays size={12} /> {formatDate(s.date)}</span>
-                        {!isTeardown && <span className="flex items-center gap-1"><Clock size={12} /> {s.noTime ? "ללא שעה קבועה" : `${s.start}–${s.end}`}</span>}
+                        {!isTeardown && !s.noTime && <span className="flex items-center gap-1"><Clock size={12} /> {s.start}–{s.end}</span>}
                       </div>
                       {isTeardown && (
                         <TeardownTaskPicker selected={teardownTasks[identity] || []} onToggle={toggleTeardownTask} />
