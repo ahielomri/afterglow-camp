@@ -214,7 +214,7 @@ function buildShifts() {
       shifts.push({ id: `kitchen-eve-${d}`, phase: "ימי האירוע", title: "משמרת בישול - ערב", team: "צוות המטבח", date: d, start: "17:30", end: "20:00", spots: 5, desc: "הכנה והגשה של ארוחות היום" });
     }
     if (d === lastDay) return;
-    shifts.push({ id: `ice-${d}`, phase: "ימי האירוע", title: "הבאת קרח", team: "אחראי קרח", date: d, start: "10:00", end: "11:00", spots: 1, desc: "רכישת קרח יומי מנקודת המכירה הרשמית" });
+    shifts.push({ id: `ice-${d}`, phase: "ימי האירוע", title: "הבאת קרח", team: "אחראי קרח", date: d, start: "10:00", end: "11:00", spots: 3, desc: "רכישת קרח יומי מנקודת המכירה הרשמית - 2-3 אנשים שיכולים לעשות אותה" });
     // Arrival day (first event day): people are still arriving through the
     // morning, so there's no one there yet for morning cleaning or LNT/trash duty.
     if (d !== firstDay) {
@@ -3624,6 +3624,78 @@ ${cards}
     setTimeout(() => win.print(), 300);
   }
 
+  // Admin-only: a printable (save-as-PDF) roster of every shift and who's
+  // in it, with a summary up top. "Shifts" and "volunteers" are deliberately
+  // different counts - a shift with 5 spots and 3 people signed up is still
+  // 1 shift, but 3 volunteers; "open"/"filled" are the same two numbers
+  // restated as spots rather than people.
+  function exportShiftsPdf() {
+    const win = window.open("", "_blank");
+    if (!win) return showToast("נחסמה פתיחת חלון - יש לאפשר חלונות קופצים לאתר", "error");
+
+    const totalShifts = SHIFTS.length;
+    const totalSpots = SHIFTS.reduce((s, sh) => s + sh.spots, 0);
+    const totalVolunteers = SHIFTS.reduce((s, sh) => s + (assignments[sh.id] || []).length, 0);
+    const openSpots = Math.max(totalSpots - totalVolunteers, 0);
+
+    const phases = [...new Set(SHIFTS.map((s) => s.phase))];
+    const sections = phases.map((phase) => {
+      const phaseShifts = SHIFTS.filter((s) => s.phase === phase);
+      const dates = [...new Set(phaseShifts.map((s) => s.date))];
+      const dateBlocks = dates.map((date) => {
+        const dayShifts = phaseShifts.filter((s) => s.date === date);
+        const rows = dayShifts.map((s) => {
+          const names = assignments[s.id] || [];
+          const namesHtml = names.length > 0
+            ? names.map((n) => escapeHtml(n)).join(", ")
+            : `<span class="empty">אין נרשמים עדיין</span>`;
+          return `<tr>
+            <td>${escapeHtml(s.title)}</td>
+            <td>${escapeHtml(s.team)}</td>
+            <td>${s.start}–${s.end}</td>
+            <td>${names.length}/${s.spots}</td>
+            <td>${namesHtml}</td>
+          </tr>`;
+        }).join("");
+        return `<h3>${escapeHtml(formatDate(date))}</h3>
+          <table>
+            <thead><tr><th>משמרת</th><th>צוות</th><th>שעות</th><th>איוש</th><th>מי רשום</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>`;
+      }).join("");
+      return `<h2>${escapeHtml(phase)}</h2>${dateBlocks}`;
+    }).join("");
+
+    win.document.write(`<!doctype html>
+<html dir="rtl" lang="he"><head><meta charset="UTF-8"><title>לוח משמרות - Afterglow</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #222; }
+  h1 { font-size: 18px; margin: 0 0 16px; }
+  h2 { font-size: 15px; margin: 22px 0 8px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+  h3 { font-size: 13px; margin: 14px 0 6px; color: #555; }
+  .summary { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .summary div { border: 1px solid #ccc; border-radius: 8px; padding: 8px 14px; font-size: 12px; }
+  .summary b { display: block; font-size: 16px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 6px; break-inside: avoid; page-break-inside: avoid; }
+  th, td { border: 1px solid #ddd; padding: 4px 8px; font-size: 11px; text-align: right; vertical-align: top; }
+  th { background: #f4f4f4; }
+  .empty { color: #999; }
+</style>
+</head><body>
+<h1>לוח משמרות - Afterglow (${escapeHtml(new Date().toLocaleDateString("he-IL"))})</h1>
+<div class="summary">
+  <div><b>${totalShifts}</b>כמות משמרות</div>
+  <div><b>${totalVolunteers}</b>כמות מתנדבים בכל המשמרות</div>
+  <div><b>${openSpots}</b>מקומות פנויים</div>
+  <div><b>${totalVolunteers}</b>מקומות תפוסים</div>
+</div>
+${sections}
+</body></html>`);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 300);
+  }
+
   async function createPoll(question, options) {
     if (!question.trim() || options.filter((o) => o.trim()).length < 2) {
       return showToast("צריך שאלה ולפחות 2 אפשרויות", "error");
@@ -5080,6 +5152,17 @@ ${cards}
 
         {tab === "shifts" && (
           <div>
+            {isAdmin && (
+              <div className="mb-3">
+                <button
+                  onClick={exportShiftsPdf}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold"
+                  style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, color: COLORS.textMuted }}
+                >
+                  <CalendarDays size={13} /> ייצוא לוח משמרות ל-PDF
+                </button>
+              </div>
+            )}
             <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
               <div className="flex gap-2 flex-wrap">
                 {["הכל", ...TEAM_FILTERS].map((t) => (
