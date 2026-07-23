@@ -1,712 +1,1102 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { ChevronRight, Plus } from "lucide-react";
-import { ensurePushEnabled, scheduleServerReminder } from "./push.js";
+import React, { useMemo, useState } from "react";
+import {
+  SafeAreaView,
+  ScrollView,
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  StyleSheet,
+  Alert,
+} from "react-native";
 
-const STORAGE_KEY = "check_timer_app_data_v1";
-
-const amountOptions = [
-  "0.1", "0.2", "0.3", "0.4",
-  "0.5", "1.0", "0.6", "0.7",
-  "0.8", "0.9", "1.1", "1.2",
-  "1.3", "1.4", "1.5", "1.6",
-  "1.7", "1.8", "1.9", "2.1",
-  "2.2", "2.0", "2.3", "2.4",
-  "2.5", "2.6", "2.7",
+const symbols = ["🪬","🪩","🧿","🪐","🧬","🫧","🪄","🪞","🪶","🪸","🪷","🦋"];
+const colors = ["#2563EB","#16A34A","#9333EA","#DC2626","#EA580C","#0891B2"];
+const reminders = [30, 60, 90, 120];
+const beforeOptions = [5,10,15,20,25,30,35,40,45,50];
+const amounts = [
+  0.1,0.2,0.3,0.4,
+  0.5,1,0.6,0.7,
+  0.8,0.9,1.1,1.2,
+  1.3,1.4,1.5,1.6,
+  1.7,1.8,1.9,2.1,
+  2.2,2,2.3,2.4,
+  2.5,2.6,2.7
 ];
 
-const featuredAmounts = ["1.0", "1.5", "2.0"];
-
-const minutesAgoOptions = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
-
-const reminderOptions = [
-  { label: "30 דק׳", minutes: 30 },
-  { label: "1:00", minutes: 60 },
-  { label: "1:30", minutes: 90 },
-  { label: "2:00", minutes: 120 },
-];
-
-const colorOptions = [
-  "#2563EB", "#16A34A", "#9333EA", "#DC2626",
-  "#EA580C", "#0891B2", "#4F46E5", "#BE123C",
-];
-
-const symbolOptions = [
-  "🪬", "🪩", "🧿", "🪐", "🧬", "🫧",
-  "🪄", "🪞", "🪶", "🪸", "🪷", "🪻",
-  "🪁", "🛸", "🧭", "🪆", "🧩", "🪅",
-  "🪙", "🎐", "🎏", "🎎", "🦚", "🦦",
-  "🦥", "🦔", "🪼", "🦑", "🐚", "🦋",
-];
-
-function uid(prefix) {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+function amountText(n) {
+  const v = Number(n || 0);
+  return Number.isInteger(v) ? String(v) : v.toFixed(1);
 }
 
-function hexToRgb(hex) {
-  const clean = hex.replace("#", "");
-  return {
-    r: parseInt(clean.slice(0, 2), 16),
-    g: parseInt(clean.slice(2, 4), 16),
-    b: parseInt(clean.slice(4, 6), 16),
-  };
+function timeText(value) {
+  const x = new Date(value);
+  return x.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
 }
 
-function mixWithWhite(hex, mix = 0.9) {
-  const rgb = hexToRgb(hex);
-  const r = Math.round(rgb.r * (1 - mix) + 255 * mix);
-  const g = Math.round(rgb.g * (1 - mix) + 255 * mix);
-  const b = Math.round(rgb.b * (1 - mix) + 255 * mix);
-  return `rgb(${r}, ${g}, ${b})`;
+function dateText(value) {
+  const x = new Date(value);
+  return x.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" });
 }
 
-function mixTextColor(hex, amount = 0.35) {
-  const rgb = hexToRgb(hex);
-  const r = Math.round(rgb.r * (1 - amount));
-  const g = Math.round(rgb.g * (1 - amount));
-  const b = Math.round(rgb.b * (1 - amount));
-  return `rgb(${r}, ${g}, ${b})`;
+function addMinutes(date, minutes) {
+  return new Date(date.getTime() + minutes * 60000);
 }
 
-function formatAmount(value) {
-  const num = Number(value || 0);
-  return Number.isInteger(num) ? String(num) : num.toFixed(1);
-}
-
-function formatTime(dateValue) {
-  if (!dateValue) return "";
-  return new Date(dateValue).toLocaleTimeString("he-IL", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatShortDate(dateValue) {
-  if (!dateValue) return "";
-  const d = new Date(dateValue);
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const year = String(d.getFullYear()).slice(-2);
-  return `${day}.${month}.${year}`;
-}
-
-function addMinutes(dateValue, minutes) {
-  return new Date(new Date(dateValue).getTime() + minutes * 60000).toISOString();
-}
-
-function subtractMinutes(dateValue, minutes) {
-  return new Date(new Date(dateValue).getTime() - minutes * 60000).toISOString();
-}
-
-function diffMinutes(a, b) {
-  return Math.floor((new Date(a).getTime() - new Date(b).getTime()) / 60000);
-}
-
-function elapsedDurationFrom(dateValue, nowValue) {
-  if (!dateValue) return "00:00";
-  const ms = nowValue - new Date(dateValue).getTime();
-  if (ms <= 0) return "00:00";
-  const totalSeconds = Math.floor(ms / 1000);
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-  if (h > 0) {
-    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  }
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-
-function gapBetween(currentEntry, olderEntry) {
-  if (!olderEntry) return "";
-  const minutes = Math.max(
-    0,
-    Math.floor((new Date(currentEntry.takenAt).getTime() - new Date(olderEntry.takenAt).getTime()) / 60000)
-  );
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  if (hours && mins) return `↓ ${hours}h${String(mins).padStart(2, "0")}`;
-  if (hours) return `↓ ${hours}h`;
-  return `↓ ${mins}m`;
-}
-
-function loadData() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { users: [], entries: [] };
-    const parsed = JSON.parse(raw);
-    return {
-      users: Array.isArray(parsed.users) ? parsed.users : [],
-      entries: Array.isArray(parsed.entries) ? parsed.entries : [],
-    };
-  } catch {
-    return { users: [], entries: [] };
-  }
-}
-
-// Tries to queue the reminder as a real server-sent push (arrives even if
-// this tab/app is closed by then). Falls back to a client-side timer - which
-// only fires while this tab stays open - if push isn't available (browser
-// doesn't support it, or the permission prompt was denied).
-async function scheduleReminder(entry) {
-  const passedLabel = entry.reminderAfterMinutes >= 60
-    ? `${Math.floor(entry.reminderAfterMinutes / 60)}:${String(entry.reminderAfterMinutes % 60).padStart(2, "0")}`
-    : `${entry.reminderAfterMinutes} דק׳`;
-  const title = "תזכורת";
-  const body = `עברו ${passedLabel} מאז הסימון האחרון.\nהשעון עשה את שלו, עכשיו תורך לבדוק מה המצב.`;
-
-  try {
-    await ensurePushEnabled();
-    await scheduleServerReminder({ title, body, remindAt: entry.nextReminderAt });
-    return;
-  } catch {
-    // fall through to the local-only fallback below
-  }
-
-  if ("Notification" in window && Notification.permission === "granted") {
-    const ms = new Date(entry.nextReminderAt).getTime() - Date.now();
-    if (ms > 0) {
-      window.setTimeout(() => {
-        try {
-          new Notification(title, { body });
-        } catch {
-          // ignore - notification best-effort only
-        }
-      }, ms);
-    }
-  }
+function money(n) {
+  const v = Number(n || 0);
+  return `${Math.round(v * 100) / 100} ₪`;
 }
 
 export default function App() {
-  const [data, setData] = useState(() => loadData());
-  const [screen, setScreen] = useState(() => (loadData().users.length ? "users" : "welcome"));
-  const [activeUserId, setActiveUserId] = useState(null);
-  const [newUser, setNewUser] = useState({
-    name: "",
-    color: colorOptions[0],
-    symbol: symbolOptions[0],
-  });
-  const [flow, setFlow] = useState(null);
-  const [warning, setWarning] = useState(null);
-  const [now, setNow] = useState(Date.now());
+  const [screen, setScreen] = useState("main");
 
-  useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, []);
+  const [mainUser, setMainUser] = useState(null);
+  const [mainName, setMainName] = useState("");
+  const [mainSymbol, setMainSymbol] = useState(symbols[0]);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [data]);
+  const [users, setUsers] = useState([]);
+  const [activeId, setActiveId] = useState(null);
 
-  const activeUser = data.users.find((user) => user.userId === activeUserId) || null;
+  const [newName, setNewName] = useState("");
+  const [newSymbol, setNewSymbol] = useState(symbols[1]);
+  const [newColor, setNewColor] = useState(colors[0]);
 
-  const activeEntries = useMemo(() => {
-    return data.entries
-      .filter((entry) => entry.userId === activeUserId)
-      .sort((a, b) => new Date(b.takenAt).getTime() - new Date(a.takenAt).getTime());
-  }, [data.entries, activeUserId]);
+  const [reminder, setReminder] = useState(90);
+  const [pendingTime, setPendingTime] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  const chronologicalEntries = useMemo(() => {
-    return data.entries
-      .filter((entry) => entry.userId === activeUserId)
-      .sort((a, b) => new Date(a.takenAt).getTime() - new Date(b.takenAt).getTime());
-  }, [data.entries, activeUserId]);
+  const [stockName, setStockName] = useState("");
+  const [stockMl, setStockMl] = useState("");
+  const [stockPrice, setStockPrice] = useState("");
 
-  function totalAmountForUser(userId = activeUserId) {
-    return data.entries
-      .filter((entry) => entry.userId === userId)
-      .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const [givePerson, setGivePerson] = useState("");
+  const [giveMl, setGiveMl] = useState("");
+  const [giveStatus, setGiveStatus] = useState("צריך לשלם");
+  const [giveToPay, setGiveToPay] = useState("");
+  const [givePaid, setGivePaid] = useState("");
+  const [giveNote, setGiveNote] = useState("");
+
+  const activeUser = users.find((u) => u.id === activeId);
+
+  const stats = useMemo(() => {
+    if (!activeUser) {
+      return { taken: 0, given: 0, pricePerMl: 0, remaining: 0, openDebt: 0, last: null };
+    }
+
+    const taken = activeUser.entries.reduce((sum, x) => sum + Number(x.amount || 0), 0);
+    const given = activeUser.given.reduce((sum, x) => sum + Number(x.ml || 0), 0);
+    const totalMl = Number(activeUser.stock.ml || 0);
+    const totalPrice = Number(activeUser.stock.price || 0);
+    const pricePerMl = totalMl > 0 ? totalPrice / totalMl : 0;
+    const remaining = Math.max(totalMl - taken - given, 0);
+    const openDebt = activeUser.given.reduce((sum, x) => {
+      return sum + Math.max(Number(x.toPay || 0) - Number(x.paid || 0), 0);
+    }, 0);
+
+    return {
+      taken,
+      given,
+      pricePerMl,
+      remaining,
+      openDebt,
+      last: activeUser.entries[0] || null,
+    };
+  }, [activeUser]);
+
+  function updateActive(patch) {
+    setUsers((list) =>
+      list.map((u) => (u.id === activeId ? { ...u, ...patch } : u))
+    );
   }
 
-  function selectUser(userId) {
-    setActiveUserId(userId);
-    setScreen("user");
+  function saveMainUser() {
+    if (!mainName.trim()) return;
+    setMainUser({ name: mainName.trim(), symbol: mainSymbol });
+    setScreen("users");
   }
 
-  function createUser() {
-    const cleanName = newUser.name.trim();
-    if (!cleanName) return;
+  function saveNewUser() {
+    if (!newName.trim()) return;
 
     const user = {
-      userId: uid("user"),
-      name: cleanName,
-      color: newUser.color,
-      symbol: newUser.symbol,
-      createdAt: new Date().toISOString(),
-      lastTakenAt: null,
-      lastAmount: null,
-      nextReminderAt: null,
-      selectedReminderAfterMinutes: 120,
+      id: String(Date.now()),
+      name: newName.trim(),
+      symbol: newSymbol,
+      color: newColor,
+      entries: [],
+      stock: { name: "", ml: "", price: "" },
+      given: [],
     };
 
-    setData((current) => ({
-      ...current,
-      users: [...current.users, user],
-    }));
-
-    setActiveUserId(user.userId);
-    setNewUser({ name: "", color: colorOptions[0], symbol: symbolOptions[0] });
-    setScreen("user");
+    setUsers([...users, user]);
+    setNewName("");
+    setNewSymbol(symbols[1]);
+    setNewColor(colors[0]);
+    setScreen("users");
   }
 
-  function updateUserReminder(minutes) {
-    if (!activeUser) return;
-    setData((current) => ({
-      ...current,
-      users: current.users.map((user) =>
-        user.userId === activeUser.userId
-          ? { ...user, selectedReminderAfterMinutes: minutes }
-          : user
-      ),
-    }));
+  function openUser(user) {
+    setActiveId(user.id);
+    setMenuOpen(false);
+    setScreen("tracker");
   }
 
-  function beginNow() {
-    const nextFlow = {
-      mode: "now",
-      selectedTakenAt: new Date().toISOString(),
-      minutesAgo: null,
-    };
-    checkWarningOrContinue(nextFlow);
-  }
+  function saveEntry(amount) {
+    if (!activeUser || !pendingTime) return;
 
-  function beginBefore(minutesAgo) {
-    const nextFlow = {
-      mode: "before",
-      selectedTakenAt: subtractMinutes(new Date().toISOString(), minutesAgo),
-      minutesAgo,
-    };
-    checkWarningOrContinue(nextFlow);
-  }
+    const last = activeUser.entries[0];
 
-  function checkWarningOrContinue(nextFlow) {
-    if (activeUser?.lastTakenAt) {
-      const minutesSinceLast = diffMinutes(nextFlow.selectedTakenAt, activeUser.lastTakenAt);
-      if (minutesSinceLast < 60) {
-        setFlow(nextFlow);
-        setWarning({
-          lastTakenAt: activeUser.lastTakenAt,
-          minutesSinceLast: Math.max(0, minutesSinceLast),
-          continuedAnyway: false,
-        });
-        setScreen("warning");
-        return;
+    if (last) {
+      const diffMinutes =
+        (pendingTime.getTime() - new Date(last.takenAt).getTime()) / 60000;
+
+      if (diffMinutes > -1 && diffMinutes < 60) {
+        Alert.alert(
+          "רגע, השעון מרים גבה",
+          "חלפה פחות משעה מהסימון הקודם. שווה לעצור רגע ולבדוק שזה באמת הזמן הנכון."
+        );
       }
     }
 
-    setFlow(nextFlow);
-    setScreen("amount");
-  }
-
-  function continueAfterWarning() {
-    setWarning((current) => ({ ...current, continuedAnyway: true }));
-    setScreen("amount");
-  }
-
-  async function chooseAmount(amount) {
-    if (!activeUser || !flow) return;
-
-    const reminderMinutes = activeUser.selectedReminderAfterMinutes || 120;
-    const nextReminderAt = addMinutes(flow.selectedTakenAt, reminderMinutes);
-
     const entry = {
-      entryId: uid("entry"),
-      userId: activeUser.userId,
-      mode: flow.mode,
+      id: String(Date.now()),
       amount,
-      takenAt: flow.selectedTakenAt,
-      minutesAgo: flow.minutesAgo,
-      reminderAfterMinutes: reminderMinutes,
-      nextReminderAt,
-      redWarningShown: Boolean(warning),
-      continuedAnyway: Boolean(warning?.continuedAnyway),
-      createdAt: new Date().toISOString(),
+      takenAt: pendingTime.toISOString(),
+      nextAt: addMinutes(pendingTime, reminder).toISOString(),
     };
 
-    setData((current) => ({
-      users: current.users.map((user) =>
-        user.userId === activeUser.userId
-          ? { ...user, lastTakenAt: flow.selectedTakenAt, lastAmount: amount, nextReminderAt }
-          : user
-      ),
-      entries: [...current.entries, entry],
-    }));
-
-    await scheduleReminder(entry);
-
-    setFlow(null);
-    setWarning(null);
-    setScreen("user");
+    updateActive({ entries: [entry, ...activeUser.entries] });
+    setPendingTime(null);
+    setScreen("tracker");
   }
 
-  function resetAllData() {
-    if (!window.confirm("למחוק את כל הנתונים? הפעולה בלתי הפיכה.")) return;
-    localStorage.removeItem(STORAGE_KEY);
-    setData({ users: [], entries: [] });
-    setActiveUserId(null);
-    setScreen("welcome");
+  function openStock() {
+    setStockName(activeUser.stock.name || "");
+    setStockMl(String(activeUser.stock.ml || ""));
+    setStockPrice(String(activeUser.stock.price || ""));
+    setMenuOpen(false);
+    setScreen("stock");
   }
 
-  if (screen === "welcome") {
+  function saveStock() {
+    updateActive({
+      stock: {
+        name: stockName,
+        ml: stockMl,
+        price: stockPrice,
+      },
+    });
+    setScreen("tracker");
+  }
+
+  function openGive() {
+    setGivePerson("");
+    setGiveMl("");
+    setGiveStatus("צריך לשלם");
+    setGiveToPay("");
+    setGivePaid("");
+    setGiveNote("");
+    setMenuOpen(false);
+    setScreen("give");
+  }
+
+  function saveGive() {
+    if (!activeUser || !givePerson.trim() || !Number(giveMl)) return;
+
+    const ml = Number(giveMl);
+    const suggested = stats.pricePerMl
+      ? Math.round(stats.pricePerMl * ml * 100) / 100
+      : 0;
+
+    const item = {
+      id: String(Date.now()),
+      person: givePerson.trim(),
+      ml,
+      status: giveStatus,
+      toPay: giveToPay.trim() ? Number(giveToPay) : suggested,
+      paid: Number(givePaid || 0),
+      note: giveNote,
+      date: new Date().toISOString(),
+    };
+
+    updateActive({ given: [item, ...activeUser.given] });
+    setScreen("tracker");
+  }
+
+  if (screen === "main") {
     return (
-      <Shell>
-        <div className="flex flex-1 flex-col items-center justify-center gap-5 p-7 text-center">
-          <h1 className="text-3xl font-black text-slate-900">ברוכים הבאים</h1>
-          <p className="max-w-xs text-lg font-bold leading-relaxed text-slate-500">
-            כדי להתחיל, נקים יוזר אישי.
-          </p>
-          <PrimaryButton label="הקמת יוזר חדש" onClick={() => setScreen("createUser")} />
-        </div>
-      </Shell>
+      <SafeAreaView style={styles.shell}>
+        <ScrollView contentContainerStyle={styles.center}>
+          <Text style={styles.title}>הקמת משתמש ראשי</Text>
+          <Text style={styles.sub}>המשתמש שמנהל את כל המעקבים באפליקציה.</Text>
+
+          <TextInput
+            value={mainName}
+            onChangeText={setMainName}
+            placeholder="שם המשתמש הראשי"
+            style={styles.input}
+            textAlign="right"
+          />
+
+          <View style={styles.grid}>
+            {symbols.map((s) => (
+              <Pressable
+                key={s}
+                onPress={() => setMainSymbol(s)}
+                style={[styles.symbolBtn, mainSymbol === s && styles.selectedDark]}
+              >
+                <Text style={styles.symbolText}>{s}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Pressable style={styles.primary} onPress={saveMainUser}>
+            <Text style={styles.primaryText}>שמירה והמשך</Text>
+          </Pressable>
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
   if (screen === "users") {
     return (
-      <Shell>
-        <TopBar title="בחר יוזר" rightIcon={<Plus size={26} />} onRight={() => setScreen("createUser")} />
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="flex flex-col gap-3.5">
-            {data.users.map((user) => (
-              <button
-                key={user.userId}
-                onClick={() => selectUser(user.userId)}
-                className="flex min-h-[78px] items-center gap-3.5 rounded-[22px] border border-slate-900/5 p-3.5 text-right"
-                style={{ backgroundColor: mixWithWhite(user.color, 0.9) }}
-              >
-                <span
-                  className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-2xl text-2xl"
-                  style={{ backgroundColor: user.color }}
-                >
-                  {user.symbol}
-                </span>
-                <span className="flex-1">
-                  <span className="block text-xl font-black text-slate-900">{user.name}</span>
-                  <span className="mt-1 block text-xs font-bold text-slate-500">כניסה למסך היוזר</span>
-                </span>
-                <span className="min-w-[70px] text-left text-lg font-black text-slate-900">
-                  {user.lastTakenAt ? elapsedDurationFrom(user.lastTakenAt, now) : ""}
-                </span>
-              </button>
-            ))}
-          </div>
+      <SafeAreaView style={styles.shell}>
+        <ScrollView contentContainerStyle={styles.content}>
+          {mainUser && (
+            <View style={styles.card}>
+              <Text style={styles.bigSymbol}>{mainUser.symbol}</Text>
+              <Text style={styles.cardTitle}>{mainUser.name}</Text>
+              <Text style={styles.cardSub}>משתמש ראשי</Text>
+            </View>
+          )}
 
-          <button
-            onClick={resetAllData}
-            className="mt-6 min-h-[48px] w-full rounded-2xl bg-slate-200 text-base font-black text-slate-700"
-          >
-            איפוס נתונים
-          </button>
-        </div>
-      </Shell>
+          <Pressable style={styles.primary} onPress={() => setScreen("createUser")}>
+            <Text style={styles.primaryText}>הקמת יוזר חדש</Text>
+          </Pressable>
+
+          {users.map((user) => (
+            <Pressable
+              key={user.id}
+              onPress={() => openUser(user)}
+              style={styles.userRow}
+            >
+              <View style={[styles.userIcon, { backgroundColor: user.color }]}>
+                <Text style={styles.userIconText}>{user.symbol}</Text>
+              </View>
+
+              <View style={styles.userText}>
+                <Text style={styles.userName}>{user.name}</Text>
+                <Text style={styles.userSub}>כניסה למסך מעקב</Text>
+              </View>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
   if (screen === "createUser") {
     return (
-      <Shell>
-        <TopBar
-          title="הקמת יוזר"
-          leftIcon={<ChevronRight size={28} />}
-          onLeft={() => setScreen(data.users.length ? "users" : "welcome")}
-        />
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="flex flex-col gap-3.5">
-            <label className="text-right text-sm font-black text-slate-700">שם היוזר</label>
-            <input
-              value={newUser.name}
-              onChange={(e) => setNewUser((current) => ({ ...current, name: e.target.value }))}
-              placeholder="לדוגמה: עומרי"
-              dir="rtl"
-              className="min-h-[54px] rounded-2xl border border-slate-200 bg-white px-3.5 text-right text-lg text-slate-900 outline-none focus:border-slate-400"
-            />
+      <SafeAreaView style={styles.shell}>
+        <ScrollView contentContainerStyle={styles.content}>
+          <Text style={styles.title}>הקמת יוזר</Text>
 
-            <label className="mt-2 text-right text-sm font-black text-slate-700">בחירת צבע</label>
-            <div className="flex flex-wrap gap-3">
-              {colorOptions.map((color) => (
-                <button
-                  key={color}
-                  onClick={() => setNewUser((current) => ({ ...current, color }))}
-                  className="h-12 w-16 rounded-2xl border-4"
-                  style={{
-                    backgroundColor: color,
-                    borderColor: newUser.color === color ? "#0F172A" : "#FFFFFF",
-                  }}
-                />
-              ))}
-            </div>
+          <TextInput
+            value={newName}
+            onChangeText={setNewName}
+            placeholder="שם היוזר"
+            style={styles.input}
+            textAlign="right"
+          />
 
-            <label className="mt-2 text-right text-sm font-black text-slate-700">בחירת סימן מזהה</label>
-            <div className="flex flex-wrap gap-2.5">
-              {symbolOptions.map((symbol) => (
-                <button
-                  key={symbol}
-                  onClick={() => setNewUser((current) => ({ ...current, symbol }))}
-                  className="flex h-[50px] w-[50px] items-center justify-center rounded-2xl text-2xl"
-                  style={{ backgroundColor: newUser.symbol === symbol ? "#0F172A" : "#EEF2F7" }}
-                >
-                  {symbol}
-                </button>
-              ))}
-            </div>
+          <Text style={styles.label}>בחירת צבע</Text>
+          <View style={styles.grid}>
+            {colors.map((c) => (
+              <Pressable
+                key={c}
+                onPress={() => setNewColor(c)}
+                style={[
+                  styles.colorBtn,
+                  { backgroundColor: c },
+                  newColor === c && styles.selectedColor,
+                ]}
+              />
+            ))}
+          </View>
 
-            <div className="mt-2">
-              <PrimaryButton label="שמירה והתחלה" onClick={createUser} fullWidth />
-            </div>
-          </div>
-        </div>
-      </Shell>
+          <Text style={styles.label}>בחירת סימן</Text>
+          <View style={styles.grid}>
+            {symbols.map((s) => (
+              <Pressable
+                key={s}
+                onPress={() => setNewSymbol(s)}
+                style={[styles.symbolBtn, newSymbol === s && styles.selectedDark]}
+              >
+                <Text style={styles.symbolText}>{s}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Pressable style={styles.primary} onPress={saveNewUser}>
+            <Text style={styles.primaryText}>שמירה</Text>
+          </Pressable>
+
+          <Pressable style={styles.secondary} onPress={() => setScreen("users")}>
+            <Text style={styles.secondaryText}>חזרה</Text>
+          </Pressable>
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
-  if (screen === "user" && activeUser) {
+  if (screen === "tracker" && activeUser) {
     return (
-      <Shell backgroundColor={mixWithWhite(activeUser.color, 0.92)}>
-        <TopBar
-          title={`${activeUser.name} ${activeUser.symbol}`}
-          leftIcon={<ChevronRight size={28} />}
-          onLeft={() => setScreen("users")}
-          backgroundColor={mixWithWhite(activeUser.color, 0.87)}
-        />
+      <SafeAreaView style={[styles.shell, { backgroundColor: activeUser.color + "12" }]}>
+        <View style={styles.topBar}>
+          <Pressable onPress={() => setScreen("users")} style={styles.topSmallBtn}>
+            <Text style={styles.topSmallText}>חזרה</Text>
+          </Pressable>
 
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <div className="flex h-[42px] items-center border-b border-slate-900/15 px-4">
-            <span className="flex-1 text-center text-xs font-black text-slate-500">כמות</span>
-            <span className="flex-[1.8] text-center text-xs font-black text-slate-500">שעה ← פעם הבאה</span>
-            <span className="flex-1 text-center text-xs font-black text-slate-500">תאריך</span>
-          </div>
+          <View style={styles.topName}>
+            <Text style={styles.topTitle}>
+              {activeUser.symbol} {activeUser.name}
+            </Text>
+          </View>
 
-          <div className="flex-1 overflow-y-auto">
-            {activeEntries.length ? (
-              activeEntries.slice(0, 20).map((entry) => {
-                const index = chronologicalEntries.findIndex((item) => item.entryId === entry.entryId);
-                const older = index > 0 ? chronologicalEntries[index - 1] : null;
-                const gap = gapBetween(entry, older);
+          <Pressable
+            onPress={() => setMenuOpen(!menuOpen)}
+            style={styles.dotsBtn}
+          >
+            <Text style={styles.dots}>⋯</Text>
+          </Pressable>
+        </View>
 
-                return (
-                  <div
-                    key={entry.entryId}
-                    className="flex min-h-[62px] items-center border-b border-slate-900/10 px-4"
-                  >
-                    <span className="flex-1 text-center text-lg font-black text-slate-900">
-                      {formatAmount(entry.amount)}
-                    </span>
-                    <div className="flex flex-[1.8] flex-col items-center">
-                      <span className="text-xl font-black text-slate-900">
-                        {formatTime(entry.nextReminderAt)} ← {formatTime(entry.takenAt)}
-                      </span>
-                      {gap ? <span className="mt-1 text-xs font-black text-slate-400">{gap}</span> : null}
-                    </div>
-                    <span className="flex-1 text-center text-sm font-black text-slate-900">
-                      {formatShortDate(entry.takenAt)}
-                    </span>
-                  </div>
-                );
-              })
+        {menuOpen && (
+          <View style={styles.menu}>
+            <Pressable onPress={openStock} style={styles.menuItem}>
+              <Text style={styles.menuText}>מלאי ועלות</Text>
+            </Pressable>
+
+            <Pressable onPress={openGive} style={styles.menuItem}>
+              <Text style={styles.menuText}>נתתי למישהו</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                setMenuOpen(false);
+                setScreen("payments");
+              }}
+              style={styles.menuItem}
+            >
+              <Text style={styles.menuText}>היסטוריית תשלומים</Text>
+            </Pressable>
+
+            <Pressable onPress={() => setMenuOpen(false)} style={styles.menuItem}>
+              <Text style={styles.menuText}>סגירה</Text>
+            </Pressable>
+          </View>
+        )}
+
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.statsRow}>
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>מצטבר</Text>
+              <Text style={styles.statValue}>{amountText(stats.taken)} מ״ל</Text>
+            </View>
+
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>זמן מאז הסימון האחרון</Text>
+              <Text style={styles.statValue}>
+                {stats.last ? timeText(stats.last.takenAt) : "אין סימון"}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.historyBox}>
+            <View style={styles.historyHead}>
+              <Text style={styles.hCell}>כמות</Text>
+              <Text style={styles.hCell}>שעה ← פעם הבאה</Text>
+              <Text style={styles.hCell}>תאריך</Text>
+            </View>
+
+            {activeUser.entries.length === 0 ? (
+              <Text style={styles.empty}>אין עדיין סימונים</Text>
             ) : (
-              <p className="mt-6 text-center text-lg font-bold text-slate-500">ממתין לסימון ראשון</p>
+              activeUser.entries.map((entry) => (
+                <View key={entry.id} style={styles.historyRow}>
+                  <Text style={styles.hCell}>{amountText(entry.amount)}</Text>
+                  <Text style={styles.hCell}>
+                    {timeText(entry.takenAt)} ← {timeText(entry.nextAt)}
+                  </Text>
+                  <Text style={styles.hCell}>{dateText(entry.takenAt)}</Text>
+                </View>
+              ))
             )}
-          </div>
+          </View>
+        </ScrollView>
 
-          <div className="border-t border-slate-900/10 bg-white/[0.98] p-4">
-            <div className="mb-2 flex items-center gap-2">
-              <div className="flex min-h-[52px] flex-1 flex-col items-center justify-center rounded-2xl border border-slate-900/10 bg-white py-2">
-                <span className="mb-1 text-xs font-black text-slate-600">מצטבר</span>
-                <span className="text-xl font-black text-slate-900">{formatAmount(totalAmountForUser())}</span>
-              </div>
-              <span className="text-2xl font-bold text-slate-400">|</span>
-              <div className="flex min-h-[52px] flex-1 flex-col items-center justify-center rounded-2xl border border-slate-900/10 bg-white py-2">
-                <span className="mb-1 text-xs font-black text-slate-600">זמן מאז הסימון האחרון</span>
-                <span className="text-xl font-black text-slate-900">
-                  {activeUser.lastTakenAt ? elapsedDurationFrom(activeUser.lastTakenAt, now) : "00:00"}
-                </span>
-              </div>
-            </div>
+        <View style={styles.bottomPanel}>
+          <Text style={styles.labelCenter}>תזכיר לי עוד...</Text>
 
-            <p className="mb-2 text-right text-sm font-black text-slate-600">תזכיר לי עוד...</p>
-
-            <div className="mb-2.5 flex gap-2">
-              {reminderOptions.map((option) => {
-                const selected = activeUser.selectedReminderAfterMinutes === option.minutes;
-                return (
-                  <button
-                    key={option.minutes}
-                    onClick={() => updateUserReminder(option.minutes)}
-                    className="min-h-[40px] flex-1 rounded-xl border text-base font-black"
-                    style={{
-                      backgroundColor: selected ? "#D9E9FF" : "#FFFFFF",
-                      borderColor: selected ? "#BFD7F7" : "#D7DCE4",
-                      color: selected ? "#325B8C" : "#516072",
-                    }}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={beginNow}
-                className="min-h-[50px] flex-1 rounded-2xl border text-lg font-black"
-                style={{
-                  backgroundColor: mixWithWhite(activeUser.color, 0.6),
-                  borderColor: mixWithWhite(activeUser.color, 0.5),
-                  color: mixTextColor(activeUser.color, 0.18),
-                }}
+          <View style={styles.reminderRow}>
+            {reminders.map((r) => (
+              <Pressable
+                key={r}
+                onPress={() => setReminder(r)}
+                style={[
+                  styles.reminderBtn,
+                  reminder === r && { backgroundColor: activeUser.color },
+                ]}
               >
-                לוקח עכשיו
-              </button>
-              <button
-                onClick={() => setScreen("before")}
-                className="min-h-[50px] flex-1 rounded-2xl border text-lg font-black"
-                style={{
-                  backgroundColor: mixWithWhite(activeUser.color, 0.72),
-                  borderColor: mixWithWhite(activeUser.color, 0.6),
-                  color: mixTextColor(activeUser.color, 0.26),
-                }}
-              >
-                לקחתי לפני...
-              </button>
-            </div>
-          </div>
-        </div>
-      </Shell>
+                <Text
+                  style={[
+                    styles.reminderText,
+                    reminder === r && styles.white,
+                  ]}
+                >
+                  {r === 30 ? "30 דק׳" : r === 60 ? "1:00" : r === 90 ? "1:30" : "2:00"}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <View style={styles.actionRow}>
+            <Pressable
+              onPress={() => {
+                setPendingTime(new Date());
+                setScreen("amount");
+              }}
+              style={[styles.actionBtn, { backgroundColor: activeUser.color }]}
+            >
+              <Text style={styles.actionText}>לוקח עכשיו</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setScreen("before")}
+              style={[styles.actionBtn, { backgroundColor: activeUser.color + "CC" }]}
+            >
+              <Text style={styles.actionText}>לקחתי לפני...</Text>
+            </Pressable>
+          </View>
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (screen === "before") {
     return (
-      <Shell backgroundColor={activeUser ? mixWithWhite(activeUser.color, 0.92) : "#F8FAFC"}>
-        <TopBar
-          title="מתי לקחת?"
-          leftIcon={<ChevronRight size={28} />}
-          onLeft={() => setScreen("user")}
-          backgroundColor={activeUser ? mixWithWhite(activeUser.color, 0.87) : "#FFFFFF"}
-        />
-        <div className="grid grid-cols-2 gap-2.5 p-4">
-          {minutesAgoOptions.map((minutes) => (
-            <button
-              key={minutes}
-              onClick={() => beginBefore(minutes)}
-              className="flex min-h-[58px] items-center justify-center rounded-2xl border border-slate-900/10 bg-white text-lg font-black text-slate-900"
-            >
-              {minutes} דק׳
-            </button>
-          ))}
-        </div>
-      </Shell>
-    );
-  }
+      <SafeAreaView style={styles.shell}>
+        <ScrollView contentContainerStyle={styles.content}>
+          <Text style={styles.title}>לקחתי לפני...</Text>
 
-  if (screen === "warning") {
-    return (
-      <div className="flex h-full min-h-screen flex-col bg-red-600 p-5" dir="rtl">
-        <div className="flex flex-1 flex-col items-center justify-center gap-1 text-center">
-          <h1 className="mb-5 text-3xl font-black text-white">רגע, השעון מרים גבה.</h1>
-          <p className="text-lg font-bold leading-loose text-white">חלפה פחות משעה מהסימון הקודם.</p>
-          <p className="text-lg font-bold leading-loose text-white">
-            הסימון האחרון היה בשעה {formatTime(warning?.lastTakenAt)},
-          </p>
-          <p className="text-lg font-bold leading-loose text-white">ומאז עברו רק {warning?.minutesSinceLast} דקות.</p>
-          <p className="mt-3.5 text-xl font-black leading-loose text-white">
-            שווה לעצור רגע ולבדוק שזה באמת הזמן הנכון.
-          </p>
-        </div>
+          <View style={styles.amountGrid}>
+            {beforeOptions.map((m) => (
+              <Pressable
+                key={m}
+                onPress={() => {
+                  setPendingTime(addMinutes(new Date(), -m));
+                  setScreen("amount");
+                }}
+                style={styles.amountBtn}
+              >
+                <Text style={styles.amountText}>{m} דק׳</Text>
+              </Pressable>
+            ))}
+          </View>
 
-        <div className="flex gap-3">
-          <button
-            onClick={() => {
-              setWarning(null);
-              setFlow(null);
-              setScreen("user");
-            }}
-            className="min-h-[56px] flex-1 rounded-[18px] bg-white text-lg font-black text-red-700"
-          >
-            חזרה
-          </button>
-          <button
-            onClick={continueAfterWarning}
-            className="min-h-[56px] flex-1 rounded-[18px] bg-red-900 text-lg font-black text-white"
-          >
-            המשך בכל זאת
-          </button>
-        </div>
-      </div>
+          <Pressable style={styles.secondary} onPress={() => setScreen("tracker")}>
+            <Text style={styles.secondaryText}>חזרה</Text>
+          </Pressable>
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
   if (screen === "amount") {
-    const bg = activeUser ? mixWithWhite(activeUser.color, 0.92) : "#F8FAFC";
-    const headerBg = activeUser ? mixWithWhite(activeUser.color, 0.87) : "#FFFFFF";
-    const modeText = flow?.mode === "before" ? `לקחת לפני ${flow.minutesAgo} דק׳` : "לוקח עכשיו";
-
     return (
-      <Shell backgroundColor={bg}>
-        <TopBar title="כמה לקחת?" leftIcon={<ChevronRight size={28} />} onLeft={() => setScreen("user")} backgroundColor={headerBg} />
-        <div className="flex-1 overflow-y-auto p-4 pb-6">
-          <p className="mb-2 text-center text-sm font-bold text-slate-500">
-            {activeUser ? `${activeUser.symbol} ${activeUser.name}` : ""}
-          </p>
-          <h2 className="mb-2.5 text-center text-3xl font-black text-slate-900">בחירת כמות</h2>
-          <p className="mb-4.5 text-center text-sm font-bold text-slate-500">{modeText}</p>
+      <SafeAreaView style={styles.shell}>
+        <ScrollView contentContainerStyle={styles.content}>
+          <Text style={styles.title}>בחירת כמות</Text>
 
-          <div className="flex flex-wrap gap-2.5">
-            {amountOptions.map((amount) => {
-              const featured = featuredAmounts.includes(amount);
+          <View style={styles.amountGrid}>
+            {amounts.map((a, index) => {
+              const big = a === 1 || a === 1.5 || a === 2;
+
               return (
-                <button
-                  key={amount}
-                  onClick={() => chooseAmount(amount)}
-                  className={
-                    featured
-                      ? "flex h-[146px] w-[48%] items-center justify-center rounded-[22px] border border-slate-900/10 bg-white/[0.97]"
-                      : "flex h-[68px] w-[22.7%] items-center justify-center rounded-2xl border border-slate-900/10 bg-white/90"
-                  }
+                <Pressable
+                  key={`${a}-${index}`}
+                  onPress={() => saveEntry(a)}
+                  style={[styles.amountBtn, big && styles.amountBig]}
                 >
-                  <span className={featured ? "text-4xl font-black text-slate-900" : "text-xl font-black text-slate-900"}>
-                    {formatAmount(amount)}
-                  </span>
-                </button>
+                  <Text style={[styles.amountText, big && styles.amountTextBig]}>
+                    {amountText(a)}
+                  </Text>
+                </Pressable>
               );
             })}
-          </div>
-        </div>
-      </Shell>
+          </View>
+
+          <Pressable style={styles.secondary} onPress={() => setScreen("tracker")}>
+            <Text style={styles.secondaryText}>חזרה</Text>
+          </Pressable>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === "stock" && activeUser) {
+    const pricePerMl = Number(stockMl || 0) > 0
+      ? Number(stockPrice || 0) / Number(stockMl || 1)
+      : 0;
+
+    return (
+      <SafeAreaView style={styles.shell}>
+        <ScrollView contentContainerStyle={styles.content}>
+          <Text style={styles.title}>מלאי ועלות</Text>
+
+          <TextInput
+            value={stockName}
+            onChangeText={setStockName}
+            placeholder="שם פריט"
+            style={styles.input}
+            textAlign="right"
+          />
+
+          <TextInput
+            value={stockMl}
+            onChangeText={setStockMl}
+            placeholder="כמות התחלתית במ״ל"
+            keyboardType="numeric"
+            style={styles.input}
+            textAlign="right"
+          />
+
+          <TextInput
+            value={stockPrice}
+            onChangeText={setStockPrice}
+            placeholder="מחיר כולל בש״ח"
+            keyboardType="numeric"
+            style={styles.input}
+            textAlign="right"
+          />
+
+          <View style={styles.card}>
+            <Text style={styles.rowText}>מחיר למ״ל: {money(pricePerMl)}</Text>
+            <Text style={styles.rowText}>נלקח: {amountText(stats.taken)} מ״ל</Text>
+            <Text style={styles.rowText}>ניתן לאחרים: {amountText(stats.given)} מ״ל</Text>
+            <Text style={styles.rowText}>נשאר: {amountText(stats.remaining)} מ״ל</Text>
+          </View>
+
+          <Pressable style={styles.primary} onPress={saveStock}>
+            <Text style={styles.primaryText}>שמירה</Text>
+          </Pressable>
+
+          <Pressable style={styles.secondary} onPress={() => setScreen("tracker")}>
+            <Text style={styles.secondaryText}>חזרה</Text>
+          </Pressable>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === "give" && activeUser) {
+    const suggested = Number(giveMl || 0) * stats.pricePerMl;
+
+    return (
+      <SafeAreaView style={styles.shell}>
+        <ScrollView contentContainerStyle={styles.content}>
+          <Text style={styles.title}>נתתי למישהו</Text>
+
+          <TextInput
+            value={givePerson}
+            onChangeText={setGivePerson}
+            placeholder="למי נתת"
+            style={styles.input}
+            textAlign="right"
+          />
+
+          <TextInput
+            value={giveMl}
+            onChangeText={setGiveMl}
+            placeholder="כמה במ״ל"
+            keyboardType="numeric"
+            style={styles.input}
+            textAlign="right"
+          />
+
+          <View style={styles.statusRow}>
+            {["צריך לשלם","שולם","חלקי","מתנה"].map((s) => (
+              <Pressable
+                key={s}
+                onPress={() => setGiveStatus(s)}
+                style={[styles.statusBtn, giveStatus === s && styles.selectedDark]}
+              >
+                <Text style={[styles.statusText, giveStatus === s && styles.white]}>
+                  {s}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Text style={styles.hint}>סכום מומלץ לפי מלאי: {money(suggested)}</Text>
+
+          <TextInput
+            value={giveToPay}
+            onChangeText={setGiveToPay}
+            placeholder="סכום לתשלום"
+            keyboardType="numeric"
+            style={styles.input}
+            textAlign="right"
+          />
+
+          <TextInput
+            value={givePaid}
+            onChangeText={setGivePaid}
+            placeholder="כמה שולם בפועל"
+            keyboardType="numeric"
+            style={styles.input}
+            textAlign="right"
+          />
+
+          <TextInput
+            value={giveNote}
+            onChangeText={setGiveNote}
+            placeholder="הערה"
+            style={styles.input}
+            textAlign="right"
+          />
+
+          <Pressable style={styles.primary} onPress={saveGive}>
+            <Text style={styles.primaryText}>שמירה</Text>
+          </Pressable>
+
+          <Pressable style={styles.secondary} onPress={() => setScreen("tracker")}>
+            <Text style={styles.secondaryText}>חזרה</Text>
+          </Pressable>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === "payments" && activeUser) {
+    return (
+      <SafeAreaView style={styles.shell}>
+        <ScrollView contentContainerStyle={styles.content}>
+          <Text style={styles.title}>היסטוריית תשלומים</Text>
+
+          <View style={styles.card}>
+            <Text style={styles.rowText}>חוב פתוח: {money(stats.openDebt)}</Text>
+          </View>
+
+          {activeUser.given.length === 0 ? (
+            <Text style={styles.empty}>אין עדיין נתינות</Text>
+          ) : (
+            activeUser.given.map((item) => (
+              <View key={item.id} style={styles.card}>
+                <Text style={styles.cardTitleSmall}>{item.person}</Text>
+                <Text style={styles.rowText}>כמות: {amountText(item.ml)} מ״ל</Text>
+                <Text style={styles.rowText}>סטטוס: {item.status}</Text>
+                <Text style={styles.rowText}>לתשלום: {money(item.toPay)}</Text>
+                <Text style={styles.rowText}>שולם: {money(item.paid)}</Text>
+                <Text style={styles.rowText}>תאריך: {dateText(item.date)}</Text>
+                {!!item.note && <Text style={styles.rowText}>הערה: {item.note}</Text>}
+              </View>
+            ))
+          )}
+
+          <Pressable style={styles.secondary} onPress={() => setScreen("tracker")}>
+            <Text style={styles.secondaryText}>חזרה</Text>
+          </Pressable>
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
   return null;
 }
 
-function Shell({ children, backgroundColor = "#FFFFFF" }) {
-  return (
-    <div className="flex h-full min-h-screen flex-col" style={{ backgroundColor }} dir="rtl">
-      {children}
-    </div>
-  );
-}
-
-function TopBar({ title, leftIcon, onLeft, rightIcon, onRight, backgroundColor = "#FFFFFF" }) {
-  return (
-    <div className="flex h-[62px] items-center border-b border-slate-900/10 px-3" style={{ backgroundColor }}>
-      <button className="flex w-[54px] items-center justify-center text-slate-900" onClick={onLeft}>
-        {leftIcon}
-      </button>
-      <span className="flex-1 text-center text-xl font-black text-slate-900">{title}</span>
-      <button className="flex w-[54px] items-center justify-center text-slate-900" onClick={onRight}>
-        {rightIcon}
-      </button>
-    </div>
-  );
-}
-
-function PrimaryButton({ label, onClick, fullWidth = false }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`min-h-[54px] rounded-2xl bg-slate-900 text-lg font-black text-white ${fullWidth ? "w-full" : "px-8"}`}
-    >
-      {label}
-    </button>
-  );
-}
+const styles = StyleSheet.create({
+  shell: {
+    flex: 1,
+    backgroundColor: "#F6F8FB",
+  },
+  center: {
+    flexGrow: 1,
+    justifyContent: "center",
+    padding: 24,
+    gap: 18,
+  },
+  content: {
+    padding: 18,
+    gap: 14,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "900",
+    textAlign: "center",
+    color: "#0F172A",
+  },
+  sub: {
+    fontSize: 16,
+    fontWeight: "700",
+    textAlign: "center",
+    color: "#64748B",
+    lineHeight: 24,
+  },
+  input: {
+    minHeight: 54,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingHorizontal: 14,
+    fontSize: 17,
+  },
+  label: {
+    textAlign: "right",
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#475569",
+  },
+  labelCenter: {
+    textAlign: "center",
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#475569",
+  },
+  grid: {
+    flexDirection: "row-reverse",
+    flexWrap: "wrap",
+    gap: 10,
+    justifyContent: "center",
+  },
+  symbolBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: "#EAF0F6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  selectedDark: {
+    backgroundColor: "#0F172A",
+  },
+  symbolText: {
+    fontSize: 24,
+  },
+  colorBtn: {
+    width: 58,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 4,
+    borderColor: "#FFFFFF",
+  },
+  selectedColor: {
+    borderColor: "#0F172A",
+  },
+  primary: {
+    minHeight: 54,
+    borderRadius: 18,
+    backgroundColor: "#0F172A",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryText: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  secondary: {
+    minHeight: 50,
+    borderRadius: 18,
+    backgroundColor: "#E2E8F0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  secondaryText: {
+    color: "#334155",
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 18,
+    alignItems: "center",
+    gap: 5,
+  },
+  bigSymbol: {
+    fontSize: 38,
+  },
+  cardTitle: {
+    fontSize: 26,
+    fontWeight: "900",
+    color: "#0F172A",
+  },
+  cardTitleSmall: {
+    fontSize: 21,
+    fontWeight: "900",
+    color: "#0F172A",
+  },
+  cardSub: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#64748B",
+  },
+  userRow: {
+    minHeight: 82,
+    borderRadius: 22,
+    padding: 14,
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 14,
+  },
+  userIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  userIconText: {
+    color: "#FFFFFF",
+    fontSize: 22,
+  },
+  userText: {
+    flex: 1,
+    alignItems: "flex-end",
+  },
+  userName: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#0F172A",
+  },
+  userSub: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#64748B",
+    marginTop: 4,
+  },
+  topBar: {
+    height: 64,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFFCC",
+  },
+  topSmallBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: "#E2E8F0",
+  },
+  topSmallText: {
+    fontWeight: "900",
+    color: "#334155",
+  },
+  topName: {
+    flex: 1,
+    alignItems: "center",
+  },
+  topTitle: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: "#0F172A",
+  },
+  dotsBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 16,
+    backgroundColor: "#0F172A",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dots: {
+    color: "#FFFFFF",
+    fontSize: 28,
+    fontWeight: "900",
+    marginTop: -8,
+  },
+  menu: {
+    position: "absolute",
+    top: 58,
+    right: 12,
+    zIndex: 10,
+    width: 210,
+    borderRadius: 20,
+    padding: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  menuItem: {
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+  },
+  menuText: {
+    textAlign: "right",
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#0F172A",
+  },
+  statsRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  statBox: {
+    flex: 1,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    padding: 14,
+    alignItems: "center",
+  },
+  statLabel: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#64748B",
+    textAlign: "center",
+  },
+  statValue: {
+    fontSize: 19,
+    fontWeight: "900",
+    color: "#0F172A",
+    marginTop: 6,
+    textAlign: "center",
+  },
+  historyBox: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    padding: 12,
+  },
+  historyHead: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingBottom: 8,
+  },
+  historyRow: {
+    flexDirection: "row",
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderColor: "#F1F5F9",
+  },
+  hCell: {
+    flex: 1,
+    textAlign: "center",
+    fontWeight: "800",
+    color: "#334155",
+  },
+  empty: {
+    textAlign: "center",
+    color: "#64748B",
+    fontWeight: "800",
+    padding: 18,
+  },
+  bottomPanel: {
+    padding: 14,
+    backgroundColor: "#FFFFFFE6",
+    borderTopWidth: 1,
+    borderColor: "#E2E8F0",
+    gap: 12,
+  },
+  reminderRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  reminderBtn: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 15,
+    backgroundColor: "#EAF0F6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reminderText: {
+    fontWeight: "900",
+    color: "#334155",
+  },
+  white: {
+    color: "#FFFFFF",
+  },
+  actionRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  actionBtn: {
+    flex: 1,
+    minHeight: 58,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionText: {
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  amountGrid: {
+    flexDirection: "row-reverse",
+    flexWrap: "wrap",
+    gap: 10,
+    justifyContent: "center",
+  },
+  amountBtn: {
+    width: 72,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  amountBig: {
+    width: 108,
+    height: 72,
+    backgroundColor: "#0F172A",
+  },
+  amountText: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#0F172A",
+  },
+  amountTextBig: {
+    fontSize: 26,
+    color: "#FFFFFF",
+  },
+  rowText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#334155",
+    textAlign: "center",
+  },
+  hint: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#475569",
+    textAlign: "center",
+  },
+  statusRow: {
+    flexDirection: "row-reverse",
+    flexWrap: "wrap",
+    gap: 8,
+    justifyContent: "center",
+  },
+  statusBtn: {
+    paddingHorizontal: 14,
+    minHeight: 42,
+    borderRadius: 14,
+    backgroundColor: "#EAF0F6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#334155",
+  },
+});
