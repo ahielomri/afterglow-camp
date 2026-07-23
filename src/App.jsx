@@ -3638,9 +3638,15 @@ ${cards}
     const win = window.open("", "_blank");
     if (!win) return showToast("נחסמה פתיחת חלון - יש לאפשר חלונות קופצים לאתר", "error");
 
-    const totalShifts = SHIFTS.length;
-    const totalSpots = SHIFTS.reduce((s, sh) => s + sh.spots, 0);
-    const totalVolunteers = SHIFTS.reduce((s, sh) => s + (assignments[sh.id] || []).length, 0);
+    // Teardown is excluded from the summary counts, same as
+    // unfilledShiftsCount/openShiftsCount elsewhere - it isn't a normal
+    // slot-limited shift people opt into (spots = every member, "everyone
+    // participates"), so counting its ~30 nominally-"open" spots would
+    // swamp the real numbers from the actual self-scheduled shifts.
+    const countedShifts = SHIFTS.filter((s) => s.id !== TEARDOWN_ID);
+    const totalShifts = countedShifts.length;
+    const totalSpots = countedShifts.reduce((s, sh) => s + sh.spots, 0);
+    const totalVolunteers = countedShifts.reduce((s, sh) => s + (assignments[sh.id] || []).length, 0);
     const openSpots = Math.max(totalSpots - totalVolunteers, 0);
 
     const phases = [...new Set(SHIFTS.map((s) => s.phase))];
