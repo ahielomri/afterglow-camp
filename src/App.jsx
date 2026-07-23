@@ -1,1336 +1,808 @@
-"use client";
-
 import React, { useEffect, useMemo, useState } from "react";
+import { ChevronRight, Plus, MoreVertical } from "lucide-react";
+import { ensurePushEnabled, scheduleServerReminder } from "./push.js";
 
-const SYMBOLS = [
-  "🪬","🪩","🧿","🪐","🧬","🫧","🪄","🪞","🪶","🪸",
-  "🪷","🪻","🪁","🛸","🧭","🧩","🪅","🎐","🦚","🦋"
+const STORAGE_KEY = "check_timer_app_data_v1";
+
+const amountOptions = [
+  "0.1", "0.2", "0.3", "0.4",
+  "0.5", "1.0", "0.6", "0.7",
+  "0.8", "0.9", "1.1", "1.2",
+  "1.3", "1.4", "1.5", "1.6",
+  "1.7", "1.8", "1.9", "2.1",
+  "2.2", "2.0", "2.3", "2.4",
+  "2.5", "2.6", "2.7",
 ];
 
-const COLORS = [
-  "#B794F4",
-  "#60A5FA",
-  "#34D399",
-  "#F59E0B",
-  "#F472B6",
-  "#818CF8",
-  "#22D3EE",
-  "#FB7185"
+const featuredAmounts = ["1.0", "1.5", "2.0"];
+
+const minutesAgoOptions = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
+
+const reminderOptions = [
+  { label: "30 דק׳", minutes: 30 },
+  { label: "1:00", minutes: 60 },
+  { label: "1:30", minutes: 90 },
+  { label: "2:00", minutes: 120 },
 ];
 
-const REMINDERS = [30, 60, 90, 120];
-const BEFORE = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
-
-const AMOUNTS = [
-  0.1, 0.2, 0.3, 0.4,
-  0.5, 1, 0.6, 0.7,
-  0.8, 0.9, 1.1, 1.2,
-  1.3, 1.4, 1.5, 1.6,
-  1.7, 1.8, 1.9, 2.1,
-  2.2, 2, 2.3, 2.4,
-  2.5, 2.6, 2.7
+const colorOptions = [
+  "#2563EB", "#16A34A", "#9333EA", "#DC2626",
+  "#EA580C", "#0891B2", "#4F46E5", "#BE123C",
 ];
 
-const STORAGE_KEY = "check_timer_vercel_full_v1";
+const symbolOptions = [
+  "🪬", "🪩", "🧿", "🪐", "🧬", "🫧",
+  "🪄", "🪞", "🪶", "🪸", "🪷", "🪻",
+  "🪁", "🛸", "🧭", "🪆", "🧩", "🪅",
+  "🪙", "🎐", "🎏", "🎎", "🦚", "🦦",
+  "🦥", "🦔", "🪼", "🦑", "🐚", "🦋",
+];
+
+function uid(prefix) {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function hexToRgb(hex) {
+  const clean = hex.replace("#", "");
+  return {
+    r: parseInt(clean.slice(0, 2), 16),
+    g: parseInt(clean.slice(2, 4), 16),
+    b: parseInt(clean.slice(4, 6), 16),
+  };
+}
+
+function mixWithWhite(hex, mix = 0.9) {
+  const rgb = hexToRgb(hex);
+  const r = Math.round(rgb.r * (1 - mix) + 255 * mix);
+  const g = Math.round(rgb.g * (1 - mix) + 255 * mix);
+  const b = Math.round(rgb.b * (1 - mix) + 255 * mix);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+function mixTextColor(hex, amount = 0.35) {
+  const rgb = hexToRgb(hex);
+  const r = Math.round(rgb.r * (1 - amount));
+  const g = Math.round(rgb.g * (1 - amount));
+  const b = Math.round(rgb.b * (1 - amount));
+  return `rgb(${r}, ${g}, ${b})`;
+}
 
 function formatAmount(value) {
-  const n = Number(value || 0);
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+  const num = Number(value || 0);
+  return Number.isInteger(num) ? String(num) : num.toFixed(1);
 }
 
-function timeText(value) {
-  if (!value) return "";
-  return new Date(value).toLocaleTimeString("he-IL", {
+function formatTime(dateValue) {
+  if (!dateValue) return "";
+  return new Date(dateValue).toLocaleTimeString("he-IL", {
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
   });
 }
 
-function dateText(value) {
-  if (!value) return "";
-  return new Date(value).toLocaleDateString("he-IL", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit"
-  });
+function formatShortDate(dateValue) {
+  if (!dateValue) return "";
+  const d = new Date(dateValue);
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = String(d.getFullYear()).slice(-2);
+  return `${day}.${month}.${year}`;
 }
 
-function addMinutes(date, minutes) {
-  return new Date(date.getTime() + minutes * 60000);
+function addMinutes(dateValue, minutes) {
+  return new Date(new Date(dateValue).getTime() + minutes * 60000).toISOString();
 }
 
-function money(value) {
-  const n = Number(value || 0);
-  return `${Math.round(n * 100) / 100} ₪`;
+function subtractMinutes(dateValue, minutes) {
+  return new Date(new Date(dateValue).getTime() - minutes * 60000).toISOString();
 }
 
-function minutesSince(value) {
-  if (!value) return "00:00";
+function diffMinutes(a, b) {
+  return Math.floor((new Date(a).getTime() - new Date(b).getTime()) / 60000);
+}
 
-  const diff = Math.max(0, Date.now() - new Date(value).getTime());
-  const totalMinutes = Math.floor(diff / 60000);
-  const hours = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
-  const minutes = String(totalMinutes % 60).padStart(2, "0");
+function elapsedDurationFrom(dateValue, nowValue) {
+  if (!dateValue) return "00:00";
+  const ms = nowValue - new Date(dateValue).getTime();
+  if (ms <= 0) return "00:00";
+  const totalSeconds = Math.floor(ms / 1000);
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) {
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
 
-  return `${hours}:${minutes}`;
+function gapBetween(currentEntry, olderEntry) {
+  if (!olderEntry) return "";
+  const minutes = Math.max(
+    0,
+    Math.floor((new Date(currentEntry.takenAt).getTime() - new Date(olderEntry.takenAt).getTime()) / 60000)
+  );
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours && mins) return `↓ ${hours}h${String(mins).padStart(2, "0")}`;
+  if (hours) return `↓ ${hours}h`;
+  return `↓ ${mins}m`;
+}
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { users: [], entries: [] };
+    const parsed = JSON.parse(raw);
+    return {
+      users: Array.isArray(parsed.users) ? parsed.users : [],
+      entries: Array.isArray(parsed.entries) ? parsed.entries : [],
+    };
+  } catch {
+    return { users: [], entries: [] };
+  }
+}
+
+// Tries to queue the reminder as a real server-sent push (arrives even if
+// this tab/app is closed by then). Falls back to a client-side timer - which
+// only fires while this tab stays open - if push isn't available (browser
+// doesn't support it, or the permission prompt was denied).
+async function scheduleReminder(entry) {
+  const passedLabel = entry.reminderAfterMinutes >= 60
+    ? `${Math.floor(entry.reminderAfterMinutes / 60)}:${String(entry.reminderAfterMinutes % 60).padStart(2, "0")}`
+    : `${entry.reminderAfterMinutes} דק׳`;
+  const title = "תזכורת";
+  const body = `עברו ${passedLabel} מאז הסימון האחרון.\nהשעון עשה את שלו, עכשיו תורך לבדוק מה המצב.`;
+
+  try {
+    await ensurePushEnabled();
+    await scheduleServerReminder({ title, body, remindAt: entry.nextReminderAt });
+    return;
+  } catch {
+    // fall through to the local-only fallback below
+  }
+
+  if ("Notification" in window && Notification.permission === "granted") {
+    const ms = new Date(entry.nextReminderAt).getTime() - Date.now();
+    if (ms > 0) {
+      window.setTimeout(() => {
+        try {
+          new Notification(title, { body });
+        } catch {
+          // ignore - notification best-effort only
+        }
+      }, ms);
+    }
+  }
 }
 
 export default function App() {
-  const [data, setData] = useState({
-    mainUser: null,
-    users: []
-  });
-
-  const [screen, setScreen] = useState("boot");
+  const [data, setData] = useState(() => loadData());
+  const [screen, setScreen] = useState(() => (loadData().users.length ? "users" : "welcome"));
   const [activeUserId, setActiveUserId] = useState(null);
+  const [newUser, setNewUser] = useState({
+    name: "",
+    color: colorOptions[0],
+    symbol: symbolOptions[0],
+  });
+  const [editingUserId, setEditingUserId] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
-
-  const [mainName, setMainName] = useState("");
-  const [mainSymbol, setMainSymbol] = useState(SYMBOLS[0]);
-
-  const [newName, setNewName] = useState("");
-  const [newSymbol, setNewSymbol] = useState(SYMBOLS[1]);
-  const [newColor, setNewColor] = useState(COLORS[0]);
-
-  const [reminder, setReminder] = useState(90);
-  const [pendingTakenAt, setPendingTakenAt] = useState(null);
-
-  const [stockName, setStockName] = useState("");
-  const [stockMl, setStockMl] = useState("");
-  const [stockPrice, setStockPrice] = useState("");
-
-  const [givePerson, setGivePerson] = useState("");
-  const [giveMl, setGiveMl] = useState("");
-  const [giveStatus, setGiveStatus] = useState("צריך לשלם");
-  const [giveToPay, setGiveToPay] = useState("");
-  const [givePaid, setGivePaid] = useState("");
-  const [giveNote, setGiveNote] = useState("");
-
+  const [flow, setFlow] = useState(null);
   const [warning, setWarning] = useState(null);
-  const [clock, setClock] = useState(Date.now());
+  const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setData(parsed);
-        setScreen(parsed.mainUser ? "users" : "main");
-      } else {
-        setScreen("main");
-      }
-    } catch {
-      setScreen("main");
-    }
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    if (screen !== "boot") {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    }
-  }, [data, screen]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }, [data]);
 
-  useEffect(() => {
-    const id = setInterval(() => {
-      setClock(Date.now());
-    }, 1000);
+  const activeUser = data.users.find((user) => user.userId === activeUserId) || null;
 
-    return () => clearInterval(id);
-  }, []);
+  const activeEntries = useMemo(() => {
+    return data.entries
+      .filter((entry) => entry.userId === activeUserId)
+      .sort((a, b) => new Date(b.takenAt).getTime() - new Date(a.takenAt).getTime());
+  }, [data.entries, activeUserId]);
 
-  const activeUser = data.users.find((user) => user.id === activeUserId);
+  const chronologicalEntries = useMemo(() => {
+    return data.entries
+      .filter((entry) => entry.userId === activeUserId)
+      .sort((a, b) => new Date(a.takenAt).getTime() - new Date(b.takenAt).getTime());
+  }, [data.entries, activeUserId]);
 
-  const stats = useMemo(() => {
-    if (!activeUser) {
-      return {
-        taken: 0,
-        given: 0,
-        remaining: 0,
-        pricePerMl: 0,
-        openDebt: 0,
-        last: null
-      };
-    }
-
-    const taken = activeUser.entries.reduce((sum, item) => {
-      return sum + Number(item.amount || 0);
-    }, 0);
-
-    const given = activeUser.given.reduce((sum, item) => {
-      return sum + Number(item.ml || 0);
-    }, 0);
-
-    const totalMl = Number(activeUser.stock?.ml || 0);
-    const totalPrice = Number(activeUser.stock?.price || 0);
-    const pricePerMl = totalMl > 0 ? totalPrice / totalMl : 0;
-    const remaining = Math.max(totalMl - taken - given, 0);
-
-    const openDebt = activeUser.given.reduce((sum, item) => {
-      return sum + Math.max(Number(item.toPay || 0) - Number(item.paid || 0), 0);
-    }, 0);
-
-    return {
-      taken,
-      given,
-      remaining,
-      pricePerMl,
-      openDebt,
-      last: activeUser.entries[0] || null
-    };
-  }, [activeUser, clock]);
-
-  function updateUser(userId, patch) {
-    setData((prev) => ({
-      ...prev,
-      users: prev.users.map((user) => {
-        if (user.id === userId) {
-          return {
-            ...user,
-            ...patch
-          };
-        }
-
-        return user;
-      })
-    }));
+  function totalAmountForUser(userId = activeUserId) {
+    return data.entries
+      .filter((entry) => entry.userId === userId)
+      .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
   }
 
-  function saveMainUser() {
-    if (!mainName.trim()) return;
+  function selectUser(userId) {
+    setActiveUserId(userId);
+    setMenuOpen(false);
+    setScreen("user");
+  }
 
-    setData((prev) => ({
-      ...prev,
-      mainUser: {
-        name: mainName.trim(),
-        symbol: mainSymbol
-      }
-    }));
-
+  function backToUsers() {
+    setMenuOpen(false);
     setScreen("users");
   }
 
-  function saveNewUser() {
-    if (!newName.trim()) return;
+  function createUser() {
+    const cleanName = newUser.name.trim();
+    if (!cleanName) return;
 
     const user = {
-      id: String(Date.now()),
-      name: newName.trim(),
-      symbol: newSymbol,
-      color: newColor,
-      entries: [],
-      stock: {
-        name: "",
-        ml: "",
-        price: ""
-      },
-      given: []
+      userId: uid("user"),
+      name: cleanName,
+      color: newUser.color,
+      symbol: newUser.symbol,
+      createdAt: new Date().toISOString(),
+      lastTakenAt: null,
+      lastAmount: null,
+      nextReminderAt: null,
+      selectedReminderAfterMinutes: 120,
     };
 
-    setData((prev) => ({
-      ...prev,
-      users: [...prev.users, user]
+    setData((current) => ({
+      ...current,
+      users: [...current.users, user],
     }));
 
-    setNewName("");
-    setNewSymbol(SYMBOLS[1]);
-    setNewColor(COLORS[0]);
+    setActiveUserId(user.userId);
+    setNewUser({ name: "", color: colorOptions[0], symbol: symbolOptions[0] });
+    setScreen("user");
+  }
+
+  function openEditUser() {
+    if (!activeUser) return;
+    setNewUser({ name: activeUser.name, color: activeUser.color, symbol: activeUser.symbol });
+    setEditingUserId(activeUser.userId);
+    setMenuOpen(false);
+    setScreen("editUser");
+  }
+
+  function saveEditUser() {
+    const cleanName = newUser.name.trim();
+    if (!cleanName || !editingUserId) return;
+
+    setData((current) => ({
+      ...current,
+      users: current.users.map((user) =>
+        user.userId === editingUserId
+          ? { ...user, name: cleanName, color: newUser.color, symbol: newUser.symbol }
+          : user
+      ),
+    }));
+
+    setEditingUserId(null);
+    setScreen("user");
+  }
+
+  function deleteUser() {
+    if (!activeUser) return;
+    if (!window.confirm(`למחוק את ${activeUser.name} לצמיתות, כולל כל ההיסטוריה שלו?`)) return;
+
+    const userId = activeUser.userId;
+    setData((current) => ({
+      users: current.users.filter((user) => user.userId !== userId),
+      entries: current.entries.filter((entry) => entry.userId !== userId),
+    }));
+
+    setActiveUserId(null);
+    setMenuOpen(false);
     setScreen("users");
   }
 
-  function openTracker(user) {
-    setActiveUserId(user.id);
+  function resetUserHistory() {
+    if (!activeUser) return;
+    if (!window.confirm(`לאפס את ההיסטוריה של ${activeUser.name}? היוזר עצמו יישאר.`)) return;
+
+    const userId = activeUser.userId;
+    setData((current) => ({
+      users: current.users.map((user) =>
+        user.userId === userId
+          ? { ...user, lastTakenAt: null, lastAmount: null, nextReminderAt: null }
+          : user
+      ),
+      entries: current.entries.filter((entry) => entry.userId !== userId),
+    }));
+
     setMenuOpen(false);
-    setScreen("tracker");
   }
 
-  function startNow() {
-    setPendingTakenAt(new Date());
-    setScreen("amount");
+  function updateUserReminder(minutes) {
+    if (!activeUser) return;
+    setData((current) => ({
+      ...current,
+      users: current.users.map((user) =>
+        user.userId === activeUser.userId
+          ? { ...user, selectedReminderAfterMinutes: minutes }
+          : user
+      ),
+    }));
   }
 
-  function startBefore(minutes) {
-    setPendingTakenAt(addMinutes(new Date(), -minutes));
-    setScreen("amount");
+  function beginNow() {
+    const nextFlow = {
+      mode: "now",
+      selectedTakenAt: new Date().toISOString(),
+      minutesAgo: null,
+    };
+    checkWarningOrContinue(nextFlow);
   }
 
-  function saveEntry(amount, force = false) {
-    if (!activeUser || !pendingTakenAt) return;
+  function beginBefore(minutesAgo) {
+    const nextFlow = {
+      mode: "before",
+      selectedTakenAt: subtractMinutes(new Date().toISOString(), minutesAgo),
+      minutesAgo,
+    };
+    checkWarningOrContinue(nextFlow);
+  }
 
-    const last = activeUser.entries[0];
-
-    if (last && !force) {
-      const diff = (pendingTakenAt.getTime() - new Date(last.takenAt).getTime()) / 60000;
-
-      if (diff > -1 && diff < 60) {
-        setWarning({ amount });
+  function checkWarningOrContinue(nextFlow) {
+    if (activeUser?.lastTakenAt) {
+      const minutesSinceLast = diffMinutes(nextFlow.selectedTakenAt, activeUser.lastTakenAt);
+      if (minutesSinceLast < 60) {
+        setFlow(nextFlow);
+        setWarning({
+          lastTakenAt: activeUser.lastTakenAt,
+          minutesSinceLast: Math.max(0, minutesSinceLast),
+          continuedAnyway: false,
+        });
+        setScreen("warning");
         return;
       }
     }
 
+    setFlow(nextFlow);
+    setScreen("amount");
+  }
+
+  function continueAfterWarning() {
+    setWarning((current) => ({ ...current, continuedAnyway: true }));
+    setScreen("amount");
+  }
+
+  async function chooseAmount(amount) {
+    if (!activeUser || !flow) return;
+
+    const reminderMinutes = activeUser.selectedReminderAfterMinutes || 120;
+    const nextReminderAt = addMinutes(flow.selectedTakenAt, reminderMinutes);
+
     const entry = {
-      id: String(Date.now()),
+      entryId: uid("entry"),
+      userId: activeUser.userId,
+      mode: flow.mode,
       amount,
-      takenAt: pendingTakenAt.toISOString(),
-      nextAt: addMinutes(pendingTakenAt, reminder).toISOString()
+      takenAt: flow.selectedTakenAt,
+      minutesAgo: flow.minutesAgo,
+      reminderAfterMinutes: reminderMinutes,
+      nextReminderAt,
+      redWarningShown: Boolean(warning),
+      continuedAnyway: Boolean(warning?.continuedAnyway),
+      createdAt: new Date().toISOString(),
     };
 
-    updateUser(activeUser.id, {
-      entries: [entry, ...activeUser.entries]
-    });
+    setData((current) => ({
+      users: current.users.map((user) =>
+        user.userId === activeUser.userId
+          ? { ...user, lastTakenAt: flow.selectedTakenAt, lastAmount: amount, nextReminderAt }
+          : user
+      ),
+      entries: [...current.entries, entry],
+    }));
 
+    await scheduleReminder(entry);
+
+    setFlow(null);
     setWarning(null);
-    setPendingTakenAt(null);
-    setScreen("tracker");
+    setScreen("user");
   }
 
-  function openStock() {
-    if (!activeUser) return;
-
-    setStockName(activeUser.stock?.name || "");
-    setStockMl(String(activeUser.stock?.ml || ""));
-    setStockPrice(String(activeUser.stock?.price || ""));
-    setMenuOpen(false);
-    setScreen("stock");
-  }
-
-  function saveStock() {
-    if (!activeUser) return;
-
-    updateUser(activeUser.id, {
-      stock: {
-        name: stockName,
-        ml: stockMl,
-        price: stockPrice
-      }
-    });
-
-    setScreen("tracker");
-  }
-
-  function openGive() {
-    setGivePerson("");
-    setGiveMl("");
-    setGiveStatus("צריך לשלם");
-    setGiveToPay("");
-    setGivePaid("");
-    setGiveNote("");
-    setMenuOpen(false);
-    setScreen("give");
-  }
-
-  function saveGive() {
-    if (!activeUser || !givePerson.trim() || !Number(giveMl)) return;
-
-    const ml = Number(giveMl);
-    const suggested = stats.pricePerMl
-      ? Math.round(stats.pricePerMl * ml * 100) / 100
-      : 0;
-
-    const item = {
-      id: String(Date.now()),
-      person: givePerson.trim(),
-      ml,
-      status: giveStatus,
-      toPay: giveToPay.trim() ? Number(giveToPay) : suggested,
-      paid: Number(givePaid || 0),
-      note: giveNote,
-      date: new Date().toISOString()
-    };
-
-    updateUser(activeUser.id, {
-      given: [item, ...activeUser.given]
-    });
-
-    setScreen("tracker");
-  }
-
-  function resetApp() {
-    const ok = confirm("למחוק את כל הנתונים באפליקציה?");
-    if (!ok) return;
-
+  function resetAllData() {
+    if (!window.confirm("למחוק את כל הנתונים? הפעולה בלתי הפיכה.")) return;
     localStorage.removeItem(STORAGE_KEY);
-    setData({
-      mainUser: null,
-      users: []
-    });
+    setData({ users: [], entries: [] });
     setActiveUserId(null);
-    setScreen("main");
+    setScreen("welcome");
   }
 
-  if (screen === "boot") {
+  if (screen === "welcome") {
     return (
-      <main style={styles.page}>
-        <section style={styles.centerCard}>
-          <h1 style={styles.h1}>טוען...</h1>
-        </section>
-      </main>
-    );
-  }
-
-  if (screen === "main") {
-    return (
-      <main style={styles.page}>
-        <section style={styles.centerCard}>
-          <h1 style={styles.h1}>הקמת משתמש ראשי</h1>
-          <p style={styles.sub}>זה המשתמש שמנהל את כל המעקבים באפליקציה.</p>
-
-          <input
-            value={mainName}
-            onChange={(event) => setMainName(event.target.value)}
-            placeholder="שם המשתמש הראשי"
-            style={styles.input}
-          />
-
-          <div style={styles.symbolGrid}>
-            {SYMBOLS.map((symbol) => (
-              <button
-                key={symbol}
-                onClick={() => setMainSymbol(symbol)}
-                style={{
-                  ...styles.symbolButton,
-                  ...(mainSymbol === symbol ? styles.selectedDark : {})
-                }}
-              >
-                {symbol}
-              </button>
-            ))}
-          </div>
-
-          <button style={styles.primary} onClick={saveMainUser}>
-            שמירה והמשך
-          </button>
-        </section>
-      </main>
+      <Shell>
+        <div className="flex flex-1 flex-col items-center justify-center gap-5 p-7 text-center">
+          <h1 className="text-3xl font-black text-slate-900">ברוכים הבאים</h1>
+          <p className="max-w-xs text-lg font-bold leading-relaxed text-slate-500">
+            כדי להתחיל, נקים יוזר אישי.
+          </p>
+          <PrimaryButton label="הקמת יוזר חדש" onClick={() => setScreen("createUser")} />
+        </div>
+      </Shell>
     );
   }
 
   if (screen === "users") {
     return (
-      <main style={styles.page}>
-        <section style={styles.appShell}>
-          <header style={styles.header}>
-            <button style={styles.iconMenu} onClick={resetApp}>
-              ⌫
-            </button>
-
-            <div style={styles.headerTitle}>
-              <span>{data.mainUser?.symbol}</span>
-              <strong>{data.mainUser?.name}</strong>
-            </div>
-
-            <span style={styles.spacer} />
-          </header>
-
-          <div style={styles.list}>
-            <button style={styles.primary} onClick={() => setScreen("createUser")}>
-              הקמת יוזר חדש
-            </button>
-
-            {data.users.length === 0 ? (
-              <div style={styles.emptyBox}>
-                אין עדיין יוזרים. כדאי להקים יוזר ראשון.
-              </div>
-            ) : (
-              data.users.map((user) => (
-                <button
-                  key={user.id}
-                  style={styles.userCard}
-                  onClick={() => openTracker(user)}
+      <Shell>
+        <TopBar title="בחר יוזר" rightIcon={<Plus size={26} />} onRight={() => setScreen("createUser")} />
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex flex-col gap-3.5">
+            {data.users.map((user) => (
+              <button
+                key={user.userId}
+                onClick={() => selectUser(user.userId)}
+                className="flex min-h-[78px] items-center gap-3.5 rounded-[22px] border border-slate-900/5 p-3.5 text-right"
+                style={{ backgroundColor: mixWithWhite(user.color, 0.9) }}
+              >
+                <span
+                  className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-2xl text-2xl"
+                  style={{ backgroundColor: user.color }}
                 >
-                  <span style={{ ...styles.userSymbol, background: user.color }}>
-                    {user.symbol}
-                  </span>
-
-                  <span style={styles.userInfo}>
-                    <strong>{user.name}</strong>
-                    <small>כניסה למסך מעקב</small>
-                  </span>
-
-                  <span style={styles.chevron}>›</span>
-                </button>
-              ))
-            )}
+                  {user.symbol}
+                </span>
+                <span className="flex-1">
+                  <span className="block text-xl font-black text-slate-900">{user.name}</span>
+                  <span className="mt-1 block text-xs font-bold text-slate-500">כניסה למסך היוזר</span>
+                </span>
+                <span className="min-w-[70px] text-left text-lg font-black text-slate-900">
+                  {user.lastTakenAt ? elapsedDurationFrom(user.lastTakenAt, now) : ""}
+                </span>
+              </button>
+            ))}
           </div>
-        </section>
-      </main>
+
+          <button
+            onClick={resetAllData}
+            className="mt-6 min-h-[48px] w-full rounded-2xl bg-slate-200 text-base font-black text-slate-700"
+          >
+            איפוס נתונים
+          </button>
+        </div>
+      </Shell>
     );
   }
 
-  if (screen === "createUser") {
+  if (screen === "createUser" || screen === "editUser") {
+    const isEdit = screen === "editUser";
     return (
-      <main style={styles.page}>
-        <section style={styles.appShell}>
-          <header style={styles.header}>
-            <button style={styles.back} onClick={() => setScreen("users")}>
-              חזרה
-            </button>
-
-            <div style={styles.headerTitle}>
-              <strong>הקמת יוזר</strong>
-            </div>
-
-            <span style={styles.spacer} />
-          </header>
-
-          <div style={styles.form}>
+      <Shell>
+        <TopBar
+          title={isEdit ? "עריכת יוזר" : "הקמת יוזר"}
+          leftIcon={<ChevronRight size={28} />}
+          onLeft={() => setScreen(isEdit ? "user" : data.users.length ? "users" : "welcome")}
+        />
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex flex-col gap-3.5">
+            <label className="text-right text-sm font-black text-slate-700">שם היוזר</label>
             <input
-              value={newName}
-              onChange={(event) => setNewName(event.target.value)}
-              placeholder="שם היוזר"
-              style={styles.input}
+              value={newUser.name}
+              onChange={(e) => setNewUser((current) => ({ ...current, name: e.target.value }))}
+              placeholder="לדוגמה: עומרי"
+              dir="rtl"
+              className="min-h-[54px] rounded-2xl border border-slate-200 bg-white px-3.5 text-right text-lg text-slate-900 outline-none focus:border-slate-400"
             />
 
-            <label style={styles.label}>בחירת צבע</label>
-
-            <div style={styles.colorGrid}>
-              {COLORS.map((color) => (
+            <label className="mt-2 text-right text-sm font-black text-slate-700">בחירת צבע</label>
+            <div className="flex flex-wrap gap-3">
+              {colorOptions.map((color) => (
                 <button
                   key={color}
-                  onClick={() => setNewColor(color)}
+                  onClick={() => setNewUser((current) => ({ ...current, color }))}
+                  className="h-12 w-16 rounded-2xl border-4"
                   style={{
-                    ...styles.colorButton,
-                    background: color,
-                    outline: newColor === color ? "4px solid #0F172A" : "4px solid #FFF"
+                    backgroundColor: color,
+                    borderColor: newUser.color === color ? "#0F172A" : "#FFFFFF",
                   }}
                 />
               ))}
             </div>
 
-            <label style={styles.label}>בחירת סימן</label>
-
-            <div style={styles.symbolGrid}>
-              {SYMBOLS.map((symbol) => (
+            <label className="mt-2 text-right text-sm font-black text-slate-700">בחירת סימן מזהה</label>
+            <div className="flex flex-wrap gap-2.5">
+              {symbolOptions.map((symbol) => (
                 <button
                   key={symbol}
-                  onClick={() => setNewSymbol(symbol)}
-                  style={{
-                    ...styles.symbolButton,
-                    ...(newSymbol === symbol ? styles.selectedDark : {})
-                  }}
+                  onClick={() => setNewUser((current) => ({ ...current, symbol }))}
+                  className="flex h-[50px] w-[50px] items-center justify-center rounded-2xl text-2xl"
+                  style={{ backgroundColor: newUser.symbol === symbol ? "#0F172A" : "#EEF2F7" }}
                 >
                   {symbol}
                 </button>
               ))}
             </div>
 
-            <button style={styles.primary} onClick={saveNewUser}>
-              שמירה
-            </button>
+            <div className="mt-2">
+              <PrimaryButton
+                label={isEdit ? "שמירת שינויים" : "שמירה והתחלה"}
+                onClick={isEdit ? saveEditUser : createUser}
+                fullWidth
+              />
+            </div>
           </div>
-        </section>
-      </main>
+        </div>
+      </Shell>
     );
   }
 
-  if (screen === "tracker" && activeUser) {
+  if (screen === "user" && activeUser) {
     return (
-      <main style={{ ...styles.page, background: `${activeUser.color}22` }}>
-        <section style={styles.appShell}>
-          <header style={{ ...styles.header, background: `${activeUser.color}24` }}>
-            <button style={styles.iconMenu} onClick={() => setMenuOpen(true)}>
-              ⋯
-            </button>
-
-            <div style={styles.headerTitle}>
-              <span>{activeUser.symbol}</span>
-              <strong>{activeUser.name}</strong>
-            </div>
-
-            <button style={styles.iconMenu} onClick={() => setScreen("users")}>
-              ×
-            </button>
-          </header>
-
+      <Shell backgroundColor={mixWithWhite(activeUser.color, 0.92)}>
+        <div className="relative">
+          <TopBar
+            title={`${activeUser.name} ${activeUser.symbol}`}
+            leftIcon={<ChevronRight size={28} />}
+            onLeft={backToUsers}
+            rightIcon={<MoreVertical size={24} />}
+            onRight={() => setMenuOpen((open) => !open)}
+            backgroundColor={mixWithWhite(activeUser.color, 0.87)}
+          />
           {menuOpen && (
-            <div style={styles.overlay} onClick={() => setMenuOpen(false)}>
-              <aside style={styles.drawer} onClick={(event) => event.stopPropagation()}>
-                <button style={styles.drawerClose} onClick={() => setMenuOpen(false)}>
-                  ×
-                </button>
-
-                <h3 style={styles.drawerTitle}>תפריט</h3>
-
-                <button style={styles.drawerItem} onClick={openStock}>
-                  מלאי ועלות
-                </button>
-
-                <button style={styles.drawerItem} onClick={openGive}>
-                  נתתי למישהו
-                </button>
-
-                <button
-                  style={styles.drawerItem}
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setScreen("payments");
-                  }}
-                >
-                  היסטוריית תשלומים
-                </button>
-
-                <button style={styles.drawerItem} onClick={() => setMenuOpen(false)}>
-                  סגירה
-                </button>
-              </aside>
+            <div className="absolute left-3 top-[64px] z-10 w-48 overflow-hidden rounded-2xl border border-slate-900/10 bg-white shadow-lg">
+              <button
+                onClick={openEditUser}
+                className="block w-full px-4 py-3 text-right text-base font-bold text-slate-900 hover:bg-slate-50"
+              >
+                עריכת יוזר
+              </button>
+              <button
+                onClick={resetUserHistory}
+                className="block w-full px-4 py-3 text-right text-base font-bold text-slate-900 hover:bg-slate-50"
+              >
+                איפוס היסטוריה
+              </button>
+              <button
+                onClick={deleteUser}
+                className="block w-full px-4 py-3 text-right text-base font-bold text-red-600 hover:bg-red-50"
+              >
+                מחיקת יוזר
+              </button>
             </div>
           )}
+        </div>
 
-          <section style={styles.historyHeader}>
-            <strong>תאריך</strong>
-            <strong>שעה ← פעם הבאה</strong>
-            <strong>כמות</strong>
-          </section>
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <div className="flex h-[42px] items-center border-b border-slate-900/15 px-4">
+            <span className="flex-1 text-center text-xs font-black text-slate-500">כמות</span>
+            <span className="flex-[1.8] text-center text-xs font-black text-slate-500">שעה ← פעם הבאה</span>
+            <span className="flex-1 text-center text-xs font-black text-slate-500">תאריך</span>
+          </div>
 
-          <section style={styles.historyList}>
-            {activeUser.entries.length === 0 ? (
-              <div style={styles.emptyHistory}>ממתין לסימון ראשון</div>
+          <div className="flex-1 overflow-y-auto">
+            {activeEntries.length ? (
+              activeEntries.slice(0, 20).map((entry) => {
+                const index = chronologicalEntries.findIndex((item) => item.entryId === entry.entryId);
+                const older = index > 0 ? chronologicalEntries[index - 1] : null;
+                const gap = gapBetween(entry, older);
+
+                return (
+                  <div
+                    key={entry.entryId}
+                    className="flex min-h-[62px] items-center border-b border-slate-900/10 px-4"
+                  >
+                    <span className="flex-1 text-center text-lg font-black text-slate-900">
+                      {formatAmount(entry.amount)}
+                    </span>
+                    <div className="flex flex-[1.8] flex-col items-center">
+                      <span className="text-xl font-black text-slate-900">
+                        {formatTime(entry.nextReminderAt)} ← {formatTime(entry.takenAt)}
+                      </span>
+                      {gap ? <span className="mt-1 text-xs font-black text-slate-400">{gap}</span> : null}
+                    </div>
+                    <span className="flex-1 text-center text-sm font-black text-slate-900">
+                      {formatShortDate(entry.takenAt)}
+                    </span>
+                  </div>
+                );
+              })
             ) : (
-              activeUser.entries.map((entry) => (
-                <div key={entry.id} style={styles.historyRow}>
-                  <span>{dateText(entry.takenAt)}</span>
-                  <span>
-                    {timeText(entry.takenAt)} ← {timeText(entry.nextAt)}
-                  </span>
-                  <span>{formatAmount(entry.amount)}</span>
-                </div>
-              ))
+              <p className="mt-6 text-center text-lg font-bold text-slate-500">ממתין לסימון ראשון</p>
             )}
-          </section>
+          </div>
 
-          <section style={styles.bottomPanel}>
-            <div style={styles.statsCards}>
-              <div style={styles.statCard}>
-                <span>זמן מאז הסימון האחרון</span>
-                <strong>{stats.last ? minutesSince(stats.last.takenAt) : "00:00"}</strong>
+          <div className="border-t border-slate-900/10 bg-white/[0.98] p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <div className="flex min-h-[52px] flex-1 flex-col items-center justify-center rounded-2xl border border-slate-900/10 bg-white py-2">
+                <span className="mb-1 text-xs font-black text-slate-600">מצטבר</span>
+                <span className="text-xl font-black text-slate-900">{formatAmount(totalAmountForUser())}</span>
               </div>
-
-              <div style={styles.divider} />
-
-              <div style={styles.statCard}>
-                <span>מצטבר</span>
-                <strong>{formatAmount(stats.taken)}</strong>
+              <span className="text-2xl font-bold text-slate-400">|</span>
+              <div className="flex min-h-[52px] flex-1 flex-col items-center justify-center rounded-2xl border border-slate-900/10 bg-white py-2">
+                <span className="mb-1 text-xs font-black text-slate-600">זמן מאז הסימון האחרון</span>
+                <span className="text-xl font-black text-slate-900">
+                  {activeUser.lastTakenAt ? elapsedDurationFrom(activeUser.lastTakenAt, now) : "00:00"}
+                </span>
               </div>
             </div>
 
-            <h3 style={styles.reminderTitle}>תזכיר לי עוד...</h3>
+            <p className="mb-2 text-right text-sm font-black text-slate-600">תזכיר לי עוד...</p>
 
-            <div style={styles.reminderGrid}>
-              {REMINDERS.map((item) => (
-                <button
-                  key={item}
-                  onClick={() => setReminder(item)}
-                  style={{
-                    ...styles.reminderButton,
-                    ...(reminder === item ? { background: activeUser.color, color: "#FFF" } : {})
-                  }}
-                >
-                  {item === 30
-                    ? "30 דק׳"
-                    : item === 60
-                      ? "1:00"
-                      : item === 90
-                        ? "1:30"
-                        : "2:00"}
-                </button>
-              ))}
+            <div className="mb-2.5 flex gap-2">
+              {reminderOptions.map((option) => {
+                const selected = activeUser.selectedReminderAfterMinutes === option.minutes;
+                return (
+                  <button
+                    key={option.minutes}
+                    onClick={() => updateUserReminder(option.minutes)}
+                    className="min-h-[40px] flex-1 rounded-xl border text-base font-black"
+                    style={{
+                      backgroundColor: selected ? "#D9E9FF" : "#FFFFFF",
+                      borderColor: selected ? "#BFD7F7" : "#D7DCE4",
+                      color: selected ? "#325B8C" : "#516072",
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
             </div>
 
-            <div style={styles.actions}>
+            <div className="flex gap-3">
               <button
-                style={{ ...styles.actionButton, background: activeUser.color }}
-                onClick={startNow}
+                onClick={beginNow}
+                className="min-h-[50px] flex-1 rounded-2xl border text-lg font-black"
+                style={{
+                  backgroundColor: mixWithWhite(activeUser.color, 0.6),
+                  borderColor: mixWithWhite(activeUser.color, 0.5),
+                  color: mixTextColor(activeUser.color, 0.18),
+                }}
               >
                 לוקח עכשיו
               </button>
-
               <button
-                style={{ ...styles.actionButton, background: `${activeUser.color}CC` }}
                 onClick={() => setScreen("before")}
+                className="min-h-[50px] flex-1 rounded-2xl border text-lg font-black"
+                style={{
+                  backgroundColor: mixWithWhite(activeUser.color, 0.72),
+                  borderColor: mixWithWhite(activeUser.color, 0.6),
+                  color: mixTextColor(activeUser.color, 0.26),
+                }}
               >
                 לקחתי לפני...
               </button>
             </div>
-          </section>
-        </section>
-      </main>
+          </div>
+        </div>
+      </Shell>
     );
   }
 
   if (screen === "before") {
     return (
-      <ScreenShell title="לקחתי לפני..." onBack={() => setScreen("tracker")}>
-        <div style={styles.amountGrid}>
-          {BEFORE.map((minutes) => (
+      <Shell backgroundColor={activeUser ? mixWithWhite(activeUser.color, 0.92) : "#F8FAFC"}>
+        <TopBar
+          title="מתי לקחת?"
+          leftIcon={<ChevronRight size={28} />}
+          onLeft={() => setScreen("user")}
+          backgroundColor={activeUser ? mixWithWhite(activeUser.color, 0.87) : "#FFFFFF"}
+        />
+        <div className="grid grid-cols-2 gap-2.5 p-4">
+          {minutesAgoOptions.map((minutes) => (
             <button
               key={minutes}
-              style={styles.amountButton}
-              onClick={() => startBefore(minutes)}
+              onClick={() => beginBefore(minutes)}
+              className="flex min-h-[58px] items-center justify-center rounded-2xl border border-slate-900/10 bg-white text-lg font-black text-slate-900"
             >
               {minutes} דק׳
             </button>
           ))}
         </div>
-      </ScreenShell>
+      </Shell>
+    );
+  }
+
+  if (screen === "warning") {
+    return (
+      <div className="flex h-full min-h-screen flex-col bg-red-600 p-5" dir="rtl">
+        <div className="flex flex-1 flex-col items-center justify-center gap-1 text-center">
+          <h1 className="mb-5 text-3xl font-black text-white">רגע, השעון מרים גבה.</h1>
+          <p className="text-lg font-bold leading-loose text-white">חלפה פחות משעה מהסימון הקודם.</p>
+          <p className="text-lg font-bold leading-loose text-white">
+            הסימון האחרון היה בשעה {formatTime(warning?.lastTakenAt)},
+          </p>
+          <p className="text-lg font-bold leading-loose text-white">ומאז עברו רק {warning?.minutesSinceLast} דקות.</p>
+          <p className="mt-3.5 text-xl font-black leading-loose text-white">
+            שווה לעצור רגע ולבדוק שזה באמת הזמן הנכון.
+          </p>
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={() => {
+              setWarning(null);
+              setFlow(null);
+              setScreen("user");
+            }}
+            className="min-h-[56px] flex-1 rounded-[18px] bg-white text-lg font-black text-red-700"
+          >
+            חזרה
+          </button>
+          <button
+            onClick={continueAfterWarning}
+            className="min-h-[56px] flex-1 rounded-[18px] bg-red-900 text-lg font-black text-white"
+          >
+            המשך בכל זאת
+          </button>
+        </div>
+      </div>
     );
   }
 
   if (screen === "amount") {
-    return (
-      <ScreenShell title="בחירת כמות" onBack={() => setScreen("tracker")}>
-        <div style={styles.amountGrid}>
-          {AMOUNTS.map((amount, index) => {
-            const big = amount === 1 || amount === 1.5 || amount === 2;
-
-            return (
-              <button
-                key={`${amount}-${index}`}
-                style={{
-                  ...styles.amountButton,
-                  ...(big ? styles.amountBig : {})
-                }}
-                onClick={() => saveEntry(amount)}
-              >
-                {formatAmount(amount)}
-              </button>
-            );
-          })}
-        </div>
-
-        {warning && (
-          <div style={styles.warning}>
-            <h2>רגע, השעון מרים גבה.</h2>
-            <p>חלפה פחות משעה מהסימון הקודם.</p>
-            <p>שווה לעצור רגע ולבדוק שזה באמת הזמן הנכון.</p>
-
-            <div style={styles.actions}>
-              <button style={styles.secondary} onClick={() => setWarning(null)}>
-                חזרה
-              </button>
-
-              <button
-                style={styles.danger}
-                onClick={() => saveEntry(warning.amount, true)}
-              >
-                המשך בכל זאת
-              </button>
-            </div>
-          </div>
-        )}
-      </ScreenShell>
-    );
-  }
-
-  if (screen === "stock" && activeUser) {
-    const currentPricePerMl = Number(stockMl || 0) > 0
-      ? Number(stockPrice || 0) / Number(stockMl || 1)
-      : 0;
+    const bg = activeUser ? mixWithWhite(activeUser.color, 0.92) : "#F8FAFC";
+    const headerBg = activeUser ? mixWithWhite(activeUser.color, 0.87) : "#FFFFFF";
+    const modeText = flow?.mode === "before" ? `לקחת לפני ${flow.minutesAgo} דק׳` : "לוקח עכשיו";
 
     return (
-      <ScreenShell title="מלאי ועלות" onBack={() => setScreen("tracker")}>
-        <div style={styles.form}>
-          <input
-            style={styles.input}
-            value={stockName}
-            onChange={(event) => setStockName(event.target.value)}
-            placeholder="שם הפריט"
-          />
+      <Shell backgroundColor={bg}>
+        <TopBar title="כמה לקחת?" leftIcon={<ChevronRight size={28} />} onLeft={() => setScreen("user")} backgroundColor={headerBg} />
+        <div className="flex-1 overflow-y-auto p-4 pb-6">
+          <p className="mb-2 text-center text-sm font-bold text-slate-500">
+            {activeUser ? `${activeUser.symbol} ${activeUser.name}` : ""}
+          </p>
+          <h2 className="mb-2.5 text-center text-3xl font-black text-slate-900">בחירת כמות</h2>
+          <p className="mb-4.5 text-center text-sm font-bold text-slate-500">{modeText}</p>
 
-          <input
-            style={styles.input}
-            value={stockMl}
-            onChange={(event) => setStockMl(event.target.value)}
-            inputMode="decimal"
-            placeholder="כמות התחלתית במ״ל"
-          />
-
-          <input
-            style={styles.input}
-            value={stockPrice}
-            onChange={(event) => setStockPrice(event.target.value)}
-            inputMode="decimal"
-            placeholder="מחיר כולל בש״ח"
-          />
-
-          <div style={styles.summaryBox}>
-            <p>מחיר למ״ל: <strong>{money(currentPricePerMl)}</strong></p>
-            <p>נלקח: <strong>{formatAmount(stats.taken)} מ״ל</strong></p>
-            <p>ניתן לאחרים: <strong>{formatAmount(stats.given)} מ״ל</strong></p>
-            <p>נשאר: <strong>{formatAmount(stats.remaining)} מ״ל</strong></p>
-            <p>עלות שימוש עצמי: <strong>{money(stats.taken * currentPricePerMl)}</strong></p>
-            <p>שווי יתרה: <strong>{money(stats.remaining * currentPricePerMl)}</strong></p>
+          <div className="flex flex-wrap gap-2.5">
+            {amountOptions.map((amount) => {
+              const featured = featuredAmounts.includes(amount);
+              return (
+                <button
+                  key={amount}
+                  onClick={() => chooseAmount(amount)}
+                  className={
+                    featured
+                      ? "flex h-[146px] w-[48%] items-center justify-center rounded-[22px] border border-slate-900/10 bg-white/[0.97]"
+                      : "flex h-[68px] w-[22.7%] items-center justify-center rounded-2xl border border-slate-900/10 bg-white/90"
+                  }
+                >
+                  <span className={featured ? "text-4xl font-black text-slate-900" : "text-xl font-black text-slate-900"}>
+                    {formatAmount(amount)}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-
-          <button style={styles.primary} onClick={saveStock}>
-            שמירה
-          </button>
         </div>
-      </ScreenShell>
-    );
-  }
-
-  if (screen === "give" && activeUser) {
-    const suggested = Number(giveMl || 0) * stats.pricePerMl;
-
-    return (
-      <ScreenShell title="נתתי למישהו" onBack={() => setScreen("tracker")}>
-        <div style={styles.form}>
-          <input
-            style={styles.input}
-            value={givePerson}
-            onChange={(event) => setGivePerson(event.target.value)}
-            placeholder="למי נתת"
-          />
-
-          <input
-            style={styles.input}
-            value={giveMl}
-            onChange={(event) => setGiveMl(event.target.value)}
-            inputMode="decimal"
-            placeholder="כמה במ״ל"
-          />
-
-          <div style={styles.statusGrid}>
-            {["צריך לשלם", "שולם", "חלקי", "מתנה"].map((status) => (
-              <button
-                key={status}
-                style={{
-                  ...styles.statusButton,
-                  ...(giveStatus === status ? styles.selectedStatus : {})
-                }}
-                onClick={() => setGiveStatus(status)}
-              >
-                {status}
-              </button>
-            ))}
-          </div>
-
-          <div style={styles.hint}>
-            סכום מומלץ לפי מלאי: {money(suggested)}
-          </div>
-
-          <input
-            style={styles.input}
-            value={giveToPay}
-            onChange={(event) => setGiveToPay(event.target.value)}
-            inputMode="decimal"
-            placeholder="סכום לתשלום"
-          />
-
-          <input
-            style={styles.input}
-            value={givePaid}
-            onChange={(event) => setGivePaid(event.target.value)}
-            inputMode="decimal"
-            placeholder="כמה שולם בפועל"
-          />
-
-          <input
-            style={styles.input}
-            value={giveNote}
-            onChange={(event) => setGiveNote(event.target.value)}
-            placeholder="הערה"
-          />
-
-          <button style={styles.primary} onClick={saveGive}>
-            שמירה
-          </button>
-        </div>
-      </ScreenShell>
-    );
-  }
-
-  if (screen === "payments" && activeUser) {
-    return (
-      <ScreenShell title="היסטוריית תשלומים" onBack={() => setScreen("tracker")}>
-        <div style={styles.summaryBox}>
-          <p>חוב פתוח: <strong>{money(stats.openDebt)}</strong></p>
-        </div>
-
-        {activeUser.given.length === 0 ? (
-          <div style={styles.emptyBox}>אין עדיין נתינות</div>
-        ) : (
-          <div style={styles.list}>
-            {activeUser.given.map((item) => (
-              <div key={item.id} style={styles.paymentCard}>
-                <strong>{item.person}</strong>
-                <span>כמות: {formatAmount(item.ml)} מ״ל</span>
-                <span>סטטוס: {item.status}</span>
-                <span>לתשלום: {money(item.toPay)}</span>
-                <span>שולם: {money(item.paid)}</span>
-                <span>תאריך: {dateText(item.date)}</span>
-                {item.note ? <span>הערה: {item.note}</span> : null}
-              </div>
-            ))}
-          </div>
-        )}
-      </ScreenShell>
+      </Shell>
     );
   }
 
   return null;
 }
 
-function ScreenShell({ title, children, onBack }) {
+function Shell({ children, backgroundColor = "#FFFFFF" }) {
   return (
-    <main style={styles.page}>
-      <section style={styles.appShell}>
-        <header style={styles.header}>
-          <button style={styles.back} onClick={onBack}>
-            חזרה
-          </button>
-
-          <div style={styles.headerTitle}>
-            <strong>{title}</strong>
-          </div>
-
-          <span style={styles.spacer} />
-        </header>
-
-        <div style={styles.content}>
-          {children}
-        </div>
-      </section>
-    </main>
+    <div className="flex h-full min-h-screen flex-col" style={{ backgroundColor }} dir="rtl">
+      {children}
+    </div>
   );
 }
 
-const styles = {
-  page: {
-    minHeight: "100vh",
-    direction: "rtl",
-    background: "#F4F6FA",
-    color: "#0F172A",
-    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    display: "flex",
-    justifyContent: "center"
-  },
-  appShell: {
-    width: "100%",
-    maxWidth: 520,
-    minHeight: "100vh",
-    background: "#F7F2FF",
-    position: "relative",
-    overflow: "hidden"
-  },
-  centerCard: {
-    width: "100%",
-    maxWidth: 520,
-    minHeight: "100vh",
-    padding: 24,
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-    gap: 18,
-    boxSizing: "border-box"
-  },
-  content: {
-    padding: 18,
-    display: "flex",
-    flexDirection: "column",
-    gap: 14
-  },
-  h1: {
-    fontSize: 34,
-    margin: 0,
-    textAlign: "center",
-    fontWeight: 950
-  },
-  sub: {
-    color: "#64748B",
-    textAlign: "center",
-    lineHeight: 1.5,
-    fontWeight: 700
-  },
-  input: {
-    width: "100%",
-    minHeight: 56,
-    borderRadius: 18,
-    border: "1px solid #DDE5F0",
-    background: "#FFF",
-    padding: "0 16px",
-    fontSize: 17,
-    boxSizing: "border-box",
-    textAlign: "right"
-  },
-  symbolGrid: {
-    display: "flex",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 10
-  },
-  symbolButton: {
-    width: 54,
-    height: 54,
-    border: 0,
-    borderRadius: 18,
-    background: "#EAF0F6",
-    fontSize: 24,
-    cursor: "pointer"
-  },
-  selectedDark: {
-    background: "#0F172A",
-    color: "#FFF"
-  },
-  colorGrid: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 12,
-    justifyContent: "center"
-  },
-  colorButton: {
-    width: 58,
-    height: 44,
-    border: 0,
-    borderRadius: 14,
-    cursor: "pointer"
-  },
-  label: {
-    fontWeight: 900,
-    color: "#475569",
-    textAlign: "right"
-  },
-  primary: {
-    minHeight: 56,
-    border: 0,
-    borderRadius: 20,
-    background: "#0F172A",
-    color: "#FFF",
-    fontSize: 18,
-    fontWeight: 950,
-    cursor: "pointer",
-    width: "100%"
-  },
-  secondary: {
-    minHeight: 50,
-    border: 0,
-    borderRadius: 18,
-    background: "#E2E8F0",
-    color: "#334155",
-    fontSize: 16,
-    fontWeight: 900,
-    cursor: "pointer",
-    flex: 1
-  },
-  danger: {
-    minHeight: 50,
-    border: 0,
-    borderRadius: 18,
-    background: "#DC2626",
-    color: "#FFF",
-    fontSize: 16,
-    fontWeight: 900,
-    cursor: "pointer",
-    flex: 1
-  },
-  header: {
-    height: 72,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "0 16px",
-    borderBottom: "1px solid rgba(15,23,42,0.1)",
-    background: "rgba(255,255,255,0.65)",
-    backdropFilter: "blur(16px)"
-  },
-  headerTitle: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    fontSize: 21,
-    fontWeight: 950
-  },
-  iconMenu: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    border: "1px solid #E2E8F0",
-    background: "#FFF",
-    fontSize: 28,
-    cursor: "pointer"
-  },
-  spacer: {
-    width: 48
-  },
-  back: {
-    border: 0,
-    borderRadius: 16,
-    background: "#E2E8F0",
-    padding: "10px 14px",
-    fontWeight: 900,
-    cursor: "pointer"
-  },
-  list: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 14,
-    padding: 18
-  },
-  userCard: {
-    border: 0,
-    borderRadius: 24,
-    background: "#FFF",
-    padding: 16,
-    display: "flex",
-    alignItems: "center",
-    gap: 14,
-    textAlign: "right",
-    cursor: "pointer",
-    boxShadow: "0 8px 30px rgba(15,23,42,0.08)"
-  },
-  userSymbol: {
-    width: 56,
-    height: 56,
-    borderRadius: 20,
-    color: "#FFF",
-    display: "grid",
-    placeItems: "center",
-    fontSize: 25
-  },
-  userInfo: {
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    gap: 4
-  },
-  chevron: {
-    fontSize: 40,
-    fontWeight: 900
-  },
-  form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 14
-  },
-  historyHeader: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1.4fr 1fr",
-    padding: "18px 14px",
-    color: "#64748B",
-    fontWeight: 900,
-    borderBottom: "1px solid rgba(15,23,42,0.1)",
-    textAlign: "center"
-  },
-  historyList: {
-    minHeight: "45vh",
-    padding: "18px 12px"
-  },
-  emptyHistory: {
-    color: "#64748B",
-    textAlign: "center",
-    fontSize: 26,
-    fontWeight: 900,
-    marginTop: 44
-  },
-  historyRow: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1.4fr 1fr",
-    gap: 8,
-    background: "#FFF",
-    borderRadius: 16,
-    padding: "12px 8px",
-    marginBottom: 8,
-    textAlign: "center",
-    fontWeight: 800
-  },
-  bottomPanel: {
-    position: "sticky",
-    bottom: 0,
-    background: "rgba(255,255,255,0.92)",
-    borderTop: "1px solid rgba(15,23,42,0.1)",
-    padding: 16,
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
-    backdropFilter: "blur(14px)"
-  },
-  statsCards: {
-    display: "grid",
-    gridTemplateColumns: "1fr 2px 1fr",
-    alignItems: "center",
-    gap: 12
-  },
-  statCard: {
-    background: "#FFF",
-    border: "1px solid #E2E8F0",
-    borderRadius: 20,
-    minHeight: 74,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4
-  },
-  divider: {
-    height: 42,
-    background: "#CBD5E1",
-    borderRadius: 2
-  },
-  reminderTitle: {
-    margin: 0,
-    textAlign: "right",
-    color: "#475569",
-    fontSize: 22
-  },
-  reminderGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
-    gap: 10
-  },
-  reminderButton: {
-    minHeight: 48,
-    borderRadius: 18,
-    border: "1px solid #DDE5F0",
-    background: "#FFF",
-    fontSize: 17,
-    fontWeight: 900,
-    color: "#475569",
-    cursor: "pointer"
-  },
-  actions: {
-    display: "flex",
-    gap: 12
-  },
-  actionButton: {
-    flex: 1,
-    minHeight: 60,
-    border: 0,
-    borderRadius: 22,
-    color: "#FFF",
-    fontSize: 18,
-    fontWeight: 950,
-    cursor: "pointer"
-  },
-  overlay: {
-    position: "absolute",
-    inset: 0,
-    zIndex: 50,
-    background: "rgba(15,23,42,0.22)"
-  },
-  drawer: {
-    width: "76%",
-    maxWidth: 330,
-    height: "100%",
-    background: "#FFF",
-    padding: 18,
-    boxSizing: "border-box",
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-    boxShadow: "-20px 0 50px rgba(15,23,42,0.25)"
-  },
-  drawerClose: {
-    alignSelf: "flex-start",
-    width: 42,
-    height: 42,
-    border: 0,
-    borderRadius: 18,
-    background: "#E2E8F0",
-    fontSize: 26,
-    cursor: "pointer"
-  },
-  drawerTitle: {
-    margin: "6px 0 10px",
-    fontSize: 28
-  },
-  drawerItem: {
-    minHeight: 56,
-    border: 0,
-    borderRadius: 18,
-    background: "#F1F5F9",
-    color: "#0F172A",
-    fontSize: 18,
-    fontWeight: 900,
-    textAlign: "right",
-    padding: "0 16px",
-    cursor: "pointer"
-  },
-  amountGrid: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-    justifyContent: "center"
-  },
-  amountButton: {
-    width: 74,
-    height: 58,
-    border: "1px solid #DDE5F0",
-    borderRadius: 18,
-    background: "#FFF",
-    color: "#0F172A",
-    fontSize: 18,
-    fontWeight: 950,
-    cursor: "pointer"
-  },
-  amountBig: {
-    width: 112,
-    height: 76,
-    background: "#0F172A",
-    color: "#FFF",
-    fontSize: 28
-  },
-  warning: {
-    position: "fixed",
-    inset: 0,
-    zIndex: 100,
-    background: "#DC2626",
-    color: "#FFF",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-    padding: 28,
-    textAlign: "center"
-  },
-  summaryBox: {
-    background: "#FFF",
-    borderRadius: 24,
-    padding: 18,
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-    boxShadow: "0 8px 30px rgba(15,23,42,0.08)"
-  },
-  statusGrid: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-    justifyContent: "center"
-  },
-  statusButton: {
-    border: 0,
-    borderRadius: 16,
-    background: "#EAF0F6",
-    padding: "12px 14px",
-    fontWeight: 900,
-    cursor: "pointer"
-  },
-  selectedStatus: {
-    background: "#0F172A",
-    color: "#FFF"
-  },
-  hint: {
-    background: "#EEF2FF",
-    borderRadius: 18,
-    padding: 14,
-    color: "#475569",
-    fontWeight: 900,
-    textAlign: "center"
-  },
-  paymentCard: {
-    background: "#FFF",
-    borderRadius: 22,
-    padding: 16,
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-    boxShadow: "0 8px 30px rgba(15,23,42,0.08)"
-  },
-  emptyBox: {
-    background: "#FFF",
-    borderRadius: 24,
-    padding: 22,
-    textAlign: "center",
-    color: "#64748B",
-    fontWeight: 900
-  }
-};
+function TopBar({ title, leftIcon, onLeft, rightIcon, onRight, backgroundColor = "#FFFFFF" }) {
+  return (
+    <div className="flex h-[62px] items-center border-b border-slate-900/10 px-3" style={{ backgroundColor }}>
+      <button className="flex w-[54px] items-center justify-center text-slate-900" onClick={onLeft}>
+        {leftIcon}
+      </button>
+      <span className="flex-1 text-center text-xl font-black text-slate-900">{title}</span>
+      <button className="flex w-[54px] items-center justify-center text-slate-900" onClick={onRight}>
+        {rightIcon}
+      </button>
+    </div>
+  );
+}
+
+function PrimaryButton({ label, onClick, fullWidth = false }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`min-h-[54px] rounded-2xl bg-slate-900 text-lg font-black text-white ${fullWidth ? "w-full" : "px-8"}`}
+    >
+      {label}
+    </button>
+  );
+}
