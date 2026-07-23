@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 
+const STORAGE_KEY = "check_timer_vercel_full_v1";
+
 const SYMBOLS = [
   "🪬","🪩","🧿","🪐","🧬","🫧","🪄","🪞","🪶","🪸",
   "🪷","🪻","🪁","🛸","🧭","🧩","🪅","🎐","🦚","🦋"
@@ -22,20 +24,22 @@ const REMINDERS = [30, 60, 90, 120];
 const BEFORE = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
 
 const AMOUNTS = [
-  0.1, 0.2, 0.3, 0.4,
-  0.5, 1, 0.6, 0.7,
-  0.8, 0.9, 1.1, 1.2,
-  1.3, 1.4, 1.5, 1.6,
-  1.7, 1.8, 1.9, 2.1,
-  2.2, 2, 2.3, 2.4,
-  2.5, 2.6, 2.7
+  0.1,0.2,0.3,0.4,
+  0.5,1,0.6,0.7,
+  0.8,0.9,1.1,1.2,
+  1.3,1.4,1.5,1.6,
+  1.7,1.8,1.9,2.1,
+  2.2,2,2.3,2.4,
+  2.5,2.6,2.7
 ];
-
-const STORAGE_KEY = "check_timer_vercel_full_v1";
 
 function formatAmount(value) {
   const n = Number(value || 0);
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+function addMinutes(date, minutes) {
+  return new Date(date.getTime() + minutes * 60000);
 }
 
 function timeText(value) {
@@ -55,24 +59,34 @@ function dateText(value) {
   });
 }
 
-function addMinutes(date, minutes) {
-  return new Date(date.getTime() + minutes * 60000);
-}
-
 function money(value) {
   const n = Number(value || 0);
   return `${Math.round(n * 100) / 100} ₪`;
 }
 
-function minutesSince(value) {
+function sinceText(value) {
   if (!value) return "00:00";
-
   const diff = Math.max(0, Date.now() - new Date(value).getTime());
   const totalMinutes = Math.floor(diff / 60000);
   const hours = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
   const minutes = String(totalMinutes % 60).padStart(2, "0");
-
   return `${hours}:${minutes}`;
+}
+
+function emptyUser(name, symbol, color) {
+  return {
+    id: String(Date.now()),
+    name,
+    symbol,
+    color,
+    entries: [],
+    stock: {
+      name: "",
+      ml: "",
+      price: ""
+    },
+    given: []
+  };
 }
 
 export default function App() {
@@ -82,7 +96,7 @@ export default function App() {
   });
 
   const [screen, setScreen] = useState("boot");
-  const [activeUserId, setActiveUserId] = useState(null);
+  const [activeId, setActiveId] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const [mainName, setMainName] = useState("");
@@ -93,7 +107,8 @@ export default function App() {
   const [newColor, setNewColor] = useState(COLORS[0]);
 
   const [reminder, setReminder] = useState(90);
-  const [pendingTakenAt, setPendingTakenAt] = useState(null);
+  const [pendingTime, setPendingTime] = useState(null);
+  const [warningAmount, setWarningAmount] = useState(null);
 
   const [stockName, setStockName] = useState("");
   const [stockMl, setStockMl] = useState("");
@@ -106,8 +121,21 @@ export default function App() {
   const [givePaid, setGivePaid] = useState("");
   const [giveNote, setGiveNote] = useState("");
 
-  const [warning, setWarning] = useState(null);
   const [clock, setClock] = useState(Date.now());
+
+  useEffect(() => {
+    document.title = "My G";
+
+    let meta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.setAttribute("name", "apple-mobile-web-app-title");
+      document.head.appendChild(meta);
+    }
+
+    meta.setAttribute("content", "My G");
+  }, []);
 
   useEffect(() => {
     try {
@@ -132,14 +160,11 @@ export default function App() {
   }, [data, screen]);
 
   useEffect(() => {
-    const id = setInterval(() => {
-      setClock(Date.now());
-    }, 1000);
-
+    const id = setInterval(() => setClock(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
 
-  const activeUser = data.users.find((user) => user.id === activeUserId);
+  const activeUser = data.users.find((user) => user.id === activeId);
 
   const stats = useMemo(() => {
     if (!activeUser) {
@@ -180,18 +205,15 @@ export default function App() {
     };
   }, [activeUser, clock]);
 
-  function updateUser(userId, patch) {
+  function updateUser(patch) {
     setData((prev) => ({
       ...prev,
       users: prev.users.map((user) => {
-        if (user.id === userId) {
-          return {
-            ...user,
-            ...patch
-          };
-        }
-
-        return user;
+        if (user.id !== activeId) return user;
+        return {
+          ...user,
+          ...patch
+        };
       })
     }));
   }
@@ -213,19 +235,7 @@ export default function App() {
   function saveNewUser() {
     if (!newName.trim()) return;
 
-    const user = {
-      id: String(Date.now()),
-      name: newName.trim(),
-      symbol: newSymbol,
-      color: newColor,
-      entries: [],
-      stock: {
-        name: "",
-        ml: "",
-        price: ""
-      },
-      given: []
-    };
+    const user = emptyUser(newName.trim(), newSymbol, newColor);
 
     setData((prev) => ({
       ...prev,
@@ -238,32 +248,22 @@ export default function App() {
     setScreen("users");
   }
 
-  function openTracker(user) {
-    setActiveUserId(user.id);
+  function openUser(user) {
+    setActiveId(user.id);
     setMenuOpen(false);
     setScreen("tracker");
   }
 
-  function startNow() {
-    setPendingTakenAt(new Date());
-    setScreen("amount");
-  }
-
-  function startBefore(minutes) {
-    setPendingTakenAt(addMinutes(new Date(), -minutes));
-    setScreen("amount");
-  }
-
   function saveEntry(amount, force = false) {
-    if (!activeUser || !pendingTakenAt) return;
+    if (!activeUser || !pendingTime) return;
 
     const last = activeUser.entries[0];
 
     if (last && !force) {
-      const diff = (pendingTakenAt.getTime() - new Date(last.takenAt).getTime()) / 60000;
+      const diff = (pendingTime.getTime() - new Date(last.takenAt).getTime()) / 60000;
 
       if (diff > -1 && diff < 60) {
-        setWarning({ amount });
+        setWarningAmount(amount);
         return;
       }
     }
@@ -271,16 +271,16 @@ export default function App() {
     const entry = {
       id: String(Date.now()),
       amount,
-      takenAt: pendingTakenAt.toISOString(),
-      nextAt: addMinutes(pendingTakenAt, reminder).toISOString()
+      takenAt: pendingTime.toISOString(),
+      nextAt: addMinutes(pendingTime, reminder).toISOString()
     };
 
-    updateUser(activeUser.id, {
+    updateUser({
       entries: [entry, ...activeUser.entries]
     });
 
-    setWarning(null);
-    setPendingTakenAt(null);
+    setPendingTime(null);
+    setWarningAmount(null);
     setScreen("tracker");
   }
 
@@ -295,9 +295,7 @@ export default function App() {
   }
 
   function saveStock() {
-    if (!activeUser) return;
-
-    updateUser(activeUser.id, {
+    updateUser({
       stock: {
         name: stockName,
         ml: stockMl,
@@ -338,7 +336,7 @@ export default function App() {
       date: new Date().toISOString()
     };
 
-    updateUser(activeUser.id, {
+    updateUser({
       given: [item, ...activeUser.given]
     });
 
@@ -354,15 +352,21 @@ export default function App() {
       mainUser: null,
       users: []
     });
-    setActiveUserId(null);
+    setActiveId(null);
     setScreen("main");
+  }
+
+  function goBackToTracker() {
+    setWarningAmount(null);
+    setScreen("tracker");
   }
 
   if (screen === "boot") {
     return (
-      <main style={styles.page}>
-        <section style={styles.centerCard}>
-          <h1 style={styles.h1}>טוען...</h1>
+      <main className="page">
+        <style>{css}</style>
+        <section className="center">
+          <h1>טוען...</h1>
         </section>
       </main>
     );
@@ -370,34 +374,32 @@ export default function App() {
 
   if (screen === "main") {
     return (
-      <main style={styles.page}>
-        <section style={styles.centerCard}>
-          <h1 style={styles.h1}>הקמת משתמש ראשי</h1>
-          <p style={styles.sub}>זה המשתמש שמנהל את כל המעקבים באפליקציה.</p>
+      <main className="page">
+        <style>{css}</style>
+
+        <section className="center">
+          <h1>הקמת משתמש ראשי</h1>
+          <p>זה המשתמש שמנהל את כל המעקבים באפליקציה.</p>
 
           <input
             value={mainName}
             onChange={(event) => setMainName(event.target.value)}
             placeholder="שם המשתמש הראשי"
-            style={styles.input}
           />
 
-          <div style={styles.symbolGrid}>
+          <div className="symbol-grid">
             {SYMBOLS.map((symbol) => (
               <button
                 key={symbol}
+                className={mainSymbol === symbol ? "symbol selected-dark" : "symbol"}
                 onClick={() => setMainSymbol(symbol)}
-                style={{
-                  ...styles.symbolButton,
-                  ...(mainSymbol === symbol ? styles.selectedDark : {})
-                }}
               >
                 {symbol}
               </button>
             ))}
           </div>
 
-          <button style={styles.primary} onClick={saveMainUser}>
+          <button className="primary" onClick={saveMainUser}>
             שמירה והמשך
           </button>
         </section>
@@ -407,51 +409,45 @@ export default function App() {
 
   if (screen === "users") {
     return (
-      <main style={styles.page}>
-        <section style={styles.appShell}>
-          <header style={styles.header}>
-            <button style={styles.iconMenu} onClick={resetApp}>
-              ⌫
-            </button>
+      <main className="page">
+        <style>{css}</style>
 
-            <div style={styles.headerTitle}>
+        <section className="app">
+          <header className="top">
+            <button className="circle" onClick={resetApp}>⌫</button>
+
+            <div className="top-title">
               <span>{data.mainUser?.symbol}</span>
               <strong>{data.mainUser?.name}</strong>
             </div>
 
-            <span style={styles.spacer} />
+            <span className="ghost" />
           </header>
 
-          <div style={styles.list}>
-            <button style={styles.primary} onClick={() => setScreen("createUser")}>
+          <section className="content">
+            <button className="primary" onClick={() => setScreen("createUser")}>
               הקמת יוזר חדש
             </button>
 
             {data.users.length === 0 ? (
-              <div style={styles.emptyBox}>
-                אין עדיין יוזרים. כדאי להקים יוזר ראשון.
-              </div>
+              <div className="empty">אין עדיין יוזרים. כדאי להקים יוזר ראשון.</div>
             ) : (
               data.users.map((user) => (
-                <button
-                  key={user.id}
-                  style={styles.userCard}
-                  onClick={() => openTracker(user)}
-                >
-                  <span style={{ ...styles.userSymbol, background: user.color }}>
+                <button className="user-row" key={user.id} onClick={() => openUser(user)}>
+                  <span className="user-icon" style={{ background: user.color }}>
                     {user.symbol}
                   </span>
 
-                  <span style={styles.userInfo}>
+                  <span className="user-info">
                     <strong>{user.name}</strong>
                     <small>כניסה למסך מעקב</small>
                   </span>
 
-                  <span style={styles.chevron}>›</span>
+                  <span className="chevron">›</span>
                 </button>
               ))
             )}
-          </div>
+          </section>
         </section>
       </main>
     );
@@ -459,65 +455,57 @@ export default function App() {
 
   if (screen === "createUser") {
     return (
-      <main style={styles.page}>
-        <section style={styles.appShell}>
-          <header style={styles.header}>
-            <button style={styles.back} onClick={() => setScreen("users")}>
-              חזרה
-            </button>
+      <main className="page">
+        <style>{css}</style>
 
-            <div style={styles.headerTitle}>
-              <strong>הקמת יוזר</strong>
-            </div>
-
-            <span style={styles.spacer} />
+        <section className="app">
+          <header className="top">
+            <button className="back" onClick={() => setScreen("users")}>חזרה</button>
+            <div className="top-title"><strong>הקמת יוזר</strong></div>
+            <span className="ghost" />
           </header>
 
-          <div style={styles.form}>
+          <section className="content form centered-form">
             <input
               value={newName}
               onChange={(event) => setNewName(event.target.value)}
               placeholder="שם היוזר"
-              style={styles.input}
             />
 
-            <label style={styles.label}>בחירת צבע</label>
+            <h3>בחירת צבע</h3>
 
-            <div style={styles.colorGrid}>
+            <div className="color-grid">
               {COLORS.map((color) => (
                 <button
                   key={color}
+                  className="color"
                   onClick={() => setNewColor(color)}
                   style={{
-                    ...styles.colorButton,
                     background: color,
-                    outline: newColor === color ? "4px solid #0F172A" : "4px solid #FFF"
+                    outline: newColor === color ? "5px solid #0F172A" : "5px solid #FFF"
                   }}
                 />
               ))}
             </div>
 
-            <label style={styles.label}>בחירת סימן</label>
+            <h3>בחירת סימן</h3>
 
-            <div style={styles.symbolGrid}>
+            <div className="symbol-grid straight">
               {SYMBOLS.map((symbol) => (
                 <button
                   key={symbol}
+                  className={newSymbol === symbol ? "symbol selected-dark" : "symbol"}
                   onClick={() => setNewSymbol(symbol)}
-                  style={{
-                    ...styles.symbolButton,
-                    ...(newSymbol === symbol ? styles.selectedDark : {})
-                  }}
                 >
                   {symbol}
                 </button>
               ))}
             </div>
 
-            <button style={styles.primary} onClick={saveNewUser}>
+            <button className="primary" onClick={saveNewUser}>
               שמירה
             </button>
-          </div>
+          </section>
         </section>
       </main>
     );
@@ -525,127 +513,120 @@ export default function App() {
 
   if (screen === "tracker" && activeUser) {
     return (
-      <main style={{ ...styles.page, background: `${activeUser.color}22` }}>
-        <section style={styles.appShell}>
-          <header style={{ ...styles.header, background: `${activeUser.color}24` }}>
-            <button style={styles.iconMenu} onClick={() => setMenuOpen(true)}>
-              ⋯
-            </button>
+      <main className="page" style={{ background: `${activeUser.color}24` }}>
+        <style>{css}</style>
 
-            <div style={styles.headerTitle}>
+        <section className="app" style={{ background: `${activeUser.color}16` }}>
+          <header className="top" style={{ background: `${activeUser.color}28` }}>
+            <button className="circle" onClick={() => setMenuOpen(true)}>⋯</button>
+
+            <div className="top-title">
               <span>{activeUser.symbol}</span>
               <strong>{activeUser.name}</strong>
             </div>
 
-            <button style={styles.iconMenu} onClick={() => setScreen("users")}>
-              ×
-            </button>
+            <button className="circle" onClick={() => setScreen("users")}>×</button>
           </header>
 
           {menuOpen && (
-            <div style={styles.overlay} onClick={() => setMenuOpen(false)}>
-              <aside style={styles.drawer} onClick={(event) => event.stopPropagation()}>
-                <button style={styles.drawerClose} onClick={() => setMenuOpen(false)}>
-                  ×
-                </button>
+            <div className="overlay" onClick={() => setMenuOpen(false)}>
+              <aside className="drawer" onClick={(event) => event.stopPropagation()}>
+                <button className="drawer-close" onClick={() => setMenuOpen(false)}>×</button>
+                <h2>תפריט</h2>
 
-                <h3 style={styles.drawerTitle}>תפריט</h3>
-
-                <button style={styles.drawerItem} onClick={openStock}>
-                  מלאי ועלות
-                </button>
-
-                <button style={styles.drawerItem} onClick={openGive}>
-                  נתתי למישהו
-                </button>
-
-                <button
-                  style={styles.drawerItem}
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setScreen("payments");
-                  }}
-                >
+                <button onClick={openStock}>מלאי ועלות</button>
+                <button onClick={openGive}>נתתי למישהו</button>
+                <button onClick={() => { setMenuOpen(false); setScreen("payments"); }}>
                   היסטוריית תשלומים
                 </button>
-
-                <button style={styles.drawerItem} onClick={() => setMenuOpen(false)}>
-                  סגירה
-                </button>
+                <button onClick={() => setMenuOpen(false)}>סגירה</button>
               </aside>
             </div>
           )}
 
-          <section style={styles.historyHeader}>
+          <section className="history-head">
             <strong>תאריך</strong>
             <strong>שעה ← פעם הבאה</strong>
             <strong>כמות</strong>
           </section>
 
-          <section style={styles.historyList}>
+          <section className="history-list">
             {activeUser.entries.length === 0 ? (
-              <div style={styles.emptyHistory}>ממתין לסימון ראשון</div>
+              <div className="empty-history">ממתין לסימון ראשון</div>
             ) : (
               activeUser.entries.map((entry) => (
-                <div key={entry.id} style={styles.historyRow}>
+                <div className="history-row" key={entry.id}>
                   <span>{dateText(entry.takenAt)}</span>
-                  <span>
-                    {timeText(entry.takenAt)} ← {timeText(entry.nextAt)}
-                  </span>
+                  <span>{timeText(entry.takenAt)} ← {timeText(entry.nextAt)}</span>
                   <span>{formatAmount(entry.amount)}</span>
                 </div>
               ))
             )}
           </section>
 
-          <section style={styles.bottomPanel}>
-            <div style={styles.statsCards}>
-              <div style={styles.statCard}>
-                <span>זמן מאז הסימון האחרון</span>
-                <strong>{stats.last ? minutesSince(stats.last.takenAt) : "00:00"}</strong>
-              </div>
+          <section className="data-strip">
+            <div>
+              <span>נשאר במלאי</span>
+              <strong>{formatAmount(stats.remaining)} מ״ל</strong>
+            </div>
 
-              <div style={styles.divider} />
+            <div>
+              <span>ניתן לאחרים</span>
+              <strong>{formatAmount(stats.given)} מ״ל</strong>
+            </div>
 
-              <div style={styles.statCard}>
+            <div>
+              <span>חוב פתוח</span>
+              <strong>{money(stats.openDebt)}</strong>
+            </div>
+          </section>
+
+          <section className="bottom">
+            <div className="stats">
+              <div>
                 <span>מצטבר</span>
                 <strong>{formatAmount(stats.taken)}</strong>
               </div>
+
+              <i />
+
+              <div>
+                <span>זמן מאז הסימון האחרון</span>
+                <strong>{stats.last ? sinceText(stats.last.takenAt) : "00:00"}</strong>
+              </div>
             </div>
 
-            <h3 style={styles.reminderTitle}>תזכיר לי עוד...</h3>
+            <h3>תזכיר לי עוד...</h3>
 
-            <div style={styles.reminderGrid}>
+            <div className="reminders">
               {REMINDERS.map((item) => (
                 <button
                   key={item}
                   onClick={() => setReminder(item)}
                   style={{
-                    ...styles.reminderButton,
-                    ...(reminder === item ? { background: activeUser.color, color: "#FFF" } : {})
+                    background: reminder === item ? activeUser.color : "#FFF",
+                    color: reminder === item ? "#FFF" : "#475569",
+                    borderColor: activeUser.color
                   }}
                 >
-                  {item === 30
-                    ? "30 דק׳"
-                    : item === 60
-                      ? "1:00"
-                      : item === 90
-                        ? "1:30"
-                        : "2:00"}
+                  {item === 30 ? "30 דק׳" : item === 60 ? "1:00" : item === 90 ? "1:30" : "2:00"}
                 </button>
               ))}
             </div>
 
-            <div style={styles.actions}>
+            <div className="actions">
               <button
-                style={{ ...styles.actionButton, background: activeUser.color }}
-                onClick={startNow}
+                style={{ background: activeUser.color }}
+                onClick={() => {
+                  setPendingTime(new Date());
+                  setScreen("amount");
+                }}
               >
                 לוקח עכשיו
               </button>
 
               <button
-                style={{ ...styles.actionButton, background: `${activeUser.color}CC` }}
+                style={{ background: activeUser.color }}
                 onClick={() => setScreen("before")}
               >
                 לקחתי לפני...
@@ -659,37 +640,45 @@ export default function App() {
 
   if (screen === "before") {
     return (
-      <ScreenShell title="לקחתי לפני..." onBack={() => setScreen("tracker")}>
-        <div style={styles.amountGrid}>
+      <Shell title="לקחתי לפני..." onBack={goBackToTracker}>
+        <style>{css}</style>
+
+        <div className="amount-grid">
           {BEFORE.map((minutes) => (
             <button
               key={minutes}
-              style={styles.amountButton}
-              onClick={() => startBefore(minutes)}
+              onClick={() => {
+                setPendingTime(addMinutes(new Date(), -minutes));
+                setScreen("amount");
+              }}
             >
               {minutes} דק׳
             </button>
           ))}
         </div>
-      </ScreenShell>
+      </Shell>
     );
   }
 
   if (screen === "amount") {
     return (
-      <ScreenShell title="בחירת כמות" onBack={() => setScreen("tracker")}>
-        <div style={styles.amountGrid}>
+      <Shell title="בחירת כמות" onBack={goBackToTracker}>
+        <style>{css}</style>
+
+        <div className="amount-grid">
           {AMOUNTS.map((amount, index) => {
-            const big = amount === 1 || amount === 1.5 || amount === 2;
+            const isBig = amount === 1 || amount === 1.5 || amount === 2;
 
             return (
               <button
                 key={`${amount}-${index}`}
-                style={{
-                  ...styles.amountButton,
-                  ...(big ? styles.amountBig : {})
-                }}
+                className={isBig ? "big" : ""}
                 onClick={() => saveEntry(amount)}
+                style={{
+                  background: isBig && activeUser ? activeUser.color : "#FFF",
+                  color: isBig ? "#FFF" : "#0F172A",
+                  borderColor: activeUser?.color || "#DDE5F0"
+                }}
               >
                 {formatAmount(amount)}
               </button>
@@ -697,27 +686,19 @@ export default function App() {
           })}
         </div>
 
-        {warning && (
-          <div style={styles.warning}>
+        {warningAmount !== null && (
+          <div className="warning">
             <h2>רגע, השעון מרים גבה.</h2>
             <p>חלפה פחות משעה מהסימון הקודם.</p>
             <p>שווה לעצור רגע ולבדוק שזה באמת הזמן הנכון.</p>
 
-            <div style={styles.actions}>
-              <button style={styles.secondary} onClick={() => setWarning(null)}>
-                חזרה
-              </button>
-
-              <button
-                style={styles.danger}
-                onClick={() => saveEntry(warning.amount, true)}
-              >
-                המשך בכל זאת
-              </button>
+            <div className="actions">
+              <button onClick={() => setWarningAmount(null)}>חזרה</button>
+              <button onClick={() => saveEntry(warningAmount, true)}>המשך בכל זאת</button>
             </div>
           </div>
         )}
-      </ScreenShell>
+      </Shell>
     );
   }
 
@@ -727,32 +708,15 @@ export default function App() {
       : 0;
 
     return (
-      <ScreenShell title="מלאי ועלות" onBack={() => setScreen("tracker")}>
-        <div style={styles.form}>
-          <input
-            style={styles.input}
-            value={stockName}
-            onChange={(event) => setStockName(event.target.value)}
-            placeholder="שם הפריט"
-          />
+      <Shell title="מלאי ועלות" onBack={goBackToTracker}>
+        <style>{css}</style>
 
-          <input
-            style={styles.input}
-            value={stockMl}
-            onChange={(event) => setStockMl(event.target.value)}
-            inputMode="decimal"
-            placeholder="כמות התחלתית במ״ל"
-          />
+        <div className="form">
+          <input value={stockName} onChange={(event) => setStockName(event.target.value)} placeholder="שם הפריט" />
+          <input value={stockMl} onChange={(event) => setStockMl(event.target.value)} inputMode="decimal" placeholder="כמות התחלתית במ״ל" />
+          <input value={stockPrice} onChange={(event) => setStockPrice(event.target.value)} inputMode="decimal" placeholder="מחיר כולל בש״ח" />
 
-          <input
-            style={styles.input}
-            value={stockPrice}
-            onChange={(event) => setStockPrice(event.target.value)}
-            inputMode="decimal"
-            placeholder="מחיר כולל בש״ח"
-          />
-
-          <div style={styles.summaryBox}>
+          <div className="summary">
             <p>מחיר למ״ל: <strong>{money(currentPricePerMl)}</strong></p>
             <p>נלקח: <strong>{formatAmount(stats.taken)} מ״ל</strong></p>
             <p>ניתן לאחרים: <strong>{formatAmount(stats.given)} מ״ל</strong></p>
@@ -761,11 +725,11 @@ export default function App() {
             <p>שווי יתרה: <strong>{money(stats.remaining * currentPricePerMl)}</strong></p>
           </div>
 
-          <button style={styles.primary} onClick={saveStock}>
+          <button className="primary" style={{ background: activeUser.color }} onClick={saveStock}>
             שמירה
           </button>
         </div>
-      </ScreenShell>
+      </Shell>
     );
   }
 
@@ -773,86 +737,59 @@ export default function App() {
     const suggested = Number(giveMl || 0) * stats.pricePerMl;
 
     return (
-      <ScreenShell title="נתתי למישהו" onBack={() => setScreen("tracker")}>
-        <div style={styles.form}>
-          <input
-            style={styles.input}
-            value={givePerson}
-            onChange={(event) => setGivePerson(event.target.value)}
-            placeholder="למי נתת"
-          />
+      <Shell title="נתתי למישהו" onBack={goBackToTracker}>
+        <style>{css}</style>
 
-          <input
-            style={styles.input}
-            value={giveMl}
-            onChange={(event) => setGiveMl(event.target.value)}
-            inputMode="decimal"
-            placeholder="כמה במ״ל"
-          />
+        <div className="form">
+          <input value={givePerson} onChange={(event) => setGivePerson(event.target.value)} placeholder="למי נתת" />
+          <input value={giveMl} onChange={(event) => setGiveMl(event.target.value)} inputMode="decimal" placeholder="כמה במ״ל" />
 
-          <div style={styles.statusGrid}>
-            {["צריך לשלם", "שולם", "חלקי", "מתנה"].map((status) => (
+          <div className="status">
+            {["צריך לשלם", "שולם", "חלקי", "מתנה"].map((item) => (
               <button
-                key={status}
+                key={item}
+                onClick={() => setGiveStatus(item)}
                 style={{
-                  ...styles.statusButton,
-                  ...(giveStatus === status ? styles.selectedStatus : {})
+                  background: giveStatus === item ? activeUser.color : "#EAF0F6",
+                  color: giveStatus === item ? "#FFF" : "#334155"
                 }}
-                onClick={() => setGiveStatus(status)}
               >
-                {status}
+                {item}
               </button>
             ))}
           </div>
 
-          <div style={styles.hint}>
+          <div className="hint">
             סכום מומלץ לפי מלאי: {money(suggested)}
           </div>
 
-          <input
-            style={styles.input}
-            value={giveToPay}
-            onChange={(event) => setGiveToPay(event.target.value)}
-            inputMode="decimal"
-            placeholder="סכום לתשלום"
-          />
+          <input value={giveToPay} onChange={(event) => setGiveToPay(event.target.value)} inputMode="decimal" placeholder="סכום לתשלום" />
+          <input value={givePaid} onChange={(event) => setGivePaid(event.target.value)} inputMode="decimal" placeholder="כמה שולם בפועל" />
+          <input value={giveNote} onChange={(event) => setGiveNote(event.target.value)} placeholder="הערה" />
 
-          <input
-            style={styles.input}
-            value={givePaid}
-            onChange={(event) => setGivePaid(event.target.value)}
-            inputMode="decimal"
-            placeholder="כמה שולם בפועל"
-          />
-
-          <input
-            style={styles.input}
-            value={giveNote}
-            onChange={(event) => setGiveNote(event.target.value)}
-            placeholder="הערה"
-          />
-
-          <button style={styles.primary} onClick={saveGive}>
+          <button className="primary" style={{ background: activeUser.color }} onClick={saveGive}>
             שמירה
           </button>
         </div>
-      </ScreenShell>
+      </Shell>
     );
   }
 
   if (screen === "payments" && activeUser) {
     return (
-      <ScreenShell title="היסטוריית תשלומים" onBack={() => setScreen("tracker")}>
-        <div style={styles.summaryBox}>
+      <Shell title="היסטוריית תשלומים" onBack={goBackToTracker}>
+        <style>{css}</style>
+
+        <div className="summary">
           <p>חוב פתוח: <strong>{money(stats.openDebt)}</strong></p>
         </div>
 
         {activeUser.given.length === 0 ? (
-          <div style={styles.emptyBox}>אין עדיין נתינות</div>
+          <div className="empty">אין עדיין נתינות</div>
         ) : (
-          <div style={styles.list}>
+          <div className="payment-list">
             {activeUser.given.map((item) => (
-              <div key={item.id} style={styles.paymentCard}>
+              <div className="payment" key={item.id}>
                 <strong>{item.person}</strong>
                 <span>כמות: {formatAmount(item.ml)} מ״ל</span>
                 <span>סטטוס: {item.status}</span>
@@ -864,473 +801,580 @@ export default function App() {
             ))}
           </div>
         )}
-      </ScreenShell>
+      </Shell>
     );
   }
 
   return null;
 }
 
-function ScreenShell({ title, children, onBack }) {
+function Shell({ title, children, onBack }) {
   return (
-    <main style={styles.page}>
-      <section style={styles.appShell}>
-        <header style={styles.header}>
-          <button style={styles.back} onClick={onBack}>
-            חזרה
-          </button>
-
-          <div style={styles.headerTitle}>
-            <strong>{title}</strong>
-          </div>
-
-          <span style={styles.spacer} />
+    <main className="page">
+      <section className="app">
+        <header className="top">
+          <button className="back" onClick={onBack}>חזרה</button>
+          <div className="top-title"><strong>{title}</strong></div>
+          <span className="ghost" />
         </header>
 
-        <div style={styles.content}>
+        <section className="content">
           {children}
-        </div>
+        </section>
       </section>
     </main>
   );
 }
 
-const styles = {
-  page: {
-    minHeight: "100vh",
-    direction: "rtl",
-    background: "#F4F6FA",
-    color: "#0F172A",
-    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    display: "flex",
-    justifyContent: "center"
-  },
-  appShell: {
-    width: "100%",
-    maxWidth: 520,
-    minHeight: "100vh",
-    background: "#F7F2FF",
-    position: "relative",
-    overflow: "hidden"
-  },
-  centerCard: {
-    width: "100%",
-    maxWidth: 520,
-    minHeight: "100vh",
-    padding: 24,
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-    gap: 18,
-    boxSizing: "border-box"
-  },
-  content: {
-    padding: 18,
-    display: "flex",
-    flexDirection: "column",
-    gap: 14
-  },
-  h1: {
-    fontSize: 34,
-    margin: 0,
-    textAlign: "center",
-    fontWeight: 950
-  },
-  sub: {
-    color: "#64748B",
-    textAlign: "center",
-    lineHeight: 1.5,
-    fontWeight: 700
-  },
-  input: {
-    width: "100%",
-    minHeight: 56,
-    borderRadius: 18,
-    border: "1px solid #DDE5F0",
-    background: "#FFF",
-    padding: "0 16px",
-    fontSize: 17,
-    boxSizing: "border-box",
-    textAlign: "right"
-  },
-  symbolGrid: {
-    display: "flex",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 10
-  },
-  symbolButton: {
-    width: 54,
-    height: 54,
-    border: 0,
-    borderRadius: 18,
-    background: "#EAF0F6",
-    fontSize: 24,
-    cursor: "pointer"
-  },
-  selectedDark: {
-    background: "#0F172A",
-    color: "#FFF"
-  },
-  colorGrid: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 12,
-    justifyContent: "center"
-  },
-  colorButton: {
-    width: 58,
-    height: 44,
-    border: 0,
-    borderRadius: 14,
-    cursor: "pointer"
-  },
-  label: {
-    fontWeight: 900,
-    color: "#475569",
-    textAlign: "right"
-  },
-  primary: {
-    minHeight: 56,
-    border: 0,
-    borderRadius: 20,
-    background: "#0F172A",
-    color: "#FFF",
-    fontSize: 18,
-    fontWeight: 950,
-    cursor: "pointer",
-    width: "100%"
-  },
-  secondary: {
-    minHeight: 50,
-    border: 0,
-    borderRadius: 18,
-    background: "#E2E8F0",
-    color: "#334155",
-    fontSize: 16,
-    fontWeight: 900,
-    cursor: "pointer",
-    flex: 1
-  },
-  danger: {
-    minHeight: 50,
-    border: 0,
-    borderRadius: 18,
-    background: "#DC2626",
-    color: "#FFF",
-    fontSize: 16,
-    fontWeight: 900,
-    cursor: "pointer",
-    flex: 1
-  },
-  header: {
-    height: 72,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "0 16px",
-    borderBottom: "1px solid rgba(15,23,42,0.1)",
-    background: "rgba(255,255,255,0.65)",
-    backdropFilter: "blur(16px)"
-  },
-  headerTitle: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    fontSize: 21,
-    fontWeight: 950
-  },
-  iconMenu: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    border: "1px solid #E2E8F0",
-    background: "#FFF",
-    fontSize: 28,
-    cursor: "pointer"
-  },
-  spacer: {
-    width: 48
-  },
-  back: {
-    border: 0,
-    borderRadius: 16,
-    background: "#E2E8F0",
-    padding: "10px 14px",
-    fontWeight: 900,
-    cursor: "pointer"
-  },
-  list: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 14,
-    padding: 18
-  },
-  userCard: {
-    border: 0,
-    borderRadius: 24,
-    background: "#FFF",
-    padding: 16,
-    display: "flex",
-    alignItems: "center",
-    gap: 14,
-    textAlign: "right",
-    cursor: "pointer",
-    boxShadow: "0 8px 30px rgba(15,23,42,0.08)"
-  },
-  userSymbol: {
-    width: 56,
-    height: 56,
-    borderRadius: 20,
-    color: "#FFF",
-    display: "grid",
-    placeItems: "center",
-    fontSize: 25
-  },
-  userInfo: {
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    gap: 4
-  },
-  chevron: {
-    fontSize: 40,
-    fontWeight: 900
-  },
-  form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 14
-  },
-  historyHeader: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1.4fr 1fr",
-    padding: "18px 14px",
-    color: "#64748B",
-    fontWeight: 900,
-    borderBottom: "1px solid rgba(15,23,42,0.1)",
-    textAlign: "center"
-  },
-  historyList: {
-    minHeight: "45vh",
-    padding: "18px 12px"
-  },
-  emptyHistory: {
-    color: "#64748B",
-    textAlign: "center",
-    fontSize: 26,
-    fontWeight: 900,
-    marginTop: 44
-  },
-  historyRow: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1.4fr 1fr",
-    gap: 8,
-    background: "#FFF",
-    borderRadius: 16,
-    padding: "12px 8px",
-    marginBottom: 8,
-    textAlign: "center",
-    fontWeight: 800
-  },
-  bottomPanel: {
-    position: "sticky",
-    bottom: 0,
-    background: "rgba(255,255,255,0.92)",
-    borderTop: "1px solid rgba(15,23,42,0.1)",
-    padding: 16,
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
-    backdropFilter: "blur(14px)"
-  },
-  statsCards: {
-    display: "grid",
-    gridTemplateColumns: "1fr 2px 1fr",
-    alignItems: "center",
-    gap: 12
-  },
-  statCard: {
-    background: "#FFF",
-    border: "1px solid #E2E8F0",
-    borderRadius: 20,
-    minHeight: 74,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4
-  },
-  divider: {
-    height: 42,
-    background: "#CBD5E1",
-    borderRadius: 2
-  },
-  reminderTitle: {
-    margin: 0,
-    textAlign: "right",
-    color: "#475569",
-    fontSize: 22
-  },
-  reminderGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
-    gap: 10
-  },
-  reminderButton: {
-    minHeight: 48,
-    borderRadius: 18,
-    border: "1px solid #DDE5F0",
-    background: "#FFF",
-    fontSize: 17,
-    fontWeight: 900,
-    color: "#475569",
-    cursor: "pointer"
-  },
-  actions: {
-    display: "flex",
-    gap: 12
-  },
-  actionButton: {
-    flex: 1,
-    minHeight: 60,
-    border: 0,
-    borderRadius: 22,
-    color: "#FFF",
-    fontSize: 18,
-    fontWeight: 950,
-    cursor: "pointer"
-  },
-  overlay: {
-    position: "absolute",
-    inset: 0,
-    zIndex: 50,
-    background: "rgba(15,23,42,0.22)"
-  },
-  drawer: {
-    width: "76%",
-    maxWidth: 330,
-    height: "100%",
-    background: "#FFF",
-    padding: 18,
-    boxSizing: "border-box",
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-    boxShadow: "-20px 0 50px rgba(15,23,42,0.25)"
-  },
-  drawerClose: {
-    alignSelf: "flex-start",
-    width: 42,
-    height: 42,
-    border: 0,
-    borderRadius: 18,
-    background: "#E2E8F0",
-    fontSize: 26,
-    cursor: "pointer"
-  },
-  drawerTitle: {
-    margin: "6px 0 10px",
-    fontSize: 28
-  },
-  drawerItem: {
-    minHeight: 56,
-    border: 0,
-    borderRadius: 18,
-    background: "#F1F5F9",
-    color: "#0F172A",
-    fontSize: 18,
-    fontWeight: 900,
-    textAlign: "right",
-    padding: "0 16px",
-    cursor: "pointer"
-  },
-  amountGrid: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-    justifyContent: "center"
-  },
-  amountButton: {
-    width: 74,
-    height: 58,
-    border: "1px solid #DDE5F0",
-    borderRadius: 18,
-    background: "#FFF",
-    color: "#0F172A",
-    fontSize: 18,
-    fontWeight: 950,
-    cursor: "pointer"
-  },
-  amountBig: {
-    width: 112,
-    height: 76,
-    background: "#0F172A",
-    color: "#FFF",
-    fontSize: 28
-  },
-  warning: {
-    position: "fixed",
-    inset: 0,
-    zIndex: 100,
-    background: "#DC2626",
-    color: "#FFF",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-    padding: 28,
-    textAlign: "center"
-  },
-  summaryBox: {
-    background: "#FFF",
-    borderRadius: 24,
-    padding: 18,
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-    boxShadow: "0 8px 30px rgba(15,23,42,0.08)"
-  },
-  statusGrid: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-    justifyContent: "center"
-  },
-  statusButton: {
-    border: 0,
-    borderRadius: 16,
-    background: "#EAF0F6",
-    padding: "12px 14px",
-    fontWeight: 900,
-    cursor: "pointer"
-  },
-  selectedStatus: {
-    background: "#0F172A",
-    color: "#FFF"
-  },
-  hint: {
-    background: "#EEF2FF",
-    borderRadius: 18,
-    padding: 14,
-    color: "#475569",
-    fontWeight: 900,
-    textAlign: "center"
-  },
-  paymentCard: {
-    background: "#FFF",
-    borderRadius: 22,
-    padding: 16,
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-    boxShadow: "0 8px 30px rgba(15,23,42,0.08)"
-  },
-  emptyBox: {
-    background: "#FFF",
-    borderRadius: 24,
-    padding: 22,
-    textAlign: "center",
-    color: "#64748B",
-    fontWeight: 900
+const css = `
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+button,
+input {
+  font-family: inherit;
+}
+
+.page {
+  min-height: 100vh;
+  direction: rtl;
+  background: #F4F6FA;
+  color: #0F172A;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  display: flex;
+  justify-content: center;
+}
+
+.app {
+  width: 100%;
+  max-width: 520px;
+  min-height: 100vh;
+  background: #F7F2FF;
+  position: relative;
+  overflow: hidden;
+}
+
+.center {
+  width: 100%;
+  max-width: 520px;
+  min-height: 100vh;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+}
+
+.center h1 {
+  margin: 0;
+  text-align: center;
+  font-size: 34px;
+  font-weight: 950;
+}
+
+.center p {
+  margin: 0;
+  text-align: center;
+  color: #64748B;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.top {
+  height: 72px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255,255,255,0.72);
+  border-bottom: 1px solid rgba(15,23,42,0.1);
+  backdrop-filter: blur(16px);
+}
+
+.top-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 23px;
+  font-weight: 950;
+}
+
+.circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 24px;
+  border: 1px solid #E2E8F0;
+  background: #FFF;
+  font-size: 30px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.ghost {
+  width: 48px;
+}
+
+.back {
+  border: 0;
+  border-radius: 16px;
+  background: #E2E8F0;
+  padding: 12px 16px;
+  font-size: 17px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.content {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.centered-form {
+  align-items: stretch;
+  text-align: center;
+}
+
+.centered-form h3 {
+  margin: 10px 0 0;
+  font-size: 23px;
+  font-weight: 950;
+  color: #475569;
+}
+
+input {
+  width: 100%;
+  min-height: 58px;
+  border: 1px solid #DDE5F0;
+  border-radius: 20px;
+  background: #FFF;
+  padding: 0 18px;
+  font-size: 19px;
+  text-align: right;
+  outline: none;
+}
+
+.primary {
+  min-height: 58px;
+  border: 0;
+  border-radius: 22px;
+  background: #0F172A;
+  color: #FFF;
+  font-size: 20px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.symbol-grid,
+.color-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  justify-items: center;
+  align-items: center;
+}
+
+.symbol-grid.straight {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.symbol {
+  width: 58px;
+  height: 58px;
+  border: 0;
+  border-radius: 19px;
+  background: #EAF0F6;
+  font-size: 25px;
+  cursor: pointer;
+}
+
+.selected-dark {
+  background: #0F172A;
+  color: #FFF;
+}
+
+.color {
+  width: 68px;
+  height: 58px;
+  border: 0;
+  border-radius: 20px;
+  cursor: pointer;
+}
+
+.empty {
+  background: #FFF;
+  border-radius: 24px;
+  padding: 22px;
+  text-align: center;
+  color: #64748B;
+  font-weight: 900;
+}
+
+.user-row {
+  min-height: 84px;
+  border: 0;
+  border-radius: 24px;
+  background: #FFF;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: right;
+  cursor: pointer;
+  box-shadow: 0 8px 30px rgba(15,23,42,0.08);
+}
+
+.user-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 20px;
+  color: #FFF;
+  display: grid;
+  place-items: center;
+  font-size: 25px;
+}
+
+.user-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.user-info strong {
+  font-size: 22px;
+}
+
+.user-info small {
+  color: #64748B;
+  font-weight: 800;
+}
+
+.chevron {
+  font-size: 40px;
+  font-weight: 950;
+}
+
+.history-head,
+.history-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 1fr;
+  gap: 8px;
+  text-align: center;
+}
+
+.history-head {
+  padding: 18px 14px;
+  color: #64748B;
+  font-weight: 950;
+  border-bottom: 1px solid rgba(15,23,42,0.1);
+}
+
+.history-list {
+  min-height: 40vh;
+  padding: 18px 12px;
+}
+
+.empty-history {
+  text-align: center;
+  margin-top: 44px;
+  font-size: 26px;
+  color: #64748B;
+  font-weight: 950;
+}
+
+.history-row {
+  background: #FFF;
+  border-radius: 18px;
+  padding: 14px 8px;
+  margin-bottom: 10px;
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.data-strip {
+  padding: 0 16px 10px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.data-strip div,
+.stats div {
+  background: #FFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 20px;
+  padding: 12px 8px;
+  text-align: center;
+}
+
+.data-strip span,
+.stats span {
+  display: block;
+  color: #64748B;
+  font-weight: 900;
+  font-size: 13px;
+}
+
+.data-strip strong,
+.stats strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 21px;
+  font-weight: 950;
+}
+
+.bottom {
+  position: sticky;
+  bottom: 0;
+  background: rgba(255,255,255,0.93);
+  border-top: 1px solid rgba(15,23,42,0.1);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  backdrop-filter: blur(14px);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 2px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.stats i {
+  height: 44px;
+  border-radius: 2px;
+  background: #CBD5E1;
+}
+
+.bottom h3 {
+  margin: 0;
+  color: #475569;
+  font-size: 22px;
+  font-weight: 950;
+}
+
+.reminders {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.reminders button {
+  min-height: 50px;
+  border: 2px solid #DDE5F0;
+  border-radius: 18px;
+  background: #FFF;
+  font-size: 17px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+}
+
+.actions button {
+  flex: 1;
+  min-height: 62px;
+  border: 0;
+  border-radius: 23px;
+  color: #FFF;
+  font-size: 20px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: rgba(15,23,42,0.22);
+}
+
+.drawer {
+  width: 76%;
+  max-width: 330px;
+  height: 100%;
+  background: #FFF;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: -20px 0 50px rgba(15,23,42,0.25);
+}
+
+.drawer-close {
+  align-self: flex-start;
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 18px;
+  background: #E2E8F0;
+  font-size: 26px;
+  cursor: pointer;
+}
+
+.drawer h2 {
+  margin: 6px 0 10px;
+  font-size: 30px;
+}
+
+.drawer button:not(.drawer-close) {
+  min-height: 58px;
+  border: 0;
+  border-radius: 18px;
+  background: #F1F5F9;
+  padding: 0 16px;
+  text-align: right;
+  font-size: 19px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.amount-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.amount-grid button {
+  width: 74px;
+  height: 58px;
+  border: 2px solid #DDE5F0;
+  border-radius: 18px;
+  background: #FFF;
+  color: #0F172A;
+  font-size: 19px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.amount-grid button.big {
+  width: 112px;
+  height: 76px;
+  font-size: 29px;
+}
+
+.warning {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #DC2626;
+  color: #FFF;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+}
+
+.warning h2 {
+  font-size: 32px;
+}
+
+.warning p {
+  font-size: 20px;
+  font-weight: 850;
+}
+
+.warning .actions button:first-child {
+  background: #FFF;
+  color: #DC2626;
+}
+
+.warning .actions button:last-child {
+  background: #7F1D1D;
+}
+
+.summary {
+  background: #FFF;
+  border-radius: 24px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 8px 30px rgba(15,23,42,0.08);
+}
+
+.summary p {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 850;
+}
+
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.status button {
+  border: 0;
+  border-radius: 16px;
+  background: #EAF0F6;
+  padding: 12px 14px;
+  font-size: 16px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.hint {
+  background: #EEF2FF;
+  border-radius: 18px;
+  padding: 14px;
+  text-align: center;
+  color: #475569;
+  font-weight: 950;
+}
+
+.payment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.payment {
+  background: #FFF;
+  border-radius: 22px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  box-shadow: 0 8px 30px rgba(15,23,42,0.08);
+}
+
+@media (max-width: 420px) {
+  .symbol-grid,
+  .color-grid {
+    grid-template-columns: repeat(4, 1fr);
   }
-};
+
+  .color {
+    width: 62px;
+  }
+
+  .data-strip {
+    grid-template-columns: 1fr;
+  }
+}
+`;
