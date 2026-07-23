@@ -3,22 +3,11 @@
 זו אפליקציית React רגילה. הנתונים עצמם (יוזרים, היסטוריית סימונים) נשמרים
 מקומית בדפדפן (localStorage) - אין להם קשר לענן. מסד הנתונים ב-Supabase
 משמש אך ורק כדי לאפשר **התראות אמיתיות ברקע** (Push) שמגיעות גם כשהאפליקציה
-סגורה.
+סגורה, ומחובר ישירות בקוד - אין שום שלב הגדרה נוסף.
 
 ---
 
-## שלב 1: חיבור המפתחות לפרויקט
-
-הפרויקט כבר מגיע עם קובץ `.env.example` שמצביע על פרויקט Supabase קיים
-(נוצר במיוחד לאפליקציה הזו, בלי שום קשר ל-Afterglow). כדי להריץ מקומית:
-
-```
-cp .env.example .env
-```
-
----
-
-## שלב 2: העלאה ל-GitHub
+## שלב 1: העלאה ל-GitHub
 
 ```
 git init
@@ -29,21 +18,14 @@ git remote add origin https://github.com/USERNAME/REPO-NAME.git
 git push -u origin main
 ```
 
-**חשוב**: הקובץ `.env` לא יעלה ל-GitHub (מוגדר ב-`.gitignore`) - זה בסדר,
-נגדיר אותו בנפרד ב-Vercel בשלב הבא.
-
 ---
 
-## שלב 3: פרסום (Vercel) - כ-3 דקות
+## שלב 2: פרסום (Vercel) - כ-3 דקות
 
 1. כנס ל-**vercel.com**, לחץ "Sign Up", והתחבר **עם GitHub**
 2. "Add New" → "Project"
 3. תבחר את ה-repository שיצרת
-4. לפני שלוחצים Deploy - תפתח "Environment Variables" ותוסיף את שני הערכים
-   מתוך `.env.example`:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-5. לחץ **Deploy**
+4. לחץ **Deploy** (אין צורך בשום Environment Variable)
 
 ---
 
