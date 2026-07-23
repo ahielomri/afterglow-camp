@@ -225,6 +225,7 @@ function buildShifts() {
     // morning, so there's no one there yet for morning cleaning or LNT/trash duty.
     if (d !== firstDay) {
       shifts.push({ id: `clean-${d}`, phase: "ימי האירוע", title: "ניקיון שירותים ומקלחות", team: "שירותים ומקלחות", date: d, start: "09:00", end: "10:00", spots: 2, desc: "ניקיון ותחזוקה יומית" });
+      shifts.push({ id: `clean-pm-${d}`, phase: "ימי האירוע", title: "ניקיון שירותים ומקלחות", team: "שירותים ומקלחות", date: d, start: "14:00", end: "16:00", spots: 2, desc: "ניקיון ותחזוקה יומית" });
       shifts.push({ id: `moop-${d}`, phase: "ימי האירוע", title: "חשל\"ש ופינוי פסולת", team: "צוות חשל\"ש", date: d, start: "16:00", end: "17:00", spots: 2, desc: "מיחזור, פינוי פחים ובדיקת MOOP" });
     }
   });
@@ -3662,6 +3663,15 @@ ${cards}
       const dateBlocks = dates.map((date) => {
         const dayShifts = phaseShifts.filter((s) => s.date === date);
         const rows = dayShifts.map((s) => {
+          if (s.id === TEARDOWN_ID) {
+            return `<tr>
+              <td>${escapeHtml(s.title)}</td>
+              <td>כולם</td>
+              <td>${s.start}–${s.end}</td>
+              <td>כולם</td>
+              <td></td>
+            </tr>`;
+          }
           const names = assignments[s.id] || [];
           const namesHtml = names.length > 0
             ? names.map((n) => escapeHtml(n)).join(", ")
@@ -3702,6 +3712,7 @@ ${cards}
 <h1>לוח משמרות - Afterglow (${escapeHtml(new Date().toLocaleDateString("he-IL"))})</h1>
 <div class="summary">
   <div><b>${totalShifts}</b>כמות משמרות</div>
+  <div><b>${totalSpots}</b>כמה אנשים סה״כ צריך</div>
   <div><b>${totalVolunteers}</b>כמות מתנדבים בכל המשמרות</div>
   <div><b>${openSpots}</b>מקומות פנויים</div>
   <div><b>${totalVolunteers}</b>מקומות תפוסים</div>
