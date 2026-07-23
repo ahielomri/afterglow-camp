@@ -225,6 +225,11 @@ function buildShifts() {
 
   shifts.push({ id: "teardown-2026-11-07", phase: "פירוקים", title: "יום פירוק", team: "פירוקים", date: "2026-11-07", start: "08:00", end: "22:00", spots: MEMBERS.length, desc: "פירוק תשתיות, בדיקת MOOP סופית וניקיון השטח - כולם משתתפים" });
 
+  // One-time exception: a lunch shift on the arrival day only (Monday,
+  // 11-02) - people are already arriving through the day and need to eat,
+  // even though noon kitchen shifts were dropped everywhere else.
+  shifts.push({ id: "kitchen-noon-2026-11-02", phase: "ימי האירוע", title: "משמרת בישול - צהריים", team: "צוות המטבח", date: "2026-11-02", start: "11:30", end: "14:00", spots: 4, desc: "הכנה והגשה של ארוחת צהריים ליום ההגעה" });
+
   return shifts;
 }
 const TEARDOWN_TASKS = [
