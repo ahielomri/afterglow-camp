@@ -1,70 +1,99 @@
-import React, { useMemo, useState } from "react";
-import {
-  SafeAreaView,
-  ScrollView,
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  StyleSheet,
-  Alert,
-} from "react-native";
+"use client";
 
-const symbols = ["🪬","🪩","🧿","🪐","🧬","🫧","🪄","🪞","🪶","🪸","🪷","🦋"];
-const colors = ["#2563EB","#16A34A","#9333EA","#DC2626","#EA580C","#0891B2"];
-const reminders = [30, 60, 90, 120];
-const beforeOptions = [5,10,15,20,25,30,35,40,45,50];
-const amounts = [
-  0.1,0.2,0.3,0.4,
-  0.5,1,0.6,0.7,
-  0.8,0.9,1.1,1.2,
-  1.3,1.4,1.5,1.6,
-  1.7,1.8,1.9,2.1,
-  2.2,2,2.3,2.4,
-  2.5,2.6,2.7
+import React, { useEffect, useMemo, useState } from "react";
+
+const SYMBOLS = [
+  "🪬","🪩","🧿","🪐","🧬","🫧","🪄","🪞","🪶","🪸",
+  "🪷","🪻","🪁","🛸","🧭","🧩","🪅","🎐","🦚","🦋"
 ];
 
-function amountText(n) {
-  const v = Number(n || 0);
-  return Number.isInteger(v) ? String(v) : v.toFixed(1);
+const COLORS = [
+  "#B794F4",
+  "#60A5FA",
+  "#34D399",
+  "#F59E0B",
+  "#F472B6",
+  "#818CF8",
+  "#22D3EE",
+  "#FB7185"
+];
+
+const REMINDERS = [30, 60, 90, 120];
+const BEFORE = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
+
+const AMOUNTS = [
+  0.1, 0.2, 0.3, 0.4,
+  0.5, 1, 0.6, 0.7,
+  0.8, 0.9, 1.1, 1.2,
+  1.3, 1.4, 1.5, 1.6,
+  1.7, 1.8, 1.9, 2.1,
+  2.2, 2, 2.3, 2.4,
+  2.5, 2.6, 2.7
+];
+
+const STORAGE_KEY = "check_timer_vercel_full_v1";
+
+function formatAmount(value) {
+  const n = Number(value || 0);
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
 function timeText(value) {
-  const x = new Date(value);
-  return x.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+  if (!value) return "";
+  return new Date(value).toLocaleTimeString("he-IL", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 }
 
 function dateText(value) {
-  const x = new Date(value);
-  return x.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  if (!value) return "";
+  return new Date(value).toLocaleDateString("he-IL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit"
+  });
 }
 
 function addMinutes(date, minutes) {
   return new Date(date.getTime() + minutes * 60000);
 }
 
-function money(n) {
-  const v = Number(n || 0);
-  return `${Math.round(v * 100) / 100} ₪`;
+function money(value) {
+  const n = Number(value || 0);
+  return `${Math.round(n * 100) / 100} ₪`;
+}
+
+function minutesSince(value) {
+  if (!value) return "00:00";
+
+  const diff = Math.max(0, Date.now() - new Date(value).getTime());
+  const totalMinutes = Math.floor(diff / 60000);
+  const hours = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
+  const minutes = String(totalMinutes % 60).padStart(2, "0");
+
+  return `${hours}:${minutes}`;
 }
 
 export default function App() {
-  const [screen, setScreen] = useState("main");
+  const [data, setData] = useState({
+    mainUser: null,
+    users: []
+  });
 
-  const [mainUser, setMainUser] = useState(null);
+  const [screen, setScreen] = useState("boot");
+  const [activeUserId, setActiveUserId] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+
   const [mainName, setMainName] = useState("");
-  const [mainSymbol, setMainSymbol] = useState(symbols[0]);
-
-  const [users, setUsers] = useState([]);
-  const [activeId, setActiveId] = useState(null);
+  const [mainSymbol, setMainSymbol] = useState(SYMBOLS[0]);
 
   const [newName, setNewName] = useState("");
-  const [newSymbol, setNewSymbol] = useState(symbols[1]);
-  const [newColor, setNewColor] = useState(colors[0]);
+  const [newSymbol, setNewSymbol] = useState(SYMBOLS[1]);
+  const [newColor, setNewColor] = useState(COLORS[0]);
 
   const [reminder, setReminder] = useState(90);
-  const [pendingTime, setPendingTime] = useState(null);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [pendingTakenAt, setPendingTakenAt] = useState(null);
 
   const [stockName, setStockName] = useState("");
   const [stockMl, setStockMl] = useState("");
@@ -77,42 +106,107 @@ export default function App() {
   const [givePaid, setGivePaid] = useState("");
   const [giveNote, setGiveNote] = useState("");
 
-  const activeUser = users.find((u) => u.id === activeId);
+  const [warning, setWarning] = useState(null);
+  const [clock, setClock] = useState(Date.now());
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setData(parsed);
+        setScreen(parsed.mainUser ? "users" : "main");
+      } else {
+        setScreen("main");
+      }
+    } catch {
+      setScreen("main");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (screen !== "boot") {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+  }, [data, screen]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setClock(Date.now());
+    }, 1000);
+
+    return () => clearInterval(id);
+  }, []);
+
+  const activeUser = data.users.find((user) => user.id === activeUserId);
 
   const stats = useMemo(() => {
     if (!activeUser) {
-      return { taken: 0, given: 0, pricePerMl: 0, remaining: 0, openDebt: 0, last: null };
+      return {
+        taken: 0,
+        given: 0,
+        remaining: 0,
+        pricePerMl: 0,
+        openDebt: 0,
+        last: null
+      };
     }
 
-    const taken = activeUser.entries.reduce((sum, x) => sum + Number(x.amount || 0), 0);
-    const given = activeUser.given.reduce((sum, x) => sum + Number(x.ml || 0), 0);
-    const totalMl = Number(activeUser.stock.ml || 0);
-    const totalPrice = Number(activeUser.stock.price || 0);
+    const taken = activeUser.entries.reduce((sum, item) => {
+      return sum + Number(item.amount || 0);
+    }, 0);
+
+    const given = activeUser.given.reduce((sum, item) => {
+      return sum + Number(item.ml || 0);
+    }, 0);
+
+    const totalMl = Number(activeUser.stock?.ml || 0);
+    const totalPrice = Number(activeUser.stock?.price || 0);
     const pricePerMl = totalMl > 0 ? totalPrice / totalMl : 0;
     const remaining = Math.max(totalMl - taken - given, 0);
-    const openDebt = activeUser.given.reduce((sum, x) => {
-      return sum + Math.max(Number(x.toPay || 0) - Number(x.paid || 0), 0);
+
+    const openDebt = activeUser.given.reduce((sum, item) => {
+      return sum + Math.max(Number(item.toPay || 0) - Number(item.paid || 0), 0);
     }, 0);
 
     return {
       taken,
       given,
-      pricePerMl,
       remaining,
+      pricePerMl,
       openDebt,
-      last: activeUser.entries[0] || null,
+      last: activeUser.entries[0] || null
     };
-  }, [activeUser]);
+  }, [activeUser, clock]);
 
-  function updateActive(patch) {
-    setUsers((list) =>
-      list.map((u) => (u.id === activeId ? { ...u, ...patch } : u))
-    );
+  function updateUser(userId, patch) {
+    setData((prev) => ({
+      ...prev,
+      users: prev.users.map((user) => {
+        if (user.id === userId) {
+          return {
+            ...user,
+            ...patch
+          };
+        }
+
+        return user;
+      })
+    }));
   }
 
   function saveMainUser() {
     if (!mainName.trim()) return;
-    setMainUser({ name: mainName.trim(), symbol: mainSymbol });
+
+    setData((prev) => ({
+      ...prev,
+      mainUser: {
+        name: mainName.trim(),
+        symbol: mainSymbol
+      }
+    }));
+
     setScreen("users");
   }
 
@@ -125,68 +219,92 @@ export default function App() {
       symbol: newSymbol,
       color: newColor,
       entries: [],
-      stock: { name: "", ml: "", price: "" },
-      given: [],
+      stock: {
+        name: "",
+        ml: "",
+        price: ""
+      },
+      given: []
     };
 
-    setUsers([...users, user]);
+    setData((prev) => ({
+      ...prev,
+      users: [...prev.users, user]
+    }));
+
     setNewName("");
-    setNewSymbol(symbols[1]);
-    setNewColor(colors[0]);
+    setNewSymbol(SYMBOLS[1]);
+    setNewColor(COLORS[0]);
     setScreen("users");
   }
 
-  function openUser(user) {
-    setActiveId(user.id);
+  function openTracker(user) {
+    setActiveUserId(user.id);
     setMenuOpen(false);
     setScreen("tracker");
   }
 
-  function saveEntry(amount) {
-    if (!activeUser || !pendingTime) return;
+  function startNow() {
+    setPendingTakenAt(new Date());
+    setScreen("amount");
+  }
+
+  function startBefore(minutes) {
+    setPendingTakenAt(addMinutes(new Date(), -minutes));
+    setScreen("amount");
+  }
+
+  function saveEntry(amount, force = false) {
+    if (!activeUser || !pendingTakenAt) return;
 
     const last = activeUser.entries[0];
 
-    if (last) {
-      const diffMinutes =
-        (pendingTime.getTime() - new Date(last.takenAt).getTime()) / 60000;
+    if (last && !force) {
+      const diff = (pendingTakenAt.getTime() - new Date(last.takenAt).getTime()) / 60000;
 
-      if (diffMinutes > -1 && diffMinutes < 60) {
-        Alert.alert(
-          "רגע, השעון מרים גבה",
-          "חלפה פחות משעה מהסימון הקודם. שווה לעצור רגע ולבדוק שזה באמת הזמן הנכון."
-        );
+      if (diff > -1 && diff < 60) {
+        setWarning({ amount });
+        return;
       }
     }
 
     const entry = {
       id: String(Date.now()),
       amount,
-      takenAt: pendingTime.toISOString(),
-      nextAt: addMinutes(pendingTime, reminder).toISOString(),
+      takenAt: pendingTakenAt.toISOString(),
+      nextAt: addMinutes(pendingTakenAt, reminder).toISOString()
     };
 
-    updateActive({ entries: [entry, ...activeUser.entries] });
-    setPendingTime(null);
+    updateUser(activeUser.id, {
+      entries: [entry, ...activeUser.entries]
+    });
+
+    setWarning(null);
+    setPendingTakenAt(null);
     setScreen("tracker");
   }
 
   function openStock() {
-    setStockName(activeUser.stock.name || "");
-    setStockMl(String(activeUser.stock.ml || ""));
-    setStockPrice(String(activeUser.stock.price || ""));
+    if (!activeUser) return;
+
+    setStockName(activeUser.stock?.name || "");
+    setStockMl(String(activeUser.stock?.ml || ""));
+    setStockPrice(String(activeUser.stock?.price || ""));
     setMenuOpen(false);
     setScreen("stock");
   }
 
   function saveStock() {
-    updateActive({
+    if (!activeUser) return;
+
+    updateUser(activeUser.id, {
       stock: {
         name: stockName,
         ml: stockMl,
-        price: stockPrice,
-      },
+        price: stockPrice
+      }
     });
+
     setScreen("tracker");
   }
 
@@ -217,386 +335,437 @@ export default function App() {
       toPay: giveToPay.trim() ? Number(giveToPay) : suggested,
       paid: Number(givePaid || 0),
       note: giveNote,
-      date: new Date().toISOString(),
+      date: new Date().toISOString()
     };
 
-    updateActive({ given: [item, ...activeUser.given] });
+    updateUser(activeUser.id, {
+      given: [item, ...activeUser.given]
+    });
+
     setScreen("tracker");
+  }
+
+  function resetApp() {
+    const ok = confirm("למחוק את כל הנתונים באפליקציה?");
+    if (!ok) return;
+
+    localStorage.removeItem(STORAGE_KEY);
+    setData({
+      mainUser: null,
+      users: []
+    });
+    setActiveUserId(null);
+    setScreen("main");
+  }
+
+  if (screen === "boot") {
+    return (
+      <main style={styles.page}>
+        <section style={styles.centerCard}>
+          <h1 style={styles.h1}>טוען...</h1>
+        </section>
+      </main>
+    );
   }
 
   if (screen === "main") {
     return (
-      <SafeAreaView style={styles.shell}>
-        <ScrollView contentContainerStyle={styles.center}>
-          <Text style={styles.title}>הקמת משתמש ראשי</Text>
-          <Text style={styles.sub}>המשתמש שמנהל את כל המעקבים באפליקציה.</Text>
+      <main style={styles.page}>
+        <section style={styles.centerCard}>
+          <h1 style={styles.h1}>הקמת משתמש ראשי</h1>
+          <p style={styles.sub}>זה המשתמש שמנהל את כל המעקבים באפליקציה.</p>
 
-          <TextInput
+          <input
             value={mainName}
-            onChangeText={setMainName}
+            onChange={(event) => setMainName(event.target.value)}
             placeholder="שם המשתמש הראשי"
             style={styles.input}
-            textAlign="right"
           />
 
-          <View style={styles.grid}>
-            {symbols.map((s) => (
-              <Pressable
-                key={s}
-                onPress={() => setMainSymbol(s)}
-                style={[styles.symbolBtn, mainSymbol === s && styles.selectedDark]}
+          <div style={styles.symbolGrid}>
+            {SYMBOLS.map((symbol) => (
+              <button
+                key={symbol}
+                onClick={() => setMainSymbol(symbol)}
+                style={{
+                  ...styles.symbolButton,
+                  ...(mainSymbol === symbol ? styles.selectedDark : {})
+                }}
               >
-                <Text style={styles.symbolText}>{s}</Text>
-              </Pressable>
+                {symbol}
+              </button>
             ))}
-          </View>
+          </div>
 
-          <Pressable style={styles.primary} onPress={saveMainUser}>
-            <Text style={styles.primaryText}>שמירה והמשך</Text>
-          </Pressable>
-        </ScrollView>
-      </SafeAreaView>
+          <button style={styles.primary} onClick={saveMainUser}>
+            שמירה והמשך
+          </button>
+        </section>
+      </main>
     );
   }
 
   if (screen === "users") {
     return (
-      <SafeAreaView style={styles.shell}>
-        <ScrollView contentContainerStyle={styles.content}>
-          {mainUser && (
-            <View style={styles.card}>
-              <Text style={styles.bigSymbol}>{mainUser.symbol}</Text>
-              <Text style={styles.cardTitle}>{mainUser.name}</Text>
-              <Text style={styles.cardSub}>משתמש ראשי</Text>
-            </View>
-          )}
+      <main style={styles.page}>
+        <section style={styles.appShell}>
+          <header style={styles.header}>
+            <button style={styles.iconMenu} onClick={resetApp}>
+              ⌫
+            </button>
 
-          <Pressable style={styles.primary} onPress={() => setScreen("createUser")}>
-            <Text style={styles.primaryText}>הקמת יוזר חדש</Text>
-          </Pressable>
+            <div style={styles.headerTitle}>
+              <span>{data.mainUser?.symbol}</span>
+              <strong>{data.mainUser?.name}</strong>
+            </div>
 
-          {users.map((user) => (
-            <Pressable
-              key={user.id}
-              onPress={() => openUser(user)}
-              style={styles.userRow}
-            >
-              <View style={[styles.userIcon, { backgroundColor: user.color }]}>
-                <Text style={styles.userIconText}>{user.symbol}</Text>
-              </View>
+            <span style={styles.spacer} />
+          </header>
 
-              <View style={styles.userText}>
-                <Text style={styles.userName}>{user.name}</Text>
-                <Text style={styles.userSub}>כניסה למסך מעקב</Text>
-              </View>
-            </Pressable>
-          ))}
-        </ScrollView>
-      </SafeAreaView>
+          <div style={styles.list}>
+            <button style={styles.primary} onClick={() => setScreen("createUser")}>
+              הקמת יוזר חדש
+            </button>
+
+            {data.users.length === 0 ? (
+              <div style={styles.emptyBox}>
+                אין עדיין יוזרים. כדאי להקים יוזר ראשון.
+              </div>
+            ) : (
+              data.users.map((user) => (
+                <button
+                  key={user.id}
+                  style={styles.userCard}
+                  onClick={() => openTracker(user)}
+                >
+                  <span style={{ ...styles.userSymbol, background: user.color }}>
+                    {user.symbol}
+                  </span>
+
+                  <span style={styles.userInfo}>
+                    <strong>{user.name}</strong>
+                    <small>כניסה למסך מעקב</small>
+                  </span>
+
+                  <span style={styles.chevron}>›</span>
+                </button>
+              ))
+            )}
+          </div>
+        </section>
+      </main>
     );
   }
 
   if (screen === "createUser") {
     return (
-      <SafeAreaView style={styles.shell}>
-        <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.title}>הקמת יוזר</Text>
+      <main style={styles.page}>
+        <section style={styles.appShell}>
+          <header style={styles.header}>
+            <button style={styles.back} onClick={() => setScreen("users")}>
+              חזרה
+            </button>
 
-          <TextInput
-            value={newName}
-            onChangeText={setNewName}
-            placeholder="שם היוזר"
-            style={styles.input}
-            textAlign="right"
-          />
+            <div style={styles.headerTitle}>
+              <strong>הקמת יוזר</strong>
+            </div>
 
-          <Text style={styles.label}>בחירת צבע</Text>
-          <View style={styles.grid}>
-            {colors.map((c) => (
-              <Pressable
-                key={c}
-                onPress={() => setNewColor(c)}
-                style={[
-                  styles.colorBtn,
-                  { backgroundColor: c },
-                  newColor === c && styles.selectedColor,
-                ]}
-              />
-            ))}
-          </View>
+            <span style={styles.spacer} />
+          </header>
 
-          <Text style={styles.label}>בחירת סימן</Text>
-          <View style={styles.grid}>
-            {symbols.map((s) => (
-              <Pressable
-                key={s}
-                onPress={() => setNewSymbol(s)}
-                style={[styles.symbolBtn, newSymbol === s && styles.selectedDark]}
-              >
-                <Text style={styles.symbolText}>{s}</Text>
-              </Pressable>
-            ))}
-          </View>
+          <div style={styles.form}>
+            <input
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+              placeholder="שם היוזר"
+              style={styles.input}
+            />
 
-          <Pressable style={styles.primary} onPress={saveNewUser}>
-            <Text style={styles.primaryText}>שמירה</Text>
-          </Pressable>
+            <label style={styles.label}>בחירת צבע</label>
 
-          <Pressable style={styles.secondary} onPress={() => setScreen("users")}>
-            <Text style={styles.secondaryText}>חזרה</Text>
-          </Pressable>
-        </ScrollView>
-      </SafeAreaView>
+            <div style={styles.colorGrid}>
+              {COLORS.map((color) => (
+                <button
+                  key={color}
+                  onClick={() => setNewColor(color)}
+                  style={{
+                    ...styles.colorButton,
+                    background: color,
+                    outline: newColor === color ? "4px solid #0F172A" : "4px solid #FFF"
+                  }}
+                />
+              ))}
+            </div>
+
+            <label style={styles.label}>בחירת סימן</label>
+
+            <div style={styles.symbolGrid}>
+              {SYMBOLS.map((symbol) => (
+                <button
+                  key={symbol}
+                  onClick={() => setNewSymbol(symbol)}
+                  style={{
+                    ...styles.symbolButton,
+                    ...(newSymbol === symbol ? styles.selectedDark : {})
+                  }}
+                >
+                  {symbol}
+                </button>
+              ))}
+            </div>
+
+            <button style={styles.primary} onClick={saveNewUser}>
+              שמירה
+            </button>
+          </div>
+        </section>
+      </main>
     );
   }
 
   if (screen === "tracker" && activeUser) {
     return (
-      <SafeAreaView style={[styles.shell, { backgroundColor: activeUser.color + "12" }]}>
-        <View style={styles.topBar}>
-          <Pressable onPress={() => setScreen("users")} style={styles.topSmallBtn}>
-            <Text style={styles.topSmallText}>חזרה</Text>
-          </Pressable>
+      <main style={{ ...styles.page, background: `${activeUser.color}22` }}>
+        <section style={styles.appShell}>
+          <header style={{ ...styles.header, background: `${activeUser.color}24` }}>
+            <button style={styles.iconMenu} onClick={() => setMenuOpen(true)}>
+              ⋯
+            </button>
 
-          <View style={styles.topName}>
-            <Text style={styles.topTitle}>
-              {activeUser.symbol} {activeUser.name}
-            </Text>
-          </View>
+            <div style={styles.headerTitle}>
+              <span>{activeUser.symbol}</span>
+              <strong>{activeUser.name}</strong>
+            </div>
 
-          <Pressable
-            onPress={() => setMenuOpen(!menuOpen)}
-            style={styles.dotsBtn}
-          >
-            <Text style={styles.dots}>⋯</Text>
-          </Pressable>
-        </View>
+            <button style={styles.iconMenu} onClick={() => setScreen("users")}>
+              ×
+            </button>
+          </header>
 
-        {menuOpen && (
-          <View style={styles.menu}>
-            <Pressable onPress={openStock} style={styles.menuItem}>
-              <Text style={styles.menuText}>מלאי ועלות</Text>
-            </Pressable>
+          {menuOpen && (
+            <div style={styles.overlay} onClick={() => setMenuOpen(false)}>
+              <aside style={styles.drawer} onClick={(event) => event.stopPropagation()}>
+                <button style={styles.drawerClose} onClick={() => setMenuOpen(false)}>
+                  ×
+                </button>
 
-            <Pressable onPress={openGive} style={styles.menuItem}>
-              <Text style={styles.menuText}>נתתי למישהו</Text>
-            </Pressable>
+                <h3 style={styles.drawerTitle}>תפריט</h3>
 
-            <Pressable
-              onPress={() => {
-                setMenuOpen(false);
-                setScreen("payments");
-              }}
-              style={styles.menuItem}
-            >
-              <Text style={styles.menuText}>היסטוריית תשלומים</Text>
-            </Pressable>
+                <button style={styles.drawerItem} onClick={openStock}>
+                  מלאי ועלות
+                </button>
 
-            <Pressable onPress={() => setMenuOpen(false)} style={styles.menuItem}>
-              <Text style={styles.menuText}>סגירה</Text>
-            </Pressable>
-          </View>
-        )}
+                <button style={styles.drawerItem} onClick={openGive}>
+                  נתתי למישהו
+                </button>
 
-        <ScrollView contentContainerStyle={styles.content}>
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statLabel}>מצטבר</Text>
-              <Text style={styles.statValue}>{amountText(stats.taken)} מ״ל</Text>
-            </View>
+                <button
+                  style={styles.drawerItem}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setScreen("payments");
+                  }}
+                >
+                  היסטוריית תשלומים
+                </button>
 
-            <View style={styles.statBox}>
-              <Text style={styles.statLabel}>זמן מאז הסימון האחרון</Text>
-              <Text style={styles.statValue}>
-                {stats.last ? timeText(stats.last.takenAt) : "אין סימון"}
-              </Text>
-            </View>
-          </View>
+                <button style={styles.drawerItem} onClick={() => setMenuOpen(false)}>
+                  סגירה
+                </button>
+              </aside>
+            </div>
+          )}
 
-          <View style={styles.historyBox}>
-            <View style={styles.historyHead}>
-              <Text style={styles.hCell}>כמות</Text>
-              <Text style={styles.hCell}>שעה ← פעם הבאה</Text>
-              <Text style={styles.hCell}>תאריך</Text>
-            </View>
+          <section style={styles.historyHeader}>
+            <strong>תאריך</strong>
+            <strong>שעה ← פעם הבאה</strong>
+            <strong>כמות</strong>
+          </section>
 
+          <section style={styles.historyList}>
             {activeUser.entries.length === 0 ? (
-              <Text style={styles.empty}>אין עדיין סימונים</Text>
+              <div style={styles.emptyHistory}>ממתין לסימון ראשון</div>
             ) : (
               activeUser.entries.map((entry) => (
-                <View key={entry.id} style={styles.historyRow}>
-                  <Text style={styles.hCell}>{amountText(entry.amount)}</Text>
-                  <Text style={styles.hCell}>
+                <div key={entry.id} style={styles.historyRow}>
+                  <span>{dateText(entry.takenAt)}</span>
+                  <span>
                     {timeText(entry.takenAt)} ← {timeText(entry.nextAt)}
-                  </Text>
-                  <Text style={styles.hCell}>{dateText(entry.takenAt)}</Text>
-                </View>
+                  </span>
+                  <span>{formatAmount(entry.amount)}</span>
+                </div>
               ))
             )}
-          </View>
-        </ScrollView>
+          </section>
 
-        <View style={styles.bottomPanel}>
-          <Text style={styles.labelCenter}>תזכיר לי עוד...</Text>
+          <section style={styles.bottomPanel}>
+            <div style={styles.statsCards}>
+              <div style={styles.statCard}>
+                <span>זמן מאז הסימון האחרון</span>
+                <strong>{stats.last ? minutesSince(stats.last.takenAt) : "00:00"}</strong>
+              </div>
 
-          <View style={styles.reminderRow}>
-            {reminders.map((r) => (
-              <Pressable
-                key={r}
-                onPress={() => setReminder(r)}
-                style={[
-                  styles.reminderBtn,
-                  reminder === r && { backgroundColor: activeUser.color },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.reminderText,
-                    reminder === r && styles.white,
-                  ]}
+              <div style={styles.divider} />
+
+              <div style={styles.statCard}>
+                <span>מצטבר</span>
+                <strong>{formatAmount(stats.taken)}</strong>
+              </div>
+            </div>
+
+            <h3 style={styles.reminderTitle}>תזכיר לי עוד...</h3>
+
+            <div style={styles.reminderGrid}>
+              {REMINDERS.map((item) => (
+                <button
+                  key={item}
+                  onClick={() => setReminder(item)}
+                  style={{
+                    ...styles.reminderButton,
+                    ...(reminder === item ? { background: activeUser.color, color: "#FFF" } : {})
+                  }}
                 >
-                  {r === 30 ? "30 דק׳" : r === 60 ? "1:00" : r === 90 ? "1:30" : "2:00"}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+                  {item === 30
+                    ? "30 דק׳"
+                    : item === 60
+                      ? "1:00"
+                      : item === 90
+                        ? "1:30"
+                        : "2:00"}
+                </button>
+              ))}
+            </div>
 
-          <View style={styles.actionRow}>
-            <Pressable
-              onPress={() => {
-                setPendingTime(new Date());
-                setScreen("amount");
-              }}
-              style={[styles.actionBtn, { backgroundColor: activeUser.color }]}
-            >
-              <Text style={styles.actionText}>לוקח עכשיו</Text>
-            </Pressable>
+            <div style={styles.actions}>
+              <button
+                style={{ ...styles.actionButton, background: activeUser.color }}
+                onClick={startNow}
+              >
+                לוקח עכשיו
+              </button>
 
-            <Pressable
-              onPress={() => setScreen("before")}
-              style={[styles.actionBtn, { backgroundColor: activeUser.color + "CC" }]}
-            >
-              <Text style={styles.actionText}>לקחתי לפני...</Text>
-            </Pressable>
-          </View>
-        </View>
-      </SafeAreaView>
+              <button
+                style={{ ...styles.actionButton, background: `${activeUser.color}CC` }}
+                onClick={() => setScreen("before")}
+              >
+                לקחתי לפני...
+              </button>
+            </div>
+          </section>
+        </section>
+      </main>
     );
   }
 
   if (screen === "before") {
     return (
-      <SafeAreaView style={styles.shell}>
-        <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.title}>לקחתי לפני...</Text>
-
-          <View style={styles.amountGrid}>
-            {beforeOptions.map((m) => (
-              <Pressable
-                key={m}
-                onPress={() => {
-                  setPendingTime(addMinutes(new Date(), -m));
-                  setScreen("amount");
-                }}
-                style={styles.amountBtn}
-              >
-                <Text style={styles.amountText}>{m} דק׳</Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <Pressable style={styles.secondary} onPress={() => setScreen("tracker")}>
-            <Text style={styles.secondaryText}>חזרה</Text>
-          </Pressable>
-        </ScrollView>
-      </SafeAreaView>
+      <ScreenShell title="לקחתי לפני..." onBack={() => setScreen("tracker")}>
+        <div style={styles.amountGrid}>
+          {BEFORE.map((minutes) => (
+            <button
+              key={minutes}
+              style={styles.amountButton}
+              onClick={() => startBefore(minutes)}
+            >
+              {minutes} דק׳
+            </button>
+          ))}
+        </div>
+      </ScreenShell>
     );
   }
 
   if (screen === "amount") {
     return (
-      <SafeAreaView style={styles.shell}>
-        <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.title}>בחירת כמות</Text>
+      <ScreenShell title="בחירת כמות" onBack={() => setScreen("tracker")}>
+        <div style={styles.amountGrid}>
+          {AMOUNTS.map((amount, index) => {
+            const big = amount === 1 || amount === 1.5 || amount === 2;
 
-          <View style={styles.amountGrid}>
-            {amounts.map((a, index) => {
-              const big = a === 1 || a === 1.5 || a === 2;
+            return (
+              <button
+                key={`${amount}-${index}`}
+                style={{
+                  ...styles.amountButton,
+                  ...(big ? styles.amountBig : {})
+                }}
+                onClick={() => saveEntry(amount)}
+              >
+                {formatAmount(amount)}
+              </button>
+            );
+          })}
+        </div>
 
-              return (
-                <Pressable
-                  key={`${a}-${index}`}
-                  onPress={() => saveEntry(a)}
-                  style={[styles.amountBtn, big && styles.amountBig]}
-                >
-                  <Text style={[styles.amountText, big && styles.amountTextBig]}>
-                    {amountText(a)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+        {warning && (
+          <div style={styles.warning}>
+            <h2>רגע, השעון מרים גבה.</h2>
+            <p>חלפה פחות משעה מהסימון הקודם.</p>
+            <p>שווה לעצור רגע ולבדוק שזה באמת הזמן הנכון.</p>
 
-          <Pressable style={styles.secondary} onPress={() => setScreen("tracker")}>
-            <Text style={styles.secondaryText}>חזרה</Text>
-          </Pressable>
-        </ScrollView>
-      </SafeAreaView>
+            <div style={styles.actions}>
+              <button style={styles.secondary} onClick={() => setWarning(null)}>
+                חזרה
+              </button>
+
+              <button
+                style={styles.danger}
+                onClick={() => saveEntry(warning.amount, true)}
+              >
+                המשך בכל זאת
+              </button>
+            </div>
+          </div>
+        )}
+      </ScreenShell>
     );
   }
 
   if (screen === "stock" && activeUser) {
-    const pricePerMl = Number(stockMl || 0) > 0
+    const currentPricePerMl = Number(stockMl || 0) > 0
       ? Number(stockPrice || 0) / Number(stockMl || 1)
       : 0;
 
     return (
-      <SafeAreaView style={styles.shell}>
-        <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.title}>מלאי ועלות</Text>
-
-          <TextInput
+      <ScreenShell title="מלאי ועלות" onBack={() => setScreen("tracker")}>
+        <div style={styles.form}>
+          <input
+            style={styles.input}
             value={stockName}
-            onChangeText={setStockName}
-            placeholder="שם פריט"
-            style={styles.input}
-            textAlign="right"
+            onChange={(event) => setStockName(event.target.value)}
+            placeholder="שם הפריט"
           />
 
-          <TextInput
+          <input
+            style={styles.input}
             value={stockMl}
-            onChangeText={setStockMl}
+            onChange={(event) => setStockMl(event.target.value)}
+            inputMode="decimal"
             placeholder="כמות התחלתית במ״ל"
-            keyboardType="numeric"
-            style={styles.input}
-            textAlign="right"
           />
 
-          <TextInput
+          <input
+            style={styles.input}
             value={stockPrice}
-            onChangeText={setStockPrice}
+            onChange={(event) => setStockPrice(event.target.value)}
+            inputMode="decimal"
             placeholder="מחיר כולל בש״ח"
-            keyboardType="numeric"
-            style={styles.input}
-            textAlign="right"
           />
 
-          <View style={styles.card}>
-            <Text style={styles.rowText}>מחיר למ״ל: {money(pricePerMl)}</Text>
-            <Text style={styles.rowText}>נלקח: {amountText(stats.taken)} מ״ל</Text>
-            <Text style={styles.rowText}>ניתן לאחרים: {amountText(stats.given)} מ״ל</Text>
-            <Text style={styles.rowText}>נשאר: {amountText(stats.remaining)} מ״ל</Text>
-          </View>
+          <div style={styles.summaryBox}>
+            <p>מחיר למ״ל: <strong>{money(currentPricePerMl)}</strong></p>
+            <p>נלקח: <strong>{formatAmount(stats.taken)} מ״ל</strong></p>
+            <p>ניתן לאחרים: <strong>{formatAmount(stats.given)} מ״ל</strong></p>
+            <p>נשאר: <strong>{formatAmount(stats.remaining)} מ״ל</strong></p>
+            <p>עלות שימוש עצמי: <strong>{money(stats.taken * currentPricePerMl)}</strong></p>
+            <p>שווי יתרה: <strong>{money(stats.remaining * currentPricePerMl)}</strong></p>
+          </div>
 
-          <Pressable style={styles.primary} onPress={saveStock}>
-            <Text style={styles.primaryText}>שמירה</Text>
-          </Pressable>
-
-          <Pressable style={styles.secondary} onPress={() => setScreen("tracker")}>
-            <Text style={styles.secondaryText}>חזרה</Text>
-          </Pressable>
-        </ScrollView>
-      </SafeAreaView>
+          <button style={styles.primary} onClick={saveStock}>
+            שמירה
+          </button>
+        </div>
+      </ScreenShell>
     );
   }
 
@@ -604,499 +773,564 @@ export default function App() {
     const suggested = Number(giveMl || 0) * stats.pricePerMl;
 
     return (
-      <SafeAreaView style={styles.shell}>
-        <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.title}>נתתי למישהו</Text>
-
-          <TextInput
+      <ScreenShell title="נתתי למישהו" onBack={() => setScreen("tracker")}>
+        <div style={styles.form}>
+          <input
+            style={styles.input}
             value={givePerson}
-            onChangeText={setGivePerson}
+            onChange={(event) => setGivePerson(event.target.value)}
             placeholder="למי נתת"
-            style={styles.input}
-            textAlign="right"
           />
 
-          <TextInput
+          <input
+            style={styles.input}
             value={giveMl}
-            onChangeText={setGiveMl}
+            onChange={(event) => setGiveMl(event.target.value)}
+            inputMode="decimal"
             placeholder="כמה במ״ל"
-            keyboardType="numeric"
-            style={styles.input}
-            textAlign="right"
           />
 
-          <View style={styles.statusRow}>
-            {["צריך לשלם","שולם","חלקי","מתנה"].map((s) => (
-              <Pressable
-                key={s}
-                onPress={() => setGiveStatus(s)}
-                style={[styles.statusBtn, giveStatus === s && styles.selectedDark]}
+          <div style={styles.statusGrid}>
+            {["צריך לשלם", "שולם", "חלקי", "מתנה"].map((status) => (
+              <button
+                key={status}
+                style={{
+                  ...styles.statusButton,
+                  ...(giveStatus === status ? styles.selectedStatus : {})
+                }}
+                onClick={() => setGiveStatus(status)}
               >
-                <Text style={[styles.statusText, giveStatus === s && styles.white]}>
-                  {s}
-                </Text>
-              </Pressable>
+                {status}
+              </button>
             ))}
-          </View>
+          </div>
 
-          <Text style={styles.hint}>סכום מומלץ לפי מלאי: {money(suggested)}</Text>
+          <div style={styles.hint}>
+            סכום מומלץ לפי מלאי: {money(suggested)}
+          </div>
 
-          <TextInput
+          <input
+            style={styles.input}
             value={giveToPay}
-            onChangeText={setGiveToPay}
+            onChange={(event) => setGiveToPay(event.target.value)}
+            inputMode="decimal"
             placeholder="סכום לתשלום"
-            keyboardType="numeric"
-            style={styles.input}
-            textAlign="right"
           />
 
-          <TextInput
+          <input
+            style={styles.input}
             value={givePaid}
-            onChangeText={setGivePaid}
+            onChange={(event) => setGivePaid(event.target.value)}
+            inputMode="decimal"
             placeholder="כמה שולם בפועל"
-            keyboardType="numeric"
-            style={styles.input}
-            textAlign="right"
           />
 
-          <TextInput
+          <input
+            style={styles.input}
             value={giveNote}
-            onChangeText={setGiveNote}
+            onChange={(event) => setGiveNote(event.target.value)}
             placeholder="הערה"
-            style={styles.input}
-            textAlign="right"
           />
 
-          <Pressable style={styles.primary} onPress={saveGive}>
-            <Text style={styles.primaryText}>שמירה</Text>
-          </Pressable>
-
-          <Pressable style={styles.secondary} onPress={() => setScreen("tracker")}>
-            <Text style={styles.secondaryText}>חזרה</Text>
-          </Pressable>
-        </ScrollView>
-      </SafeAreaView>
+          <button style={styles.primary} onClick={saveGive}>
+            שמירה
+          </button>
+        </div>
+      </ScreenShell>
     );
   }
 
   if (screen === "payments" && activeUser) {
     return (
-      <SafeAreaView style={styles.shell}>
-        <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.title}>היסטוריית תשלומים</Text>
+      <ScreenShell title="היסטוריית תשלומים" onBack={() => setScreen("tracker")}>
+        <div style={styles.summaryBox}>
+          <p>חוב פתוח: <strong>{money(stats.openDebt)}</strong></p>
+        </div>
 
-          <View style={styles.card}>
-            <Text style={styles.rowText}>חוב פתוח: {money(stats.openDebt)}</Text>
-          </View>
-
-          {activeUser.given.length === 0 ? (
-            <Text style={styles.empty}>אין עדיין נתינות</Text>
-          ) : (
-            activeUser.given.map((item) => (
-              <View key={item.id} style={styles.card}>
-                <Text style={styles.cardTitleSmall}>{item.person}</Text>
-                <Text style={styles.rowText}>כמות: {amountText(item.ml)} מ״ל</Text>
-                <Text style={styles.rowText}>סטטוס: {item.status}</Text>
-                <Text style={styles.rowText}>לתשלום: {money(item.toPay)}</Text>
-                <Text style={styles.rowText}>שולם: {money(item.paid)}</Text>
-                <Text style={styles.rowText}>תאריך: {dateText(item.date)}</Text>
-                {!!item.note && <Text style={styles.rowText}>הערה: {item.note}</Text>}
-              </View>
-            ))
-          )}
-
-          <Pressable style={styles.secondary} onPress={() => setScreen("tracker")}>
-            <Text style={styles.secondaryText}>חזרה</Text>
-          </Pressable>
-        </ScrollView>
-      </SafeAreaView>
+        {activeUser.given.length === 0 ? (
+          <div style={styles.emptyBox}>אין עדיין נתינות</div>
+        ) : (
+          <div style={styles.list}>
+            {activeUser.given.map((item) => (
+              <div key={item.id} style={styles.paymentCard}>
+                <strong>{item.person}</strong>
+                <span>כמות: {formatAmount(item.ml)} מ״ל</span>
+                <span>סטטוס: {item.status}</span>
+                <span>לתשלום: {money(item.toPay)}</span>
+                <span>שולם: {money(item.paid)}</span>
+                <span>תאריך: {dateText(item.date)}</span>
+                {item.note ? <span>הערה: {item.note}</span> : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </ScreenShell>
     );
   }
 
   return null;
 }
 
-const styles = StyleSheet.create({
-  shell: {
-    flex: 1,
-    backgroundColor: "#F6F8FB",
+function ScreenShell({ title, children, onBack }) {
+  return (
+    <main style={styles.page}>
+      <section style={styles.appShell}>
+        <header style={styles.header}>
+          <button style={styles.back} onClick={onBack}>
+            חזרה
+          </button>
+
+          <div style={styles.headerTitle}>
+            <strong>{title}</strong>
+          </div>
+
+          <span style={styles.spacer} />
+        </header>
+
+        <div style={styles.content}>
+          {children}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+const styles = {
+  page: {
+    minHeight: "100vh",
+    direction: "rtl",
+    background: "#F4F6FA",
+    color: "#0F172A",
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    display: "flex",
+    justifyContent: "center"
   },
-  center: {
-    flexGrow: 1,
-    justifyContent: "center",
+  appShell: {
+    width: "100%",
+    maxWidth: 520,
+    minHeight: "100vh",
+    background: "#F7F2FF",
+    position: "relative",
+    overflow: "hidden"
+  },
+  centerCard: {
+    width: "100%",
+    maxWidth: 520,
+    minHeight: "100vh",
     padding: 24,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
     gap: 18,
+    boxSizing: "border-box"
   },
   content: {
     padding: 18,
-    gap: 14,
+    display: "flex",
+    flexDirection: "column",
+    gap: 14
   },
-  title: {
-    fontSize: 28,
-    fontWeight: "900",
+  h1: {
+    fontSize: 34,
+    margin: 0,
     textAlign: "center",
-    color: "#0F172A",
+    fontWeight: 950
   },
   sub: {
-    fontSize: 16,
-    fontWeight: "700",
-    textAlign: "center",
     color: "#64748B",
-    lineHeight: 24,
+    textAlign: "center",
+    lineHeight: 1.5,
+    fontWeight: 700
   },
   input: {
-    minHeight: 54,
-    borderRadius: 16,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    paddingHorizontal: 14,
+    width: "100%",
+    minHeight: 56,
+    borderRadius: 18,
+    border: "1px solid #DDE5F0",
+    background: "#FFF",
+    padding: "0 16px",
     fontSize: 17,
+    boxSizing: "border-box",
+    textAlign: "right"
   },
-  label: {
-    textAlign: "right",
-    fontSize: 15,
-    fontWeight: "900",
-    color: "#475569",
-  },
-  labelCenter: {
-    textAlign: "center",
-    fontSize: 15,
-    fontWeight: "900",
-    color: "#475569",
-  },
-  grid: {
-    flexDirection: "row-reverse",
+  symbolGrid: {
+    display: "flex",
     flexWrap: "wrap",
-    gap: 10,
     justifyContent: "center",
+    gap: 10
   },
-  symbolBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: "#EAF0F6",
-    alignItems: "center",
-    justifyContent: "center",
+  symbolButton: {
+    width: 54,
+    height: 54,
+    border: 0,
+    borderRadius: 18,
+    background: "#EAF0F6",
+    fontSize: 24,
+    cursor: "pointer"
   },
   selectedDark: {
-    backgroundColor: "#0F172A",
+    background: "#0F172A",
+    color: "#FFF"
   },
-  symbolText: {
-    fontSize: 24,
+  colorGrid: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 12,
+    justifyContent: "center"
   },
-  colorBtn: {
+  colorButton: {
     width: 58,
     height: 44,
+    border: 0,
     borderRadius: 14,
-    borderWidth: 4,
-    borderColor: "#FFFFFF",
+    cursor: "pointer"
   },
-  selectedColor: {
-    borderColor: "#0F172A",
+  label: {
+    fontWeight: 900,
+    color: "#475569",
+    textAlign: "right"
   },
   primary: {
-    minHeight: 54,
-    borderRadius: 18,
-    backgroundColor: "#0F172A",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  primaryText: {
-    color: "#FFFFFF",
+    minHeight: 56,
+    border: 0,
+    borderRadius: 20,
+    background: "#0F172A",
+    color: "#FFF",
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: 950,
+    cursor: "pointer",
+    width: "100%"
   },
   secondary: {
     minHeight: 50,
+    border: 0,
     borderRadius: 18,
-    backgroundColor: "#E2E8F0",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  secondaryText: {
+    background: "#E2E8F0",
     color: "#334155",
-    fontSize: 17,
-    fontWeight: "900",
+    fontSize: 16,
+    fontWeight: 900,
+    cursor: "pointer",
+    flex: 1
   },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 18,
-    alignItems: "center",
-    gap: 5,
-  },
-  bigSymbol: {
-    fontSize: 38,
-  },
-  cardTitle: {
-    fontSize: 26,
-    fontWeight: "900",
-    color: "#0F172A",
-  },
-  cardTitleSmall: {
-    fontSize: 21,
-    fontWeight: "900",
-    color: "#0F172A",
-  },
-  cardSub: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#64748B",
-  },
-  userRow: {
-    minHeight: 82,
-    borderRadius: 22,
-    padding: 14,
-    backgroundColor: "#FFFFFF",
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 14,
-  },
-  userIcon: {
-    width: 52,
-    height: 52,
+  danger: {
+    minHeight: 50,
+    border: 0,
     borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
+    background: "#DC2626",
+    color: "#FFF",
+    fontSize: 16,
+    fontWeight: 900,
+    cursor: "pointer",
+    flex: 1
   },
-  userIconText: {
-    color: "#FFFFFF",
-    fontSize: 22,
-  },
-  userText: {
-    flex: 1,
-    alignItems: "flex-end",
-  },
-  userName: {
-    fontSize: 22,
-    fontWeight: "900",
-    color: "#0F172A",
-  },
-  userSub: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#64748B",
-    marginTop: 4,
-  },
-  topBar: {
-    height: 64,
-    paddingHorizontal: 12,
-    flexDirection: "row",
+  header: {
+    height: 72,
+    display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#FFFFFFCC",
+    padding: "0 16px",
+    borderBottom: "1px solid rgba(15,23,42,0.1)",
+    background: "rgba(255,255,255,0.65)",
+    backdropFilter: "blur(16px)"
   },
-  topSmallBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: "#E2E8F0",
-  },
-  topSmallText: {
-    fontWeight: "900",
-    color: "#334155",
-  },
-  topName: {
-    flex: 1,
+  headerTitle: {
+    display: "flex",
     alignItems: "center",
-  },
-  topTitle: {
-    fontSize: 20,
-    fontWeight: "900",
-    color: "#0F172A",
-  },
-  dotsBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 16,
-    backgroundColor: "#0F172A",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dots: {
-    color: "#FFFFFF",
-    fontSize: 28,
-    fontWeight: "900",
-    marginTop: -8,
-  },
-  menu: {
-    position: "absolute",
-    top: 58,
-    right: 12,
-    zIndex: 10,
-    width: 210,
-    borderRadius: 20,
-    padding: 8,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  menuItem: {
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-  },
-  menuText: {
-    textAlign: "right",
-    fontSize: 16,
-    fontWeight: "900",
-    color: "#0F172A",
-  },
-  statsRow: {
-    flexDirection: "row",
     gap: 10,
+    fontSize: 21,
+    fontWeight: 950
   },
-  statBox: {
-    flex: 1,
-    borderRadius: 20,
-    backgroundColor: "#FFFFFF",
-    padding: 14,
+  iconMenu: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    border: "1px solid #E2E8F0",
+    background: "#FFF",
+    fontSize: 28,
+    cursor: "pointer"
+  },
+  spacer: {
+    width: 48
+  },
+  back: {
+    border: 0,
+    borderRadius: 16,
+    background: "#E2E8F0",
+    padding: "10px 14px",
+    fontWeight: 900,
+    cursor: "pointer"
+  },
+  list: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 14,
+    padding: 18
+  },
+  userCard: {
+    border: 0,
+    borderRadius: 24,
+    background: "#FFF",
+    padding: 16,
+    display: "flex",
     alignItems: "center",
+    gap: 14,
+    textAlign: "right",
+    cursor: "pointer",
+    boxShadow: "0 8px 30px rgba(15,23,42,0.08)"
   },
-  statLabel: {
-    fontSize: 13,
-    fontWeight: "800",
+  userSymbol: {
+    width: 56,
+    height: 56,
+    borderRadius: 20,
+    color: "#FFF",
+    display: "grid",
+    placeItems: "center",
+    fontSize: 25
+  },
+  userInfo: {
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
+    gap: 4
+  },
+  chevron: {
+    fontSize: 40,
+    fontWeight: 900
+  },
+  form: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 14
+  },
+  historyHeader: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1.4fr 1fr",
+    padding: "18px 14px",
+    color: "#64748B",
+    fontWeight: 900,
+    borderBottom: "1px solid rgba(15,23,42,0.1)",
+    textAlign: "center"
+  },
+  historyList: {
+    minHeight: "45vh",
+    padding: "18px 12px"
+  },
+  emptyHistory: {
     color: "#64748B",
     textAlign: "center",
-  },
-  statValue: {
-    fontSize: 19,
-    fontWeight: "900",
-    color: "#0F172A",
-    marginTop: 6,
-    textAlign: "center",
-  },
-  historyBox: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    padding: 12,
-  },
-  historyHead: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderColor: "#E2E8F0",
-    paddingBottom: 8,
+    fontSize: 26,
+    fontWeight: 900,
+    marginTop: 44
   },
   historyRow: {
-    flexDirection: "row",
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderColor: "#F1F5F9",
-  },
-  hCell: {
-    flex: 1,
+    display: "grid",
+    gridTemplateColumns: "1fr 1.4fr 1fr",
+    gap: 8,
+    background: "#FFF",
+    borderRadius: 16,
+    padding: "12px 8px",
+    marginBottom: 8,
     textAlign: "center",
-    fontWeight: "800",
-    color: "#334155",
-  },
-  empty: {
-    textAlign: "center",
-    color: "#64748B",
-    fontWeight: "800",
-    padding: 18,
+    fontWeight: 800
   },
   bottomPanel: {
-    padding: 14,
-    backgroundColor: "#FFFFFFE6",
-    borderTopWidth: 1,
-    borderColor: "#E2E8F0",
+    position: "sticky",
+    bottom: 0,
+    background: "rgba(255,255,255,0.92)",
+    borderTop: "1px solid rgba(15,23,42,0.1)",
+    padding: 16,
+    display: "flex",
+    flexDirection: "column",
     gap: 12,
+    backdropFilter: "blur(14px)"
   },
-  reminderRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  reminderBtn: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: 15,
-    backgroundColor: "#EAF0F6",
+  statsCards: {
+    display: "grid",
+    gridTemplateColumns: "1fr 2px 1fr",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 12
   },
-  reminderText: {
-    fontWeight: "900",
-    color: "#334155",
-  },
-  white: {
-    color: "#FFFFFF",
-  },
-  actionRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  actionBtn: {
-    flex: 1,
-    minHeight: 58,
+  statCard: {
+    background: "#FFF",
+    border: "1px solid #E2E8F0",
     borderRadius: 20,
+    minHeight: 74,
+    display: "flex",
+    flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
+    gap: 4
   },
-  actionText: {
-    color: "#FFFFFF",
+  divider: {
+    height: 42,
+    background: "#CBD5E1",
+    borderRadius: 2
+  },
+  reminderTitle: {
+    margin: 0,
+    textAlign: "right",
+    color: "#475569",
+    fontSize: 22
+  },
+  reminderGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, 1fr)",
+    gap: 10
+  },
+  reminderButton: {
+    minHeight: 48,
+    borderRadius: 18,
+    border: "1px solid #DDE5F0",
+    background: "#FFF",
     fontSize: 17,
-    fontWeight: "900",
+    fontWeight: 900,
+    color: "#475569",
+    cursor: "pointer"
+  },
+  actions: {
+    display: "flex",
+    gap: 12
+  },
+  actionButton: {
+    flex: 1,
+    minHeight: 60,
+    border: 0,
+    borderRadius: 22,
+    color: "#FFF",
+    fontSize: 18,
+    fontWeight: 950,
+    cursor: "pointer"
+  },
+  overlay: {
+    position: "absolute",
+    inset: 0,
+    zIndex: 50,
+    background: "rgba(15,23,42,0.22)"
+  },
+  drawer: {
+    width: "76%",
+    maxWidth: 330,
+    height: "100%",
+    background: "#FFF",
+    padding: 18,
+    boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+    boxShadow: "-20px 0 50px rgba(15,23,42,0.25)"
+  },
+  drawerClose: {
+    alignSelf: "flex-start",
+    width: 42,
+    height: 42,
+    border: 0,
+    borderRadius: 18,
+    background: "#E2E8F0",
+    fontSize: 26,
+    cursor: "pointer"
+  },
+  drawerTitle: {
+    margin: "6px 0 10px",
+    fontSize: 28
+  },
+  drawerItem: {
+    minHeight: 56,
+    border: 0,
+    borderRadius: 18,
+    background: "#F1F5F9",
+    color: "#0F172A",
+    fontSize: 18,
+    fontWeight: 900,
+    textAlign: "right",
+    padding: "0 16px",
+    cursor: "pointer"
   },
   amountGrid: {
-    flexDirection: "row-reverse",
+    display: "flex",
     flexWrap: "wrap",
     gap: 10,
-    justifyContent: "center",
+    justifyContent: "center"
   },
-  amountBtn: {
-    width: 72,
-    height: 56,
+  amountButton: {
+    width: 74,
+    height: 58,
+    border: "1px solid #DDE5F0",
     borderRadius: 18,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+    background: "#FFF",
+    color: "#0F172A",
+    fontSize: 18,
+    fontWeight: 950,
+    cursor: "pointer"
   },
   amountBig: {
-    width: 108,
-    height: 72,
-    backgroundColor: "#0F172A",
+    width: 112,
+    height: 76,
+    background: "#0F172A",
+    color: "#FFF",
+    fontSize: 28
   },
-  amountText: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: "#0F172A",
+  warning: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 100,
+    background: "#DC2626",
+    color: "#FFF",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    padding: 28,
+    textAlign: "center"
   },
-  amountTextBig: {
-    fontSize: 26,
-    color: "#FFFFFF",
+  summaryBox: {
+    background: "#FFF",
+    borderRadius: 24,
+    padding: 18,
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    boxShadow: "0 8px 30px rgba(15,23,42,0.08)"
   },
-  rowText: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#334155",
-    textAlign: "center",
+  statusGrid: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+    justifyContent: "center"
+  },
+  statusButton: {
+    border: 0,
+    borderRadius: 16,
+    background: "#EAF0F6",
+    padding: "12px 14px",
+    fontWeight: 900,
+    cursor: "pointer"
+  },
+  selectedStatus: {
+    background: "#0F172A",
+    color: "#FFF"
   },
   hint: {
-    fontSize: 15,
-    fontWeight: "900",
+    background: "#EEF2FF",
+    borderRadius: 18,
+    padding: 14,
     color: "#475569",
-    textAlign: "center",
+    fontWeight: 900,
+    textAlign: "center"
   },
-  statusRow: {
-    flexDirection: "row-reverse",
-    flexWrap: "wrap",
+  paymentCard: {
+    background: "#FFF",
+    borderRadius: 22,
+    padding: 16,
+    display: "flex",
+    flexDirection: "column",
     gap: 8,
-    justifyContent: "center",
+    boxShadow: "0 8px 30px rgba(15,23,42,0.08)"
   },
-  statusBtn: {
-    paddingHorizontal: 14,
-    minHeight: 42,
-    borderRadius: 14,
-    backgroundColor: "#EAF0F6",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  statusText: {
-    fontSize: 14,
-    fontWeight: "900",
-    color: "#334155",
-  },
-});
+  emptyBox: {
+    background: "#FFF",
+    borderRadius: 24,
+    padding: 22,
+    textAlign: "center",
+    color: "#64748B",
+    fontWeight: 900
+  }
+};
