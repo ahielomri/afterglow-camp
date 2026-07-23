@@ -224,8 +224,7 @@ function buildShifts() {
     // Arrival day (first event day): people are still arriving through the
     // morning, so there's no one there yet for morning cleaning or LNT/trash duty.
     if (d !== firstDay) {
-      shifts.push({ id: `clean-${d}`, phase: "ימי האירוע", title: "ניקיון שירותים ומקלחות", team: "שירותים ומקלחות", date: d, start: "09:00", end: "10:00", spots: 2, desc: "ניקיון ותחזוקה יומית" });
-      shifts.push({ id: `clean-pm-${d}`, phase: "ימי האירוע", title: "ניקיון שירותים ומקלחות", team: "שירותים ומקלחות", date: d, start: "14:00", end: "16:00", spots: 2, desc: "ניקיון ותחזוקה יומית" });
+      shifts.push({ id: `clean-${d}`, phase: "ימי האירוע", title: "ניקיון שירותים ומקלחות", team: "שירותים ומקלחות", date: d, start: "14:00", end: "16:00", spots: 2, desc: "ניקיון ותחזוקה יומית" });
       shifts.push({ id: `moop-${d}`, phase: "ימי האירוע", title: "חשל\"ש ופינוי פסולת", team: "צוות חשל\"ש", date: d, start: "16:00", end: "17:00", spots: 2, desc: "מיחזור, פינוי פחים ובדיקת MOOP" });
       // No fixed clock time - can be done whenever during the day, so it
       // doesn't block/get blocked by other shifts that day.
