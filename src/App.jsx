@@ -201,7 +201,7 @@ function buildShifts() {
   const shifts = [];
   const setupDays = ["2026-10-30", "2026-10-31", "2026-11-01"];
   setupDays.forEach((d) =>
-    shifts.push({ id: `setup-${d}`, phase: "הקמות", title: "הרשמה להקמות", team: "הקמות", date: d, start: "08:00", end: "18:00", spots: 8, desc: "בנייה פיזית של תשתיות ומבני המחנה" })
+    shifts.push({ id: `setup-${d}`, phase: "הקמות", title: "הרשמה להקמות", team: "הקמות", date: d, start: "08:00", end: "18:00", spots: 8, noLimit: true, desc: "בנייה פיזית של תשתיות ומבני המחנה - ללא הגבלת מספר נרשמים" })
   );
 
   const eventDays = ["2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06", "2026-11-07"];
@@ -3079,7 +3079,7 @@ export default function App() {
     const latest = await getLatestAssignments();
     const names = latest[shift.id] || [];
     if (names.includes(who)) return;
-    if (names.length >= shift.spots) return showToast("אין מקומות פנויים במשמרת הזו", "error");
+    if (!shift.noLimit && names.length >= shift.spots) return showToast("אין מקומות פנויים במשמרת הזו", "error");
 
     const conflict = SHIFTS.find(
       (s) => s.id !== shift.id && s.date === shift.date && (latest[s.id] || []).includes(who) && overlaps(s, shift)
@@ -3097,7 +3097,7 @@ export default function App() {
       // as unfilledShiftsCount in the admin overview) - not just spots left
       // in this one shift, which is what was there before.
       const shiftsRemaining = SHIFTS.reduce(
-        (sum, s) => (s.id === TEARDOWN_ID ? sum : sum + Math.max(s.spots - (nextAssignments[s.id] || []).length, 0)),
+        (sum, s) => (s.id === TEARDOWN_ID || s.noLimit ? sum : sum + Math.max(s.spots - (nextAssignments[s.id] || []).length, 0)),
         0
       );
       notifyOwner("shift_join", { shiftTitle: shift.title, shiftsRemaining });
@@ -3656,9 +3656,14 @@ ${cards}
     // swamp the real numbers from the actual self-scheduled shifts.
     const countedShifts = SHIFTS.filter((s) => s.id !== TEARDOWN_ID);
     const totalShifts = countedShifts.length;
-    const totalSpots = countedShifts.reduce((s, sh) => s + sh.spots, 0);
     const totalVolunteers = countedShifts.reduce((s, sh) => s + (assignments[sh.id] || []).length, 0);
-    const openSpots = Math.max(totalSpots - totalVolunteers, 0);
+    // Uncapped shifts (noLimit) don't have a meaningful "people needed"
+    // number, so they're left out of the spots/open-spots math the same
+    // way teardown is - but they still count toward totalShifts/totalVolunteers above.
+    const cappedShifts = countedShifts.filter((s) => !s.noLimit);
+    const totalSpots = cappedShifts.reduce((s, sh) => s + sh.spots, 0);
+    const cappedVolunteers = cappedShifts.reduce((s, sh) => s + (assignments[sh.id] || []).length, 0);
+    const openSpots = Math.max(totalSpots - cappedVolunteers, 0);
 
     const phases = [...new Set(SHIFTS.map((s) => s.phase))];
     const sections = phases.map((phase) => {
@@ -3682,7 +3687,7 @@ ${cards}
             <td>${escapeHtml(s.title)}</td>
             <td>${escapeHtml(s.team)}</td>
             <td>${s.noTime ? "ללא שעה קבועה" : `${s.start}–${s.end}`}</td>
-            <td>${names.length}/${s.spots}</td>
+            <td>${s.noLimit ? `${names.length} (ללא הגבלה)` : `${names.length}/${s.spots}`}</td>
             <td>${namesHtml}</td>
           </tr>`;
         }).join("");
@@ -3716,7 +3721,7 @@ ${cards}
   <div><b>${totalSpots}</b>כמה אנשים סה״כ צריך</div>
   <div><b>${totalVolunteers}</b>כמות מתנדבים בכל המשמרות</div>
   <div><b>${openSpots}</b>מקומות פנויים</div>
-  <div><b>${totalVolunteers}</b>מקומות תפוסים</div>
+  <div><b>${cappedVolunteers}</b>מקומות תפוסים</div>
 </div>
 ${sections}
 </body></html>`);
@@ -3852,7 +3857,7 @@ ${sections}
 
   function teamStats(team) {
     const teamShifts = SHIFTS.filter((s) => s.team === team && s.id !== TEARDOWN_ID);
-    const unfilled = teamShifts.reduce((sum, s) => sum + Math.max(s.spots - (assignments[s.id] || []).length, 0), 0);
+    const unfilled = teamShifts.reduce((sum, s) => (s.noLimit ? sum : sum + Math.max(s.spots - (assignments[s.id] || []).length, 0)), 0);
     const planned = Number(categoryBudgets[team]) || 0;
     // Actual spend lives in two places: the legacy budgetItems list (older
     // planned-line-items, matched by `category`) and budgetExpenses (the
@@ -4046,11 +4051,11 @@ ${sections}
   // people and has 0 counts as 2, with 1 it counts as 1, matching how
   // many more people are actually still needed.
   const openShiftsCount = useMemo(
-    () => SHIFTS.reduce((sum, s) => (s.id === TEARDOWN_ID ? sum : sum + Math.max(s.spots - (assignments[s.id] || []).length, 0)), 0),
+    () => SHIFTS.reduce((sum, s) => (s.id === TEARDOWN_ID || s.noLimit ? sum : sum + Math.max(s.spots - (assignments[s.id] || []).length, 0)), 0),
     [assignments]
   );
   const unfilledShiftsCount = useMemo(
-    () => SHIFTS.reduce((sum, s) => (s.id === TEARDOWN_ID ? sum : sum + Math.max(s.spots - (assignments[s.id] || []).length, 0)), 0),
+    () => SHIFTS.reduce((sum, s) => (s.id === TEARDOWN_ID || s.noLimit ? sum : sum + Math.max(s.spots - (assignments[s.id] || []).length, 0)), 0),
     [assignments]
   );
   const membersWithoutShift = useMemo(
@@ -4814,7 +4819,7 @@ ${sections}
                 return (
                   <div key={s.id} className="rounded-xl px-3 py-2 flex items-center justify-between text-xs" style={{ background: COLORS.surface }}>
                     <span>{s.title} · {formatDate(s.date)}{isTeardownRow ? "" : s.noTime ? " · ללא שעה קבועה" : ` · ${s.start}–${s.end}`}</span>
-                    <span className="px-2 py-0.5 rounded-full" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>{names.length}/{spots}</span>
+                    <span className="px-2 py-0.5 rounded-full" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>{s.noLimit ? `${names.length} (ללא הגבלה)` : `${names.length}/${spots}`}</span>
                   </div>
                 );
               })}
@@ -5239,7 +5244,7 @@ ${sections}
                         const names = (isTeardown ? allMembers.map((m) => m.name) : (assignments[s.id] || [])).filter((n) => !removedMembers.includes(n));
                         const spots = isTeardown ? allMembers.length : s.spots;
                         const joined = isJoined(s.id);
-                        const full = names.length >= spots && !joined;
+                        const full = !s.noLimit && names.length >= spots && !joined;
                         return (
                           <div key={s.id} className="rounded-2xl p-3" style={{ background: COLORS.input, borderRight: `3px solid ${joined ? COLORS.accent2 : COLORS.accent}` }}>
                             {!isTeardown && (
@@ -5252,7 +5257,7 @@ ${sections}
                               <TeardownTaskPicker selected={teardownTasks[identity] || []} onToggle={toggleTeardownTask} compact />
                             ) : (
                               <div className="flex items-center justify-between mt-2">
-                                <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: COLORS.accentLight, color: COLORS.accentDark, fontFamily: FONT_NUM }}>{names.length}/{spots}</span>
+                                <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: COLORS.accentLight, color: COLORS.accentDark, fontFamily: FONT_NUM }}>{s.noLimit ? `${names.length} (ללא הגבלה)` : `${names.length}/${spots}`}</span>
                                 <button
                                   onClick={() => (joined ? leave(s) : join(s))}
                                   disabled={full}
@@ -5298,16 +5303,21 @@ ${sections}
                 const names = (isTeardown ? allMembers.map((m) => m.name) : (assignments[s.id] || [])).filter((n) => !removedMembers.includes(n));
                 const spots = isTeardown ? allMembers.length : s.spots;
                 const joined = isJoined(s.id);
-                const full = names.length >= spots && !joined;
+                const full = !s.noLimit && names.length >= spots && !joined;
                 return (
                   <div key={s.id} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                   <div className="flex items-center gap-4">
-                    <FillRing filled={names.length} total={spots} />
+                    {s.noLimit ? (
+                      <div className="shrink-0 flex items-center justify-center rounded-full text-xs font-bold" style={{ width: 34, height: 34, background: COLORS.accentLight, color: COLORS.accentDark, fontFamily: FONT_NUM }}>{names.length}</div>
+                    ) : (
+                      <FillRing filled={names.length} total={spots} />
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold">{s.title}</span>
                         <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>{s.team}</span>
                         {isTeardown && <span className="text-xs" style={{ color: COLORS.textMuted }}>כולם משתתפים</span>}
+                        {s.noLimit && <span className="text-xs" style={{ color: COLORS.textMuted }}>ללא הגבלת מקומות</span>}
                       </div>
                       <div className="text-xs mt-1 flex items-center gap-3 flex-wrap" style={{ color: COLORS.textMuted }}>
                         <span className="flex items-center gap-1"><CalendarDays size={12} /> {formatDate(s.date)}</span>
