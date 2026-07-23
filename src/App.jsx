@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ChevronRight, Plus } from "lucide-react";
+import { ensurePushEnabled, scheduleServerReminder } from "./push.js";
 
 const STORAGE_KEY = "check_timer_app_data_v1";
 
@@ -141,36 +142,36 @@ function loadData() {
   }
 }
 
-// Reminder timers only survive while this tab stays open - there's no
-// backend/push wiring here (unlike Afterglow), so a closed tab or a
-// backgrounded phone can silently miss the notification.
+// Tries to queue the reminder as a real server-sent push (arrives even if
+// this tab/app is closed by then). Falls back to a client-side timer - which
+// only fires while this tab stays open - if push isn't available (browser
+// doesn't support it, or the permission prompt was denied).
 async function scheduleReminder(entry) {
-  if (!("Notification" in window)) return;
+  const passedLabel = entry.reminderAfterMinutes >= 60
+    ? `${Math.floor(entry.reminderAfterMinutes / 60)}:${String(entry.reminderAfterMinutes % 60).padStart(2, "0")}`
+    : `${entry.reminderAfterMinutes} דק׳`;
+  const title = "תזכורת";
+  const body = `עברו ${passedLabel} מאז הסימון האחרון.\nהשעון עשה את שלו, עכשיו תורך לבדוק מה המצב.`;
+
   try {
-    let permission = Notification.permission;
-    if (permission === "default") {
-      permission = await Notification.requestPermission();
-    }
-    if (permission !== "granted") return;
-
-    const ms = new Date(entry.nextReminderAt).getTime() - Date.now();
-    if (ms <= 0) return;
-
-    const passedLabel = entry.reminderAfterMinutes >= 60
-      ? `${Math.floor(entry.reminderAfterMinutes / 60)}:${String(entry.reminderAfterMinutes % 60).padStart(2, "0")}`
-      : `${entry.reminderAfterMinutes} דק׳`;
-
-    window.setTimeout(() => {
-      try {
-        new Notification("תזכורת", {
-          body: `עברו ${passedLabel} מאז הסימון האחרון.\nהשעון עשה את שלו, עכשיו תורך לבדוק מה המצב.`,
-        });
-      } catch {
-        // ignore - notification best-effort only
-      }
-    }, ms);
+    await ensurePushEnabled();
+    await scheduleServerReminder({ title, body, remindAt: entry.nextReminderAt });
+    return;
   } catch {
-    // ignore - notification scheduling failed
+    // fall through to the local-only fallback below
+  }
+
+  if ("Notification" in window && Notification.permission === "granted") {
+    const ms = new Date(entry.nextReminderAt).getTime() - Date.now();
+    if (ms > 0) {
+      window.setTimeout(() => {
+        try {
+          new Notification(title, { body });
+        } catch {
+          // ignore - notification best-effort only
+        }
+      }, ms);
+    }
   }
 }
 
