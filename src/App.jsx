@@ -201,7 +201,7 @@ function buildShifts() {
   const shifts = [];
   const setupDays = ["2026-10-30", "2026-10-31", "2026-11-01"];
   setupDays.forEach((d) =>
-    shifts.push({ id: `setup-${d}`, phase: "הקמות", title: "יום הקמה", team: "הקמות", date: d, start: "08:00", end: "18:00", spots: 8, desc: "בנייה פיזית של תשתיות ומבני המחנה" })
+    shifts.push({ id: `setup-${d}`, phase: "הקמות", title: "הרשמה להקמות", team: "הקמות", date: d, start: "08:00", end: "18:00", spots: 8, desc: "בנייה פיזית של תשתיות ומבני המחנה" })
   );
 
   const eventDays = ["2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06", "2026-11-07"];
@@ -227,6 +227,9 @@ function buildShifts() {
       shifts.push({ id: `clean-${d}`, phase: "ימי האירוע", title: "ניקיון שירותים ומקלחות", team: "שירותים ומקלחות", date: d, start: "09:00", end: "10:00", spots: 2, desc: "ניקיון ותחזוקה יומית" });
       shifts.push({ id: `clean-pm-${d}`, phase: "ימי האירוע", title: "ניקיון שירותים ומקלחות", team: "שירותים ומקלחות", date: d, start: "14:00", end: "16:00", spots: 2, desc: "ניקיון ותחזוקה יומית" });
       shifts.push({ id: `moop-${d}`, phase: "ימי האירוע", title: "חשל\"ש ופינוי פסולת", team: "צוות חשל\"ש", date: d, start: "16:00", end: "17:00", spots: 2, desc: "מיחזור, פינוי פחים ובדיקת MOOP" });
+      // No fixed clock time - can be done whenever during the day, so it
+      // doesn't block/get blocked by other shifts that day.
+      shifts.push({ id: `salon-${d}`, phase: "ימי האירוע", title: "סידור סלון הקמפ וסלון הגיפט", team: "עיצוב המחנה ותפאורה", date: d, start: "09:00", end: "18:00", spots: 2, noTime: true, desc: "סידור והצגה של סלון הקמפ וסלון הגיפט - ללא שעה קבועה, בכל שעה נוחה במהלך היום" });
     }
   });
 
@@ -3011,6 +3014,7 @@ export default function App() {
   }
 
   function overlaps(a, b) {
+    if (a.noTime || b.noTime) return false;
     return a.start < b.end && b.start < a.end;
   }
 
@@ -3673,13 +3677,11 @@ ${cards}
             </tr>`;
           }
           const names = assignments[s.id] || [];
-          const namesHtml = names.length > 0
-            ? names.map((n) => escapeHtml(n)).join(", ")
-            : `<span class="empty">אין נרשמים עדיין</span>`;
+          const namesHtml = names.length > 0 ? names.map((n) => escapeHtml(n)).join(", ") : "";
           return `<tr>
             <td>${escapeHtml(s.title)}</td>
             <td>${escapeHtml(s.team)}</td>
-            <td>${s.start}–${s.end}</td>
+            <td>${s.noTime ? "ללא שעה קבועה" : `${s.start}–${s.end}`}</td>
             <td>${names.length}/${s.spots}</td>
             <td>${namesHtml}</td>
           </tr>`;
@@ -3706,7 +3708,6 @@ ${cards}
   table { width: 100%; border-collapse: collapse; margin-bottom: 6px; break-inside: avoid; page-break-inside: avoid; }
   th, td { border: 1px solid #ddd; padding: 4px 8px; font-size: 11px; text-align: right; vertical-align: top; }
   th { background: #f4f4f4; }
-  .empty { color: #999; }
 </style>
 </head><body>
 <h1>לוח משמרות - Afterglow (${escapeHtml(new Date().toLocaleDateString("he-IL"))})</h1>
@@ -4812,7 +4813,7 @@ ${sections}
                 const spots = isTeardownRow ? allMembers.length : s.spots;
                 return (
                   <div key={s.id} className="rounded-xl px-3 py-2 flex items-center justify-between text-xs" style={{ background: COLORS.surface }}>
-                    <span>{s.title} · {formatDate(s.date)}{!isTeardownRow ? ` · ${s.start}–${s.end}` : ""}</span>
+                    <span>{s.title} · {formatDate(s.date)}{isTeardownRow ? "" : s.noTime ? " · ללא שעה קבועה" : ` · ${s.start}–${s.end}`}</span>
                     <span className="px-2 py-0.5 rounded-full" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>{names.length}/{spots}</span>
                   </div>
                 );
@@ -4948,7 +4949,7 @@ ${sections}
                       <div className="text-xs font-bold" style={{ color: COLORS.accentDark }}>{formatDateShort(s.date)}</div>
                       <div className="text-sm font-semibold mt-1">{s.title}</div>
                       {s.id !== TEARDOWN_ID && (
-                        <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{s.start}–{s.end}</div>
+                        <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{s.noTime ? "ללא שעה קבועה" : `${s.start}–${s.end}`}</div>
                       )}
                       <button
                         onClick={() => downloadMyCalendarIcs([s], [])}
@@ -5243,7 +5244,7 @@ ${sections}
                           <div key={s.id} className="rounded-2xl p-3" style={{ background: COLORS.input, borderRight: `3px solid ${joined ? COLORS.accent2 : COLORS.accent}` }}>
                             {!isTeardown && (
                               <div className="text-xs flex items-center gap-1" style={{ color: COLORS.accentDark, fontFamily: FONT_NUM }}>
-                                <Clock size={11} /> {s.start}–{s.end}
+                                <Clock size={11} /> {s.noTime ? "ללא שעה קבועה" : `${s.start}–${s.end}`}
                               </div>
                             )}
                             <div className="text-sm font-bold mt-1">{s.title}</div>
@@ -5310,7 +5311,7 @@ ${sections}
                       </div>
                       <div className="text-xs mt-1 flex items-center gap-3 flex-wrap" style={{ color: COLORS.textMuted }}>
                         <span className="flex items-center gap-1"><CalendarDays size={12} /> {formatDate(s.date)}</span>
-                        {!isTeardown && <span className="flex items-center gap-1"><Clock size={12} /> {s.start}–{s.end}</span>}
+                        {!isTeardown && <span className="flex items-center gap-1"><Clock size={12} /> {s.noTime ? "ללא שעה קבועה" : `${s.start}–${s.end}`}</span>}
                       </div>
                       {isTeardown && (
                         <TeardownTaskPicker selected={teardownTasks[identity] || []} onToggle={toggleTeardownTask} />
