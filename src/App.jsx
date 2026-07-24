@@ -6015,19 +6015,24 @@ ${sections}
           <div>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
               {[
-                { label: "תקציב מתוכנן", value: budgetTotals.planned },
-                { label: "דמי קמפ שנגבו", value: budgetTotals.duesCollected },
-                { label: "התחייבויות", value: budgetTotals.committed },
-                { label: "שולם בפועל", value: budgetTotals.paid },
-                { label: "יתרה זמינה", value: budgetTotals.remaining },
-              ].map((c) => (
-                <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                  <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: c.label === "יתרה זמינה" && c.value < 0 ? COLORS.danger : COLORS.text }}>
-                    ₪{c.value.toLocaleString()}
+                { label: "תקציב מתוכנן", value: budgetTotals.planned, icon: Wallet, tint: COLORS.surface },
+                { label: "דמי קמפ שנגבו", value: budgetTotals.duesCollected, icon: Ticket, tint: COLORS.accent2Light },
+                { label: "התחייבויות", value: budgetTotals.committed, icon: Clock, tint: budgetTotals.committed > 0 ? COLORS.accentLight : COLORS.surface },
+                { label: "שולם בפועל", value: budgetTotals.paid, icon: Check, tint: COLORS.surface },
+                { label: "יתרה זמינה", value: budgetTotals.remaining, icon: CreditCard, tint: budgetTotals.remaining < 0 ? "#fbe4e2" : COLORS.accent2Light },
+              ].map((c) => {
+                const danger = c.label === "יתרה זמינה" && c.value < 0;
+                const Icon = c.icon;
+                return (
+                  <div key={c.label} className="rounded-2xl p-4" style={{ background: c.tint, border: `1px solid ${COLORS.divider}`, boxShadow: "0 1px 4px rgba(58,34,42,0.06)" }}>
+                    <Icon size={16} style={{ color: danger ? COLORS.danger : COLORS.accentDark, opacity: 0.75, marginBottom: 6 }} />
+                    <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: danger ? COLORS.danger : COLORS.text }}>
+                      ₪{c.value.toLocaleString()}
+                    </div>
+                    <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
                   </div>
-                  <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {canEditBudget && (
