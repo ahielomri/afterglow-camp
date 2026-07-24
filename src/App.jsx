@@ -328,8 +328,13 @@ function daysUntil() {
 function expenseAmounts(e) {
   const amount = Number(e.amount) || 0;
   const paidAmount = e.paymentStatus === "partial" ? (Number(e.paidAmount) || 0) : amount;
+  // "committed" is what's still owed - the unpaid remainder - not the full
+  // expense amount. A fully-paid expense has nothing outstanding, so it
+  // contributes 0 here (only to `paid`); a partial one contributes just
+  // the gap still due.
+  const outstanding = Math.max(amount - paidAmount, 0);
   const sign = e.isRefund ? -1 : 1;
-  return { committed: sign * amount, paid: sign * paidAmount };
+  return { committed: sign * outstanding, paid: sign * paidAmount };
 }
 
 // ---------------------------------------------------------------------------
