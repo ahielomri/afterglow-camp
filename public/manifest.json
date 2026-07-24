@@ -1,6 +1,6 @@
 {
-  "name": "בדיקת זמנים - תזכורת אישית",
-  "short_name": "בדיקת זמנים",
+  "name": "My G Time",
+  "short_name": "My G Time",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F8FAFC",
