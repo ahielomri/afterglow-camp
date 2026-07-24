@@ -3999,7 +3999,7 @@ ${cards}
             <td>${escapeHtml(s.title)}</td>
             <td>${escapeHtml(s.team)}</td>
             <td>${s.noTime ? "" : `${s.start}–${s.end}`}</td>
-            <td>${s.noLimit ? `${names.length} (ללא הגבלה)` : `${names.length}/${s.spots}`}</td>
+            <td>${s.noLimit ? "ללא הגבלה" : `${names.length}/${s.spots}`}</td>
             <td>${namesHtml}</td>
           </tr>`;
         }).join("");
@@ -5160,7 +5160,7 @@ ${sections}
                 return (
                   <div key={s.id} className="rounded-xl px-3 py-2 flex items-center justify-between text-xs" style={{ background: COLORS.surface }}>
                     <span>{s.title} · {formatDate(s.date)}{isTeardownRow || s.noTime ? "" : ` · ${s.start}–${s.end}`}</span>
-                    <span className="px-2 py-0.5 rounded-full" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>{s.noLimit ? `${names.length} (ללא הגבלה)` : `${names.length}/${spots}`}</span>
+                    <span className="px-2 py-0.5 rounded-full" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>{s.noLimit ? "ללא הגבלה" : `${names.length}/${spots}`}</span>
                   </div>
                 );
               })}
@@ -5592,7 +5592,7 @@ ${sections}
                               <TeardownTaskPicker selected={teardownTasks[identity] || []} onToggle={toggleTeardownTask} compact />
                             ) : (
                               <div className="flex items-center justify-between mt-2">
-                                <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: COLORS.accentLight, color: COLORS.accentDark, fontFamily: FONT_NUM }}>{s.noLimit ? `${names.length} (ללא הגבלה)` : `${names.length}/${spots}`}</span>
+                                <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: COLORS.accentLight, color: COLORS.accentDark, fontFamily: FONT_NUM }}>{s.noLimit ? "ללא הגבלה" : `${names.length}/${spots}`}</span>
                                 <button
                                   onClick={() => (joined ? leave(s) : join(s))}
                                   disabled={full}
@@ -5643,7 +5643,7 @@ ${sections}
                   <div key={s.id} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                   <div className="flex items-center gap-4">
                     {s.noLimit ? (
-                      <div className="shrink-0 flex items-center justify-center rounded-full text-xs font-bold" style={{ width: 34, height: 34, background: COLORS.accentLight, color: COLORS.accentDark, fontFamily: FONT_NUM }}>{names.length}</div>
+                      <div className="shrink-0 flex items-center justify-center rounded-full text-base font-bold" style={{ width: 34, height: 34, background: COLORS.accentLight, color: COLORS.accentDark }}>∞</div>
                     ) : (
                       <FillRing filled={names.length} total={spots} />
                     )}
