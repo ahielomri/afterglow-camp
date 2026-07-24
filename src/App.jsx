@@ -261,37 +261,41 @@ const EQUIPMENT_CONDITIONS = ["תקין", "דורש תיקון", "חסר / אב�
 // Price catalog for the kitchen shopping list - common camp staples with
 // an approximate per-unit price (₪, VAT included, as on an Israeli shelf
 // price tag). There's no live connection to a real supermarket price feed
-// from this environment, so these are placeholder estimates the kitchen
-// team should treat as a starting point and correct as real prices come
-// in (either by editing the item after adding it, or updating this list).
+// from this environment (Shufersal's own site blocks direct fetches), so
+// most of these were cross-checked via web search against real current
+// listings on Israeli price-comparison sites (Pricez/CHP/Zap Market,
+// looking at Shufersal-specific prices where available) rather than pure
+// guesses - but they're still real-world snapshots, not a live feed, so
+// the kitchen team should correct them as actual receipts come in (either
+// by editing the item after adding it, or updating this list).
 const SHOPPING_CATALOG = [
-  { name: "שמן בישול", unit: "בקבוק 1 ליטר", pricePerUnit: 12 },
+  { name: "שמן בישול", unit: "בקבוק 1 ליטר", pricePerUnit: 10 },
   { name: "מלח", unit: "ק\"ג", pricePerUnit: 4 },
-  { name: "סוכר", unit: "ק\"ג", pricePerUnit: 6 },
-  { name: "קפה נמס", unit: "צנצנת 200 גרם", pricePerUnit: 25 },
+  { name: "סוכר", unit: "ק\"ג", pricePerUnit: 5 },
+  { name: "קפה נמס", unit: "צנצנת 200 גרם", pricePerUnit: 24 },
   { name: "תה", unit: "קופסה 25 שקיקים", pricePerUnit: 10 },
-  { name: "אורז", unit: "ק\"ג", pricePerUnit: 8 },
-  { name: "פסטה", unit: "500 גרם", pricePerUnit: 6 },
-  { name: "קטשופ", unit: "בקבוק 750 גרם", pricePerUnit: 12 },
-  { name: "חרדל", unit: "בקבוק", pricePerUnit: 10 },
-  { name: "מיונז", unit: "בקבוק 500 גרם", pricePerUnit: 14 },
-  { name: "ביצים", unit: "תבנית 30 יח'", pricePerUnit: 30 },
-  { name: "שימורי טונה", unit: "יחידה 160 גרם", pricePerUnit: 8 },
+  { name: "אורז", unit: "ק\"ג", pricePerUnit: 7 },
+  { name: "פסטה", unit: "500 גרם", pricePerUnit: 3 },
+  { name: "קטשופ", unit: "בקבוק 750 גרם", pricePerUnit: 10 },
+  { name: "חרדל", unit: "בקבוק", pricePerUnit: 8 },
+  { name: "מיונז", unit: "בקבוק 500 גרם", pricePerUnit: 12 },
+  { name: "ביצים", unit: "תבנית 30 יח'", pricePerUnit: 28 },
+  { name: "שימורי טונה", unit: "יחידה 160 גרם", pricePerUnit: 7 },
   { name: "שימורי תירס", unit: "יחידה", pricePerUnit: 6 },
   { name: "רסק עגבניות", unit: "יחידה", pricePerUnit: 5 },
-  { name: "קמח", unit: "ק\"ג", pricePerUnit: 6 },
-  { name: "חומוס וטחינה", unit: "יחידה", pricePerUnit: 18 },
-  { name: "נייר אלומיניום", unit: "גליל", pricePerUnit: 12 },
-  { name: "ניילון נצמד", unit: "גליל", pricePerUnit: 10 },
-  { name: "שקיות זבל גדולות", unit: "חבילה", pricePerUnit: 18 },
-  { name: "צלחות חד פעמיות", unit: "חבילה 50 יח'", pricePerUnit: 15 },
-  { name: "כוסות חד פעמיות", unit: "חבילה 50 יח'", pricePerUnit: 12 },
-  { name: "סכו\"ם חד פעמי", unit: "סט 50 יח'", pricePerUnit: 14 },
+  { name: "קמח", unit: "ק\"ג", pricePerUnit: 5 },
+  { name: "חומוס וטחינה", unit: "יחידה", pricePerUnit: 16 },
+  { name: "נייר אלומיניום", unit: "גליל", pricePerUnit: 10 },
+  { name: "ניילון נצמד", unit: "גליל", pricePerUnit: 9 },
+  { name: "שקיות זבל גדולות", unit: "חבילה", pricePerUnit: 16 },
+  { name: "צלחות חד פעמיות", unit: "חבילה 50 יח'", pricePerUnit: 8 },
+  { name: "כוסות חד פעמיות", unit: "חבילה 50 יח'", pricePerUnit: 10 },
+  { name: "סכו\"ם חד פעמי", unit: "סט 50 יח'", pricePerUnit: 13 },
   { name: "מגבות נייר", unit: "גליל", pricePerUnit: 6 },
-  { name: "סבון כלים", unit: "בקבוק", pricePerUnit: 10 },
+  { name: "סבון כלים", unit: "בקבוק", pricePerUnit: 9 },
   { name: "ספוגי ניקוי", unit: "חבילה 5 יח'", pricePerUnit: 8 },
   { name: "כפפות ניקוי חד פעמיות", unit: "חבילה", pricePerUnit: 10 },
-  { name: "שום קלוף", unit: "250 גרם", pricePerUnit: 8 },
+  { name: "שום קלוף", unit: "250 גרם", pricePerUnit: 7 },
   { name: "בצל", unit: "ק\"ג", pricePerUnit: 5 },
   { name: "לימונים", unit: "ק\"ג", pricePerUnit: 7 },
   { name: "תבלינים בסיסיים", unit: "יחידה", pricePerUnit: 10 },
@@ -6261,12 +6265,20 @@ ${sections}
                   stays visible only where it already was (emergency info, gated
                   to the member themselves/admins). Comes from a count-only RPC
                   since emergency_info's own RLS wouldn't give a non-admin kitchen
-                  member the full picture. */}
-              {dietaryCounts && (dietaryCounts.vegetarian > 0 || dietaryCounts.vegan > 0) && (
-                <div className="rounded-2xl p-3 mb-4 flex items-center gap-4 text-xs" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>
-                  <span className="font-bold">העדפות תזונה בקמפ:</span>
-                  {dietaryCounts.vegetarian > 0 && <span>{dietaryCounts.vegetarian} צמחונים</span>}
-                  {dietaryCounts.vegan > 0 && <span>{dietaryCounts.vegan} טבעונים</span>}
+                  member the full picture. Always shown (even at 0), so a real
+                  "nobody marked this" is visible rather than the box just
+                  disappearing. */}
+              {dietaryCounts && (
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  {[
+                    { label: "צמחונים בקמפ", value: dietaryCounts.vegetarian },
+                    { label: "טבעונים בקמפ", value: dietaryCounts.vegan },
+                  ].map((c) => (
+                    <div key={c.label} className="rounded-2xl p-4 text-center" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}` }}>
+                      <div className="text-3xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
+                      <div className="text-xs font-bold mt-1" style={{ color: COLORS.accentDark }}>{c.label}</div>
+                    </div>
+                  ))}
                 </div>
               )}
 
