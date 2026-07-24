@@ -35,13 +35,16 @@ import {
 // Design tokens - "Organic" palette (matches the shared design-system folder)
 // ---------------------------------------------------------------------------
 const COLORS = {
-  bg: "#fdf1f0",
-  surface: "#f7dce0",
-  surface2: "#f0c9d2",
-  input: "#fff7f5",
-  text: "#3a222a",
-  textMuted: "rgba(58,34,42,0.65)",
-  divider: "rgba(58,34,42,0.16)",
+  // Neutrals warmed from pink toward cream/peach (sunset horizon) - the
+  // rose/orange accents below are unchanged, so every existing contrast
+  // relationship still holds; only the canvas got warmer.
+  bg: "#fdf2e9",
+  surface: "#f8ddc9",
+  surface2: "#f3cbab",
+  input: "#fffaf2",
+  text: "#3a2a1f",
+  textMuted: "rgba(58,42,31,0.65)",
+  divider: "rgba(58,42,31,0.16)",
   accent: "#e0607a",
   accentDark: "#b8415c",
   accentLight: "#fbd8e0",
