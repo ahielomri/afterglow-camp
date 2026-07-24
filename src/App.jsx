@@ -4515,18 +4515,6 @@ ${sections}
     });
   }, [categoryBudgets, categorySpend, allBudgetCategories]);
 
-  const budgetTotals = useMemo(() => {
-    const planned = Object.values(categoryBudgets).reduce((sum, v) => sum + (Number(v) || 0), 0);
-    let committed = budgetItems.reduce((sum, b) => sum + (Number(b.committed) || 0), 0);
-    let paid = budgetItems.reduce((sum, b) => sum + (Number(b.paid) || 0), 0);
-    budgetExpenses.forEach((e) => {
-      const amounts = expenseAmounts(e);
-      committed += amounts.committed;
-      paid += amounts.paid;
-    });
-    return { planned, committed, paid, remaining: planned - committed };
-  }, [budgetItems, budgetExpenses, categoryBudgets]);
-
   const paymentTotals = useMemo(() => {
     let due = 0;
     let paid = 0;
@@ -4537,6 +4525,22 @@ ${sections}
     });
     return { due, paid, remaining: due - paid };
   }, [memberPayments, campFee, allMembers, feeOverrides]);
+
+  const budgetTotals = useMemo(() => {
+    const planned = Object.values(categoryBudgets).reduce((sum, v) => sum + (Number(v) || 0), 0);
+    let committed = budgetItems.reduce((sum, b) => sum + (Number(b.committed) || 0), 0);
+    let paid = budgetItems.reduce((sum, b) => sum + (Number(b.paid) || 0), 0);
+    budgetExpenses.forEach((e) => {
+      const amounts = expenseAmounts(e);
+      committed += amounts.committed;
+      paid += amounts.paid;
+    });
+    // "Available balance" is real money on hand - dues actually collected
+    // minus what's actually been paid out - not the planning gap (planned
+    // minus committed), which doesn't reflect real cash at all.
+    const duesCollected = paymentTotals.paid;
+    return { planned, committed, paid, duesCollected, remaining: duesCollected - paid };
+  }, [budgetItems, budgetExpenses, categoryBudgets, paymentTotals]);
 
   // N (חברי מחנה) is derived from the real roster, not typed in by hand -
   // see runBudgetEngine above. The optional "what if" toggle below runs the
@@ -6004,9 +6008,10 @@ ${sections}
 
         {tab === "budget" && (
           <div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
               {[
                 { label: "תקציב מתוכנן", value: budgetTotals.planned },
+                { label: "דמי קמפ שנגבו", value: budgetTotals.duesCollected },
                 { label: "התחייבויות", value: budgetTotals.committed },
                 { label: "שולם בפועל", value: budgetTotals.paid },
                 { label: "יתרה זמינה", value: budgetTotals.remaining },
