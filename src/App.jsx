@@ -258,6 +258,18 @@ const BUDGET_CATEGORIES = [
 const EQUIPMENT_CATEGORIES = TEAMS.map((t) => t.name);
 const EQUIPMENT_CONDITIONS = ["תקין", "דורש תיקון", "חסר / אבד"];
 
+// Quick-pick suggestions for the kitchen shopping list - common camp
+// staples the kitchen team can tap to add instead of typing from scratch.
+// Tapping one only adds the name; quantity/price still need to be filled
+// in before the item counts as part of the real shopping list.
+const BASIC_SHOPPING_ITEMS = [
+  "שמן בישול", "מלח", "סוכר", "קפה נמס", "תה", "אורז", "פסטה", "קטשופ", "חרדל", "מיונז",
+  "ביצים", "שימורי טונה", "שימורי תירס", "רסק עגבניות", "קמח", "חומוס וטחינה",
+  "נייר אלומיניום", "ניילון נצמד", "שקיות זבל גדולות", "צלחות חד פעמיות", "כוסות חד פעמיות",
+  "סכו\"ם חד פעמי", "מגבות נייר", "סבון כלים", "ספוגי ניקוי", "כפפות ניקוי חד פעמיות",
+  "שום קלוף", "בצל", "לימונים", "תבלינים בסיסיים",
+];
+
 const TEAM_FILTERS = [...new Set(SHIFTS.map((s) => s.team))];
 const TRAVEL_DAYS = ["2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02", "2026-11-03"];
 
@@ -695,6 +707,55 @@ function NewCategoryForm({ onAdd }) {
   );
 }
 
+function EditableCategoryList({ categories, onRename, onRemove }) {
+  const [editing, setEditing] = useState(null);
+  const [draft, setDraft] = useState("");
+  if (categories.length === 0) return null;
+  return (
+    <div className="space-y-1.5 mb-4">
+      {categories.map((cat) => (
+        <div key={cat} className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+          {editing === cat ? (
+            <>
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                autoFocus
+                className="flex-1 px-2 py-1 rounded-lg text-sm outline-none"
+                style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+              />
+              <button
+                onClick={() => { onRename(cat, draft); setEditing(null); }}
+                className="text-xs px-3 py-1 rounded-full font-semibold shrink-0"
+                style={{ background: COLORS.accent2, color: COLORS.bg }}
+              >
+                שמירה
+              </button>
+              <button onClick={() => setEditing(null)} className="text-xs px-2 py-1 shrink-0" style={{ color: COLORS.textMuted }}>
+                ביטול
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="flex-1 text-sm">{cat}</span>
+              <button
+                onClick={() => { setEditing(cat); setDraft(cat); }}
+                className="shrink-0"
+                style={{ color: COLORS.textMuted }}
+              >
+                <Pencil size={14} />
+              </button>
+              <button onClick={() => onRemove(cat)} className="shrink-0" style={{ color: COLORS.textMuted }}>
+                <Trash2 size={14} />
+              </button>
+            </>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function CategoryBudgetForm({ onSet, categories }) {
   const [cat, setCat] = useState(categories[0]);
   const [amount, setAmount] = useState("");
@@ -823,7 +884,7 @@ function ShoppingItemForm({ onAdd, initial, onCancel }) {
   const [notes, setNotes] = useState(initial?.notes || "");
 
   function submit() {
-    if (!name.trim() || !qty) return;
+    if (!name.trim()) return;
     onAdd({ name: name.trim(), qty, unit: unit.trim(), price, notes: notes.trim() });
     if (!initial) {
       setName(""); setQty(""); setUnit(""); setPrice(""); setNotes("");
@@ -832,6 +893,9 @@ function ShoppingItemForm({ onAdd, initial, onCancel }) {
 
   return (
     <div className="rounded-2xl p-4 space-y-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      {initial && !(Number(qty) > 0 && Number(price) > 0) && (
+        <p className="text-xs" style={{ color: COLORS.accentDark }}>יש להשלים כמות ומחיר משוער כדי שהפריט יעבור לרשימת הקניות המאושרת</p>
+      )}
       <div className="grid sm:grid-cols-2 gap-2">
         <input
           value={name} onChange={(e) => setName(e.target.value)}
@@ -841,7 +905,7 @@ function ShoppingItemForm({ onAdd, initial, onCancel }) {
         />
         <input
           type="number" value={qty} onChange={(e) => setQty(e.target.value)}
-          placeholder="כמות"
+          placeholder="כמות משוערת"
           className="px-3 py-2 rounded-xl text-sm outline-none"
           style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
         />
@@ -853,7 +917,7 @@ function ShoppingItemForm({ onAdd, initial, onCancel }) {
         />
         <input
           type="number" value={price} onChange={(e) => setPrice(e.target.value)}
-          placeholder="מחיר משוער (₪, אופציונלי)"
+          placeholder="מחיר משוער (₪)"
           className="px-3 py-2 rounded-xl text-sm outline-none"
           style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
         />
@@ -1221,6 +1285,109 @@ function AddPaymentForm({ onAdd }) {
 // Primary lead (slot 0) can only be set/changed by an admin - the second
 // slot can also be managed by whoever is already leading this team, so a
 // lead can bring on a co-lead without needing an admin every time.
+function TeamChecklist({ items, state, canCheck, canManage, onToggle, onAdd, onEdit, onRemove }) {
+  const [newText, setNewText] = useState("");
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [editText, setEditText] = useState("");
+  const doneCount = items.filter((_, i) => state[i]).length;
+  return (
+    <div>
+      <div className="text-xs font-bold mb-1.5 flex items-center justify-between" style={{ color: COLORS.textMuted }}>
+        <span>צ'קליסט בטיחות ותפעול{!canCheck && " (רק מוביל/ת הצוות או מנהל יכולים לסמן)"}</span>
+        <span>{doneCount}/{items.length}</span>
+      </div>
+      {items.length === 0 && <p className="text-xs mb-1.5" style={{ color: COLORS.textMuted }}>אין עדיין פריטים בצ'קליסט.</p>}
+      <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
+        {items.map((item, i) =>
+          editingIndex === i ? (
+            <div key={i} className="flex items-center gap-1.5">
+              <input
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                autoFocus
+                className="flex-1 px-2 py-1 rounded-lg text-xs outline-none"
+                style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+              />
+              <button
+                onClick={() => { onEdit(i, editText); setEditingIndex(null); }}
+                className="text-xs px-2.5 py-1 rounded-full font-semibold shrink-0"
+                style={{ background: COLORS.accent2, color: COLORS.bg }}
+              >
+                שמירה
+              </button>
+              <button onClick={() => setEditingIndex(null)} className="text-xs shrink-0" style={{ color: COLORS.textMuted }}>ביטול</button>
+            </div>
+          ) : (
+            <div key={i} className="flex items-center gap-2 text-xs">
+              <label className={`flex items-center gap-2 flex-1 ${canCheck ? "cursor-pointer" : "cursor-not-allowed"}`}>
+                <input type="checkbox" checked={!!state[i]} disabled={!canCheck} onChange={() => canCheck && onToggle(i)} />
+                <span style={{ textDecoration: state[i] ? "line-through" : "none", opacity: state[i] ? 0.6 : 1 }}>{item}</span>
+              </label>
+              {canManage && (
+                <>
+                  <button onClick={() => { setEditingIndex(i); setEditText(item); }} className="shrink-0" style={{ color: COLORS.textMuted }}><Pencil size={12} /></button>
+                  <button onClick={() => onRemove(i)} className="shrink-0" style={{ color: COLORS.textMuted }}><Trash2 size={12} /></button>
+                </>
+              )}
+            </div>
+          )
+        )}
+      </div>
+      {canManage && (
+        <div className="flex items-center gap-1.5 mt-2">
+          <input
+            value={newText}
+            onChange={(e) => setNewText(e.target.value)}
+            placeholder="הוספת משימה לצ'קליסט"
+            className="flex-1 px-2.5 py-1.5 rounded-lg text-xs outline-none"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          />
+          <button
+            onClick={() => { onAdd(newText); setNewText(""); }}
+            className="text-xs px-3 py-1.5 rounded-full font-semibold shrink-0"
+            style={{ background: COLORS.accent2, color: COLORS.bg }}
+          >
+            הוספה
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NewTeamForm({ onAdd }) {
+  const [name, setName] = useState("");
+  const [desc, setDesc] = useState("");
+  return (
+    <div className="rounded-2xl p-4 mb-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <div className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>הוספת צוות חדש</div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="שם הצוות"
+          className="flex-1 min-w-[140px] px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        <input
+          value={desc}
+          onChange={(e) => setDesc(e.target.value)}
+          placeholder="תיאור קצר (אופציונלי)"
+          className="flex-[2] min-w-[180px] px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        <button
+          onClick={() => { onAdd(name, desc); setName(""); setDesc(""); }}
+          className="px-4 py-2 rounded-full text-sm font-semibold shrink-0"
+          style={{ background: COLORS.accent2, color: COLORS.bg }}
+        >
+          הוספת צוות
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TeamLeadPicker({ team, current, members, onSet, canEditPrimary }) {
   const leads = current || [];
   const slot0 = leads[0] || "";
@@ -2294,6 +2461,8 @@ export default function App() {
   const [personalCalendarAdds, setPersonalCalendarAddsState] = useState({});
   const [checklistState, setChecklistState] = useState({});
   const [manualTeamMembers, setManualTeamMembers] = useState({});
+  const [extraTeams, setExtraTeams] = useState([]);
+  const [customChecklists, setCustomChecklists] = useState({});
   const [budgetParams, setBudgetParams] = useState({
     global: { N: "", setupDays: "", eventDays: "", contingencyPct: "", vatIncluded: false, whatIfEnabled: false, whatIfN: "" },
     campInfra: { items: [], loungeItems: [], oneTimeIncome: [], icePricePerKg: "", iceKgPerDay: "", iceDays: "", elecPricePerKw: "", elecKw: "" },
@@ -2383,7 +2552,7 @@ export default function App() {
         rawLeads, rawPhones, rawRides, rawFeeOv, rawEmails, rawWhatsappConsent, rawPersonalCalendarAdds, rawChecklists,
         rawManualTeam, rawLog, rawLogins, rawExtra, rawRemoved,
         rawAnn, rawPolls, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories, rawRideMatches,
-        rawShoppingList, rawShoppingRequests,
+        rawShoppingList, rawShoppingRequests, rawExtraTeams, rawCustomChecklists,
       ] = await Promise.all([
         safeGet("shift-assignments", true),
         safeGet("budget-items", true),
@@ -2413,6 +2582,8 @@ export default function App() {
         safeGet("ride-matches", true),
         safeGet("kitchen-shopping-list", true),
         safeGet("kitchen-shopping-requests", true),
+        safeGet("extra-teams", true),
+        safeGet("team-checklist-items", true),
       ]);
 
       async function safeCall(fn, fallback) {
@@ -2498,6 +2669,8 @@ export default function App() {
       setExtraBudgetCategories(rawExtraCategories ? JSON.parse(rawExtraCategories) : []);
       setShoppingList(rawShoppingList ? JSON.parse(rawShoppingList) : []);
       setShoppingRequests(rawShoppingRequests ? JSON.parse(rawShoppingRequests) : []);
+      setExtraTeams(rawExtraTeams ? JSON.parse(rawExtraTeams) : []);
+      setCustomChecklists(rawCustomChecklists ? JSON.parse(rawCustomChecklists) : {});
     }
     loadSharedDataRef.current = loadSharedData;
 
@@ -2770,13 +2943,17 @@ export default function App() {
   // (enforced client-side, same trust model as camp-equipment above), but
   // visible to everyone so the whole camp can see what's already planned.
   async function addShoppingItem(item) {
+    if (shoppingList.some((it) => it.name === item.name)) {
+      return showToast(`"${item.name}" כבר ברשימה`, "error");
+    }
+    const isPending = !(Number(item.qty) > 0 && Number(item.price) > 0);
     const latest = await getFreshShared("kitchen-shopping-list", shoppingList);
     const next = [...latest, { ...item, id: Date.now().toString(), bought: false, addedBy: identity, addedAt: Date.now() }];
     setShoppingList(next);
     try {
       await window.storage.set("kitchen-shopping-list", JSON.stringify(next), true);
-      showToast("הפריט נוסף לרשימת הקניות", "ok");
-      logActivity("הוספת פריט לרשימת קניות", `${item.name} × ${item.qty}`);
+      showToast(isPending ? `"${item.name}" נוסף - יש להשלים כמות ומחיר` : "הפריט נוסף לרשימת הקניות", "ok");
+      logActivity("הוספת פריט לרשימת קניות", `${item.name}${item.qty ? ` × ${item.qty}` : ""}`);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -2854,6 +3031,71 @@ export default function App() {
       await window.storage.set("extra-budget-categories", JSON.stringify(next), true);
       showToast(`הקטגוריה "${trimmed}" נוספה`, "ok");
       logActivity("הוספת קטגוריית הוצאה חדשה", trimmed);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  // Only custom (extra) categories can be renamed/removed - the built-in
+  // BUDGET_CATEGORIES are wired into the budget engine and other parts of
+  // the app, so they aren't user-editable.
+  async function renameBudgetCategory(oldName, newName) {
+    const trimmed = (newName || "").trim();
+    if (!trimmed || trimmed === oldName) return;
+    if (!extraBudgetCategories.includes(oldName)) return;
+    if (BUDGET_CATEGORIES.includes(trimmed) || extraBudgetCategories.includes(trimmed)) {
+      return showToast("הקטגוריה כבר קיימת", "error");
+    }
+    const nextCats = extraBudgetCategories.map((c) => (c === oldName ? trimmed : c));
+    setExtraBudgetCategories(nextCats);
+
+    const nextBudgets = { ...categoryBudgets };
+    if (oldName in nextBudgets) {
+      nextBudgets[trimmed] = nextBudgets[oldName];
+      delete nextBudgets[oldName];
+    }
+    setCategoryBudgets(nextBudgets);
+
+    const latestItems = await getFreshShared("budget-items", budgetItems);
+    const nextItems = latestItems.map((b) => (b.category === oldName ? { ...b, category: trimmed } : b));
+    setBudgetItems(nextItems);
+
+    const latestExpenses = await getFreshShared("budget-expenses", budgetExpenses);
+    const nextExpenses = latestExpenses.map((e) => (e.allocation === oldName ? { ...e, allocation: trimmed } : e));
+    setBudgetExpenses(nextExpenses);
+
+    try {
+      await Promise.all([
+        window.storage.set("extra-budget-categories", JSON.stringify(nextCats), true),
+        window.storage.set("category-budgets", JSON.stringify(nextBudgets), true),
+        window.storage.set("budget-items", JSON.stringify(nextItems), true),
+        window.storage.set("budget-expenses", JSON.stringify(nextExpenses), true),
+      ]);
+      showToast(`הקטגוריה שונתה ל"${trimmed}"`, "ok");
+      logActivity("שינוי שם קטגוריית הוצאה", `${oldName} → ${trimmed}`);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function removeBudgetCategory(name) {
+    if (!extraBudgetCategories.includes(name)) return;
+    const hasItems = budgetItems.some((b) => b.category === name) || budgetExpenses.some((e) => e.allocation === name);
+    if (hasItems) {
+      return showToast("יש הוצאות משויכות לקטגוריה זו - יש להעביר או למחוק אותן קודם", "error");
+    }
+    const nextCats = extraBudgetCategories.filter((c) => c !== name);
+    setExtraBudgetCategories(nextCats);
+    const nextBudgets = { ...categoryBudgets };
+    delete nextBudgets[name];
+    setCategoryBudgets(nextBudgets);
+    try {
+      await Promise.all([
+        window.storage.set("extra-budget-categories", JSON.stringify(nextCats), true),
+        window.storage.set("category-budgets", JSON.stringify(nextBudgets), true),
+      ]);
+      showToast(`הקטגוריה "${name}" נמחקה`, "ok");
+      logActivity("מחיקת קטגוריית הוצאה", name);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3354,8 +3596,77 @@ export default function App() {
     setChecklistState(next);
     try {
       await window.storage.set("team-checklists", JSON.stringify(next), true);
-      const itemLabel = TEAM_CHECKLISTS[team]?.[index] || `פריט ${index + 1}`;
+      const itemLabel = checklistItemsFor(team)[index] || `פריט ${index + 1}`;
       logActivity(nowChecked ? "סימון פריט צ׳ק-ליסט" : "ביטול סימון פריט צ׳ק-ליסט", `${team}: ${itemLabel}`);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function persistCustomChecklist(team, items) {
+    const latest = await getFreshShared("team-checklist-items", customChecklists);
+    const next = { ...latest, [team]: items };
+    setCustomChecklists(next);
+    try {
+      await window.storage.set("team-checklist-items", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function addChecklistItem(team, text) {
+    const trimmed = (text || "").trim();
+    if (!trimmed) return;
+    await persistCustomChecklist(team, [...checklistItemsFor(team), trimmed]);
+    logActivity("הוספת פריט לצ׳ק-ליסט", `${team}: ${trimmed}`);
+  }
+
+  async function editChecklistItem(team, index, text) {
+    const trimmed = (text || "").trim();
+    if (!trimmed) return;
+    const items = checklistItemsFor(team);
+    await persistCustomChecklist(team, items.map((it, i) => (i === index ? trimmed : it)));
+    logActivity("עריכת פריט צ׳ק-ליסט", `${team}: ${trimmed}`);
+  }
+
+  // Removing an item shifts every later item's index down by one, so the
+  // checked/unchecked state (keyed by index) has to shift with it, or
+  // completed items would suddenly look unchecked (and vice versa).
+  async function removeChecklistItem(team, index) {
+    const items = checklistItemsFor(team);
+    const removed = items[index];
+    await persistCustomChecklist(team, items.filter((_, i) => i !== index));
+
+    const latestState = await getFreshShared("team-checklists", checklistState);
+    const current = latestState[team] || {};
+    const nextTeamState = {};
+    Object.entries(current).forEach(([i, checked]) => {
+      const idx = Number(i);
+      if (idx < index) nextTeamState[idx] = checked;
+      else if (idx > index) nextTeamState[idx - 1] = checked;
+    });
+    const nextState = { ...latestState, [team]: nextTeamState };
+    setChecklistState(nextState);
+    try {
+      await window.storage.set("team-checklists", JSON.stringify(nextState), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+    logActivity("מחיקת פריט מצ׳ק-ליסט", `${team}: ${removed || ""}`);
+  }
+
+  async function addTeam(name, desc) {
+    const trimmed = (name || "").trim();
+    if (!trimmed) return;
+    if (TEAMS.some((t) => t.name === trimmed) || extraTeams.some((t) => t.name === trimmed)) {
+      return showToast("הצוות כבר קיים", "error");
+    }
+    const next = [...extraTeams, { name: trimmed, desc: (desc || "").trim() }];
+    setExtraTeams(next);
+    try {
+      await window.storage.set("extra-teams", JSON.stringify(next), true);
+      showToast(`הצוות "${trimmed}" נוסף`, "ok");
+      logActivity("הוספת צוות חדש", trimmed);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3922,6 +4233,10 @@ ${sections}
     () => [...BUDGET_CATEGORIES, ...extraBudgetCategories],
     [extraBudgetCategories]
   );
+  const allTeams = useMemo(() => [...TEAMS, ...extraTeams], [extraTeams]);
+  function checklistItemsFor(team) {
+    return customChecklists[team] || TEAM_CHECKLISTS[team] || [];
+  }
 
   // login-history only ever gets a new entry from an explicit credential
   // login (first-time setup or a password re-entry) - once a member's PWA
@@ -4857,38 +5172,32 @@ ${sections}
                 <p className="text-xs" style={{ color: COLORS.textMuted }}>עדיין אף אחד לא שיבץ משמרת בצוות הזה.</p>
               ) : (
                 teamMembers(myLeadTeam).map((n) => (
-                  <span key={n} className="text-xs px-2.5 py-1 rounded-full" style={{ background: COLORS.surface }} dir="ltr">
+                  <span key={n} className="text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5" style={{ background: COLORS.surface }} dir="ltr">
                     <span dir="rtl">{n}</span>{memberPhones[n] ? ` · ${memberPhones[n]}` : ""}
+                    {isManualTeamMember(myLeadTeam, n) && (
+                      <button onClick={() => removeManualTeamMember(myLeadTeam, n)} style={{ color: COLORS.textMuted }}><X size={10} /></button>
+                    )}
                   </span>
                 ))
               )}
             </div>
+            <div className="mt-2">
+              <div className="text-xs mb-1" style={{ color: COLORS.textMuted }}>הוספת חבר/ה לצוות ללא משמרת</div>
+              <AdminAssignPicker members={allMembers} onAssign={(name) => addManualTeamMember(myLeadTeam, name)} />
+            </div>
 
-            {TEAM_CHECKLISTS[myLeadTeam] && (() => {
-              const items = TEAM_CHECKLISTS[myLeadTeam];
-              const state = checklistState[myLeadTeam] || {};
-              const doneCount = items.filter((_, i) => state[i]).length;
-              return (
-                <div className="mt-5 pt-4 border-t" style={{ borderColor: COLORS.divider }}>
-                  <div className="text-xs font-bold mb-1.5 flex items-center justify-between" style={{ color: COLORS.textMuted }}>
-                    <span>צ'קליסט בטיחות ותפעול</span>
-                    <span>{doneCount}/{items.length}</span>
-                  </div>
-                  <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
-                    {items.map((item, i) => (
-                      <label key={i} className="flex items-center gap-2 text-xs cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={!!state[i]}
-                          onChange={() => toggleChecklistItem(myLeadTeam, i)}
-                        />
-                        <span style={{ textDecoration: state[i] ? "line-through" : "none", opacity: state[i] ? 0.6 : 1 }}>{item}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
+            <div className="mt-5 pt-4 border-t" style={{ borderColor: COLORS.divider }}>
+              <TeamChecklist
+                items={checklistItemsFor(myLeadTeam)}
+                state={checklistState[myLeadTeam] || {}}
+                canCheck
+                canManage
+                onToggle={(i) => toggleChecklistItem(myLeadTeam, i)}
+                onAdd={(text) => addChecklistItem(myLeadTeam, text)}
+                onEdit={(i, text) => editChecklistItem(myLeadTeam, i, text)}
+                onRemove={(i) => removeChecklistItem(myLeadTeam, i)}
+              />
+            </div>
 
             <div className="mt-5 pt-4 border-t" style={{ borderColor: COLORS.divider }}>
               <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>הוספת הוצאה לצוות</h3>
@@ -5507,7 +5816,7 @@ ${sections}
             )}
 
             <h3 className="text-sm font-bold mb-3" style={{ color: COLORS.accentDark }}>לוח מודעות</h3>
-            <AnnouncementForm onPost={addAnnouncement} teams={TEAMS.map((t) => t.name)} />
+            <AnnouncementForm onPost={addAnnouncement} teams={allTeams.map((t) => t.name)} />
             {announcements.length === 0 ? (
               <p className="text-xs text-center py-10" style={{ color: COLORS.textMuted }}>עדיין אין מודעות. תהיה/י הראשון/ה לפרסם.</p>
             ) : (
@@ -5854,8 +6163,17 @@ ${sections}
 
         {tab === "shopping" && (() => {
           const canManageShopping = isAdmin || teamMembers("צוות המטבח").includes(identity);
-          const totalPrice = shoppingList.reduce((s, it) => s + (Number(it.price) || 0), 0);
-          const sortedList = [...shoppingList].sort((a, b) => (a.bought === b.bought ? 0 : a.bought ? 1 : -1));
+          // "Pending" = still missing quantity or price - a quick-picked or
+          // freshly-added item sits here until the kitchen team fills both
+          // in, at which point it automatically counts as part of the real
+          // (confirmed) shopping list. No separate status flag to track -
+          // it's just derived from whether qty/price are filled in.
+          const isPending = (it) => !(Number(it.qty) > 0 && Number(it.price) > 0);
+          const pendingItems = shoppingList.filter(isPending);
+          const confirmedItems = shoppingList.filter((it) => !isPending(it));
+          const totalPrice = confirmedItems.reduce((s, it) => s + (Number(it.price) || 0), 0);
+          const sortedConfirmed = [...confirmedItems].sort((a, b) => (a.bought === b.bought ? 0 : a.bought ? 1 : -1));
+          const pickableBasics = BASIC_SHOPPING_ITEMS.filter((name) => !shoppingList.some((it) => it.name === name));
           return (
             <div>
               {/* Aggregate-only, on purpose: the kitchen needs to know how many
@@ -5872,22 +6190,57 @@ ${sections}
                 </div>
               )}
 
+              {canManageShopping && pickableBasics.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>רשימה בסיסית - בחירה מהירה</h3>
+                  <div className="flex flex-wrap gap-1.5">
+                    {pickableBasics.map((name) => (
+                      <button
+                        key={name}
+                        onClick={() => addShoppingItem({ name, qty: "", unit: "", price: "", notes: "" })}
+                        className="text-xs px-3 py-1.5 rounded-full font-semibold"
+                        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                      >
+                        + {name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {canManageShopping && (
                 <div className="mb-4">
+                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>הוספת מוצר אחר</h3>
                   <ShoppingItemForm onAdd={addShoppingItem} />
                 </div>
               )}
 
-              {shoppingList.length > 0 && (
+              {canManageShopping && pendingItems.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>ממתינים להשלמת כמות ומחיר ({pendingItems.length})</h3>
+                  <div className="space-y-2">
+                    {pendingItems.map((it) => (
+                      <ShoppingItemForm
+                        key={it.id}
+                        initial={it}
+                        onCancel={() => removeShoppingItem(it.id)}
+                        onAdd={(patch) => updateShoppingItem(it.id, patch)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {confirmedItems.length > 0 && (
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-bold" style={{ color: COLORS.textMuted }}>רשימת מוצרים ({shoppingList.length})</h3>
+                  <h3 className="text-xs font-bold" style={{ color: COLORS.textMuted }}>רשימת קניות מאושרת ({confirmedItems.length})</h3>
                   {totalPrice > 0 && (
                     <span className="text-xs font-bold" style={{ color: COLORS.accentDark }}>סה"כ משוער: ₪{totalPrice.toLocaleString()}</span>
                   )}
                 </div>
               )}
               <div className="space-y-1.5 mb-6">
-                {sortedList.map((it) =>
+                {sortedConfirmed.map((it) =>
                   editingShoppingItemId === it.id ? (
                     <ShoppingItemForm
                       key={it.id}
@@ -6123,6 +6476,7 @@ ${sections}
                 אם יש הוצאה שלא שייכת לשום צוות קיים - אפשר לפתוח קטגוריה חדשה שתופיע גם בטאב "הוצאות". רק צוות תקציב/מנהלים יכולים לפתוח קטגוריה חדשה.
               </p>
               <NewCategoryForm onAdd={addBudgetCategory} />
+              <EditableCategoryList categories={extraBudgetCategories} onRename={renameBudgetCategory} onRemove={removeBudgetCategory} />
               <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.textMuted }}>הגדרת תקציב למחלקה</h3>
               <CategoryBudgetForm onSet={setCategoryBudget} categories={allBudgetCategories} />
             </div>
@@ -6675,12 +7029,13 @@ ${sections}
 
         {tab === "teams" && (
           <div>
-            {isAdmin && TEAMS.some((t) => TEAM_CHECKLISTS[t.name]) && (
+            {isAdmin && <NewTeamForm onAdd={addTeam} />}
+            {isAdmin && allTeams.some((t) => checklistItemsFor(t.name).length > 0) && (
               <div className="mb-4 rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                 <div className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>צ'קליסטים - סטטוס לפי צוות</div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {TEAMS.filter((t) => TEAM_CHECKLISTS[t.name]).map((t) => {
-                    const items = TEAM_CHECKLISTS[t.name];
+                  {allTeams.filter((t) => checklistItemsFor(t.name).length > 0).map((t) => {
+                    const items = checklistItemsFor(t.name);
                     const state = checklistState[t.name] || {};
                     const done = items.filter((_, i) => state[i]).length;
                     const complete = done === items.length;
@@ -6695,10 +7050,12 @@ ${sections}
               </div>
             )}
             <div className="grid sm:grid-cols-2 gap-3">
-            {TEAMS.map((t) => {
+            {allTeams.map((t) => {
               const leads = teamLeadsOf(t.name);
               const members = teamMembers(t.name);
               const open = expandedTeam === t.name;
+              const isLead = leads.some((l) => l.name === identity);
+              const canManageTeam = isAdmin || isLead;
               return (
                 <div key={t.name} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                   <button onClick={() => setExpandedTeam(open ? null : t.name)} className="w-full text-right">
@@ -6713,7 +7070,7 @@ ${sections}
                     )}
                   </button>
 
-                  {(isAdmin || leads.some((l) => l.name === identity)) && (
+                  {(isAdmin || isLead) && (
                     <TeamLeadPicker team={t.name} current={teamLeads[t.name]} members={allMembers} onSet={setTeamLead} canEditPrimary={isAdmin} />
                   )}
 
@@ -6730,7 +7087,7 @@ ${sections}
                             return (
                               <span key={n} className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1.5" style={{ background: manual ? COLORS.accent2Light : COLORS.input }}>
                                 {n}
-                                {isAdmin && manual && (
+                                {canManageTeam && manual && (
                                   <button onClick={() => removeManualTeamMember(t.name, n)} style={{ color: COLORS.textMuted }}><X size={10} /></button>
                                 )}
                               </span>
@@ -6739,40 +7096,25 @@ ${sections}
                         </div>
                       )}
 
-                      {isAdmin && (
+                      {canManageTeam && (
                         <div className="mt-2">
-                          <div className="text-xs mb-1" style={{ color: COLORS.textMuted }}>שיוך לצוות ללא משמרת (מנהל)</div>
+                          <div className="text-xs mb-1" style={{ color: COLORS.textMuted }}>שיוך לצוות ללא משמרת</div>
                           <AdminAssignPicker members={allMembers} onAssign={(name) => addManualTeamMember(t.name, name)} />
                         </div>
                       )}
 
-                      {TEAM_CHECKLISTS[t.name] && (() => {
-                        const items = TEAM_CHECKLISTS[t.name];
-                        const state = checklistState[t.name] || {};
-                        const doneCount = items.filter((_, i) => state[i]).length;
-                        const canCheck = isAdmin || (teamLeads[t.name] || []).includes(identity);
-                        return (
-                          <div className="mt-3 pt-3 border-t" style={{ borderColor: COLORS.divider }}>
-                            <div className="text-xs mb-1.5 flex items-center justify-between" style={{ color: COLORS.textMuted }}>
-                              <span>צ'קליסט בטיחות ותפעול{!canCheck && " (רק מוביל/ת הצוות או מנהל יכולים לסמן)"}</span>
-                              <span>{doneCount}/{items.length}</span>
-                            </div>
-                            <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
-                              {items.map((item, i) => (
-                                <label key={i} className={`flex items-center gap-2 text-xs ${canCheck ? "cursor-pointer" : "cursor-not-allowed"}`}>
-                                  <input
-                                    type="checkbox"
-                                    checked={!!state[i]}
-                                    disabled={!canCheck}
-                                    onChange={() => canCheck && toggleChecklistItem(t.name, i)}
-                                  />
-                                  <span style={{ textDecoration: state[i] ? "line-through" : "none", opacity: state[i] ? 0.6 : 1 }}>{item}</span>
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })()}
+                      <div className="mt-3 pt-3 border-t" style={{ borderColor: COLORS.divider }}>
+                        <TeamChecklist
+                          items={checklistItemsFor(t.name)}
+                          state={checklistState[t.name] || {}}
+                          canCheck={canManageTeam}
+                          canManage={canManageTeam}
+                          onToggle={(i) => toggleChecklistItem(t.name, i)}
+                          onAdd={(text) => addChecklistItem(t.name, text)}
+                          onEdit={(i, text) => editChecklistItem(t.name, i, text)}
+                          onRemove={(i) => removeChecklistItem(t.name, i)}
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
