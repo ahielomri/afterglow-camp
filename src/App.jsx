@@ -3692,11 +3692,33 @@ ${cards}
             <td>${namesHtml}</td>
           </tr>`;
         }).join("");
+
+        // End-of-day roundup: which of that day's shifts are fully staffed
+        // vs. still need people. Teardown ("everyone participates") and
+        // noLimit shifts don't have a meaningful "missing" state, so they're
+        // always counted as covered.
+        const covered = [];
+        const missing = [];
+        dayShifts.forEach((s) => {
+          if (s.id === TEARDOWN_ID || s.noLimit) {
+            covered.push(escapeHtml(s.title));
+            return;
+          }
+          const count = (assignments[s.id] || []).length;
+          if (count >= s.spots) covered.push(escapeHtml(s.title));
+          else missing.push(`${escapeHtml(s.title)} (חסרים ${s.spots - count})`);
+        });
+        const daySummary = `<div class="day-summary">
+          <div class="ok">✓ מאויש: ${covered.length > 0 ? covered.join(", ") : "-"}</div>
+          <div class="missing">✗ חסר איוש: ${missing.length > 0 ? missing.join(", ") : "אין - הכל מאויש"}</div>
+        </div>`;
+
         return `<h3>${escapeHtml(formatDate(date))}</h3>
           <table>
             <thead><tr><th>משמרת</th><th>צוות</th><th>שעות</th><th>איוש</th><th>מי רשום</th></tr></thead>
             <tbody>${rows}</tbody>
-          </table>`;
+          </table>
+          ${daySummary}`;
       }).join("");
       return `<h2>${escapeHtml(phase)}</h2>${dateBlocks}`;
     }).join("");
@@ -3714,6 +3736,9 @@ ${cards}
   table { width: 100%; border-collapse: collapse; margin-bottom: 6px; break-inside: avoid; page-break-inside: avoid; }
   th, td { border: 1px solid #ddd; padding: 4px 8px; font-size: 11px; text-align: right; vertical-align: top; }
   th { background: #f4f4f4; }
+  .day-summary { font-size: 10.5px; margin-bottom: 16px; break-inside: avoid; page-break-inside: avoid; }
+  .day-summary .ok { color: #1a7a3c; }
+  .day-summary .missing { color: #b8321f; margin-top: 2px; }
 </style>
 </head><body>
 <h1>לוח משמרות - Afterglow (${escapeHtml(new Date().toLocaleDateString("he-IL"))})</h1>
