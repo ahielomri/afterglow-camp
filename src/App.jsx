@@ -258,16 +258,43 @@ const BUDGET_CATEGORIES = [
 const EQUIPMENT_CATEGORIES = TEAMS.map((t) => t.name);
 const EQUIPMENT_CONDITIONS = ["תקין", "דורש תיקון", "חסר / אבד"];
 
-// Quick-pick suggestions for the kitchen shopping list - common camp
-// staples the kitchen team can tap to add instead of typing from scratch.
-// Tapping one only adds the name; quantity/price still need to be filled
-// in before the item counts as part of the real shopping list.
-const BASIC_SHOPPING_ITEMS = [
-  "שמן בישול", "מלח", "סוכר", "קפה נמס", "תה", "אורז", "פסטה", "קטשופ", "חרדל", "מיונז",
-  "ביצים", "שימורי טונה", "שימורי תירס", "רסק עגבניות", "קמח", "חומוס וטחינה",
-  "נייר אלומיניום", "ניילון נצמד", "שקיות זבל גדולות", "צלחות חד פעמיות", "כוסות חד פעמיות",
-  "סכו\"ם חד פעמי", "מגבות נייר", "סבון כלים", "ספוגי ניקוי", "כפפות ניקוי חד פעמיות",
-  "שום קלוף", "בצל", "לימונים", "תבלינים בסיסיים",
+// Price catalog for the kitchen shopping list - common camp staples with
+// an approximate per-unit price (₪, VAT included, as on an Israeli shelf
+// price tag). There's no live connection to a real supermarket price feed
+// from this environment, so these are placeholder estimates the kitchen
+// team should treat as a starting point and correct as real prices come
+// in (either by editing the item after adding it, or updating this list).
+const SHOPPING_CATALOG = [
+  { name: "שמן בישול", unit: "בקבוק 1 ליטר", pricePerUnit: 12 },
+  { name: "מלח", unit: "ק\"ג", pricePerUnit: 4 },
+  { name: "סוכר", unit: "ק\"ג", pricePerUnit: 6 },
+  { name: "קפה נמס", unit: "צנצנת 200 גרם", pricePerUnit: 25 },
+  { name: "תה", unit: "קופסה 25 שקיקים", pricePerUnit: 10 },
+  { name: "אורז", unit: "ק\"ג", pricePerUnit: 8 },
+  { name: "פסטה", unit: "500 גרם", pricePerUnit: 6 },
+  { name: "קטשופ", unit: "בקבוק 750 גרם", pricePerUnit: 12 },
+  { name: "חרדל", unit: "בקבוק", pricePerUnit: 10 },
+  { name: "מיונז", unit: "בקבוק 500 גרם", pricePerUnit: 14 },
+  { name: "ביצים", unit: "תבנית 30 יח'", pricePerUnit: 30 },
+  { name: "שימורי טונה", unit: "יחידה 160 גרם", pricePerUnit: 8 },
+  { name: "שימורי תירס", unit: "יחידה", pricePerUnit: 6 },
+  { name: "רסק עגבניות", unit: "יחידה", pricePerUnit: 5 },
+  { name: "קמח", unit: "ק\"ג", pricePerUnit: 6 },
+  { name: "חומוס וטחינה", unit: "יחידה", pricePerUnit: 18 },
+  { name: "נייר אלומיניום", unit: "גליל", pricePerUnit: 12 },
+  { name: "ניילון נצמד", unit: "גליל", pricePerUnit: 10 },
+  { name: "שקיות זבל גדולות", unit: "חבילה", pricePerUnit: 18 },
+  { name: "צלחות חד פעמיות", unit: "חבילה 50 יח'", pricePerUnit: 15 },
+  { name: "כוסות חד פעמיות", unit: "חבילה 50 יח'", pricePerUnit: 12 },
+  { name: "סכו\"ם חד פעמי", unit: "סט 50 יח'", pricePerUnit: 14 },
+  { name: "מגבות נייר", unit: "גליל", pricePerUnit: 6 },
+  { name: "סבון כלים", unit: "בקבוק", pricePerUnit: 10 },
+  { name: "ספוגי ניקוי", unit: "חבילה 5 יח'", pricePerUnit: 8 },
+  { name: "כפפות ניקוי חד פעמיות", unit: "חבילה", pricePerUnit: 10 },
+  { name: "שום קלוף", unit: "250 גרם", pricePerUnit: 8 },
+  { name: "בצל", unit: "ק\"ג", pricePerUnit: 5 },
+  { name: "לימונים", unit: "ק\"ג", pricePerUnit: 7 },
+  { name: "תבלינים בסיסיים", unit: "יחידה", pricePerUnit: 10 },
 ];
 
 const TEAM_FILTERS = [...new Set(SHIFTS.map((s) => s.team))];
@@ -945,6 +972,57 @@ function ShoppingItemForm({ onAdd, initial, onCancel }) {
             ביטול
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+function CatalogItemPicker({ catalog, onAdd }) {
+  const [selectedName, setSelectedName] = useState(catalog[0]?.name || "");
+  const [qty, setQty] = useState(1);
+  useEffect(() => {
+    if (!catalog.some((c) => c.name === selectedName)) setSelectedName(catalog[0]?.name || "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalog]);
+  const item = catalog.find((c) => c.name === selectedName);
+  const totalPrice = item ? Math.round((Number(qty) || 0) * item.pricePerUnit * 100) / 100 : 0;
+
+  function submit() {
+    if (!item || !(Number(qty) > 0)) return;
+    onAdd({ name: item.name, qty, unit: item.unit, price: totalPrice, notes: "מחיר משוער מקטלוג" });
+  }
+
+  return (
+    <div className="rounded-2xl p-4 space-y-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <div className="grid sm:grid-cols-3 gap-2">
+        <div className="relative sm:col-span-2">
+          <select
+            value={selectedName} onChange={(e) => setSelectedName(e.target.value)}
+            className="w-full appearance-none pl-9 pr-3 py-2 rounded-xl text-sm outline-none"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          >
+            {catalog.map((c) => <option key={c.name} value={c.name}>{c.name} · ₪{c.pricePerUnit} ל{c.unit}</option>)}
+          </select>
+          <ChevronDown size={15} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: COLORS.text }} />
+        </div>
+        <input
+          type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)}
+          placeholder="כמות"
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+      </div>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <span className="text-xs" style={{ color: COLORS.textMuted }}>
+          מחיר משוער כולל מע"מ: <b style={{ color: COLORS.accentDark }}>₪{totalPrice.toLocaleString()}</b>
+        </span>
+        <button
+          onClick={submit}
+          className="px-4 py-2 rounded-full text-sm font-semibold"
+          style={{ background: COLORS.accent, color: COLORS.bg }}
+        >
+          הוספה לרשימת הקניות
+        </button>
       </div>
     </div>
   );
@@ -6163,17 +6241,19 @@ ${sections}
 
         {tab === "shopping" && (() => {
           const canManageShopping = isAdmin || teamMembers("צוות המטבח").includes(identity);
-          // "Pending" = still missing quantity or price - a quick-picked or
-          // freshly-added item sits here until the kitchen team fills both
-          // in, at which point it automatically counts as part of the real
-          // (confirmed) shopping list. No separate status flag to track -
-          // it's just derived from whether qty/price are filled in.
+          // "Pending" = still missing quantity or price - a manually-added
+          // item sits here until the kitchen team fills both in, at which
+          // point it automatically counts as part of the real (confirmed)
+          // shopping list. No separate status flag to track - it's just
+          // derived from whether qty/price are filled in. Catalog items are
+          // never pending: the picker below computes price × qty up front,
+          // so they land straight in the confirmed list.
           const isPending = (it) => !(Number(it.qty) > 0 && Number(it.price) > 0);
           const pendingItems = shoppingList.filter(isPending);
           const confirmedItems = shoppingList.filter((it) => !isPending(it));
           const totalPrice = confirmedItems.reduce((s, it) => s + (Number(it.price) || 0), 0);
           const sortedConfirmed = [...confirmedItems].sort((a, b) => (a.bought === b.bought ? 0 : a.bought ? 1 : -1));
-          const pickableBasics = BASIC_SHOPPING_ITEMS.filter((name) => !shoppingList.some((it) => it.name === name));
+          const pickableCatalog = SHOPPING_CATALOG.filter((c) => !shoppingList.some((it) => it.name === c.name));
           return (
             <div>
               {/* Aggregate-only, on purpose: the kitchen needs to know how many
@@ -6190,27 +6270,19 @@ ${sections}
                 </div>
               )}
 
-              {canManageShopping && pickableBasics.length > 0 && (
+              {canManageShopping && pickableCatalog.length > 0 && (
                 <div className="mb-4">
-                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>רשימה בסיסית - בחירה מהירה</h3>
-                  <div className="flex flex-wrap gap-1.5">
-                    {pickableBasics.map((name) => (
-                      <button
-                        key={name}
-                        onClick={() => addShoppingItem({ name, qty: "", unit: "", price: "", notes: "" })}
-                        className="text-xs px-3 py-1.5 rounded-full font-semibold"
-                        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-                      >
-                        + {name}
-                      </button>
-                    ))}
-                  </div>
+                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>קטלוג מוצרים - בחירה עם מחיר משוער</h3>
+                  <p className="text-[11px] mb-2" style={{ color: COLORS.textMuted }}>
+                    בוחרים מוצר וכמות - המחיר הכולל (כולל מע"מ) מחושב אוטומטית לפי מחיר משוער ליחידה. לוחצים "הוספה" כדי שהמוצר ייכנס ישר לרשימת הקניות המאושרת.
+                  </p>
+                  <CatalogItemPicker catalog={pickableCatalog} onAdd={addShoppingItem} />
                 </div>
               )}
 
               {canManageShopping && (
                 <div className="mb-4">
-                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>הוספת מוצר אחר</h3>
+                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>הוספת מוצר שלא ברשימה</h3>
                   <ShoppingItemForm onAdd={addShoppingItem} />
                 </div>
               )}
