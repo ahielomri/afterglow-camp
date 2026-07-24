@@ -6016,7 +6016,7 @@ ${sections}
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
               {[
                 { label: "תקציב מתוכנן", value: budgetTotals.planned, icon: Wallet, tint: COLORS.surface },
-                { label: "דמי קמפ שנגבו", value: budgetTotals.duesCollected, icon: Ticket, tint: COLORS.accent2Light },
+                { label: "נגבה בפועל", value: budgetTotals.duesCollected, icon: Ticket, tint: COLORS.accent2Light },
                 { label: "התחייבויות", value: budgetTotals.committed, icon: Clock, tint: budgetTotals.committed > 0 ? COLORS.accentLight : COLORS.surface },
                 { label: "שולם בפועל", value: budgetTotals.paid, icon: Check, tint: COLORS.surface },
                 { label: "יתרה זמינה", value: budgetTotals.remaining, icon: CreditCard, tint: budgetTotals.remaining < 0 ? "#fbe4e2" : COLORS.accent2Light },
