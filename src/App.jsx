@@ -5497,10 +5497,27 @@ ${sections}
                     const myFee = feeOverrides[identity] !== undefined ? Number(feeOverrides[identity]) : campFee;
                     const myRemaining = myFee - myPaid;
                     return (
-                      <div className="text-sm">
-                        שילמת <b style={{ color: COLORS.accent2Dark }}>₪{myPaid.toLocaleString()}</b> מתוך ₪{myFee.toLocaleString()}
-                        {myRemaining > 0 && <span> · נותר <b style={{ color: COLORS.danger }}>₪{myRemaining.toLocaleString()}</b></span>}
-                      </div>
+                      <>
+                        <div className="text-sm">
+                          שילמת <b style={{ color: COLORS.accent2Dark }}>₪{myPaid.toLocaleString()}</b> מתוך ₪{myFee.toLocaleString()}
+                          {myRemaining > 0 && <span> · נותר <b style={{ color: COLORS.danger }}>₪{myRemaining.toLocaleString()}</b></span>}
+                        </div>
+                        {myList.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {myList.map((p) => (
+                              <div key={p.id} className="text-xs rounded-lg px-2.5 py-1.5" style={{ background: COLORS.input, color: COLORS.textMuted }}>
+                                ₪{Number(p.amount).toLocaleString()} · {p.date || "ללא תאריך"}
+                                {p.recordedBy && (
+                                  <>
+                                    {" · נרשם ע\"י "}{p.recordedBy}
+                                    {p.recordedAt ? ` · ${new Date(p.recordedAt).toLocaleString("he-IL")}` : ""}
+                                  </>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
                     );
                   })()}
                 </div>
