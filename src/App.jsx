@@ -5628,8 +5628,8 @@ ${sections}
                 </button>
               </div>
             )}
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-              <div className="flex gap-2 flex-wrap">
+            <div className="mb-4">
+              <div className="flex gap-2 flex-wrap justify-center mb-2">
                 {["הכל", ...TEAM_FILTERS].map((t) => (
                   <button
                     key={t}
@@ -5644,17 +5644,19 @@ ${sections}
                   </button>
                 ))}
               </div>
-              <div className="flex rounded-full p-1" style={{ background: COLORS.surface }}>
-                {[{ id: "list", label: "רשימה" }, { id: "calendar", label: "יומן" }].map((v) => (
-                  <button
-                    key={v.id}
-                    onClick={() => setShiftsView(v.id)}
-                    className="px-3 py-1.5 rounded-full text-xs font-semibold"
-                    style={{ background: shiftsView === v.id ? COLORS.accent2 : "transparent", color: shiftsView === v.id ? COLORS.bg : COLORS.text }}
-                  >
-                    {v.label}
-                  </button>
-                ))}
+              <div className="flex justify-center">
+                <div className="flex rounded-full p-1" style={{ background: COLORS.surface }}>
+                  {[{ id: "list", label: "רשימה" }, { id: "calendar", label: "יומן" }].map((v) => (
+                    <button
+                      key={v.id}
+                      onClick={() => setShiftsView(v.id)}
+                      className="px-3 py-1.5 rounded-full text-xs font-semibold"
+                      style={{ background: shiftsView === v.id ? COLORS.accent2 : "transparent", color: shiftsView === v.id ? COLORS.bg : COLORS.text }}
+                    >
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
