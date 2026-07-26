@@ -4661,7 +4661,9 @@ ${sections}
     );
   }
 
-  const visibleShifts = teamFilter === "הכל" ? SHIFTS : SHIFTS.filter((s) => s.team === teamFilter);
+  const visibleShifts = (teamFilter === "הכל" ? SHIFTS : SHIFTS.filter((s) => s.team === teamFilter))
+    .slice()
+    .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
 
   if (loading) {
     return (
