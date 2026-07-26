@@ -282,90 +282,143 @@ const EQUIPMENT_CONDITIONS = ["תקין", "דורש תיקון", "חסר / אב�
 
 // Price catalog for the kitchen shopping list - common camp staples with
 // an approximate per-unit price (₪, VAT included, as on an Israeli shelf
-// price tag). There's no live connection to a real supermarket price feed
-// from this environment (Shufersal/Rami Levy block direct fetches, and a
-// real Shufersal price-transparency export that was tried turned out to
-// only cover ~18 essentially random SKUs from one store - not usable as a
+// price tag) and a department (category) so the picker can group them.
+// There's no live connection to a real supermarket price feed from this
+// environment (Shufersal/Rami Levy block direct fetches, and a real
+// Shufersal price-transparency export that was tried turned out to only
+// cover ~18 essentially random SKUs from one store - not usable as a
 // catalog), so these were cross-checked via web search against real
 // current listings and price-comparison sites (Pricez/Zap Market) rather
 // than pure guesses - but they're still real-world snapshots, not a live
 // feed, so the kitchen team should correct them as actual receipts come in
 // (either by editing the item after adding it, or updating this list).
 const SHOPPING_CATALOG = [
-  { name: "שמן בישול", unit: "בקבוק 1 ליטר", pricePerUnit: 10 },
-  { name: "מלח", unit: "ק\"ג", pricePerUnit: 4 },
-  { name: "סוכר", unit: "ק\"ג", pricePerUnit: 5 },
-  { name: "קפה נמס", unit: "צנצנת 200 גרם", pricePerUnit: 24 },
-  { name: "תה", unit: "קופסה 25 שקיקים", pricePerUnit: 10 },
-  { name: "אורז", unit: "ק\"ג", pricePerUnit: 7 },
-  { name: "פסטה", unit: "500 גרם", pricePerUnit: 3 },
-  { name: "קטשופ", unit: "בקבוק 750 גרם", pricePerUnit: 10 },
-  { name: "חרדל", unit: "בקבוק", pricePerUnit: 8 },
-  { name: "מיונז", unit: "בקבוק 500 גרם", pricePerUnit: 12 },
-  { name: "ביצים", unit: "תבנית 30 יח'", pricePerUnit: 28 },
-  { name: "שימורי טונה", unit: "יחידה 160 גרם", pricePerUnit: 7 },
-  { name: "שימורי תירס", unit: "יחידה", pricePerUnit: 6 },
-  { name: "רסק עגבניות", unit: "יחידה", pricePerUnit: 5 },
-  { name: "קמח", unit: "ק\"ג", pricePerUnit: 5 },
-  { name: "חומוס וטחינה", unit: "יחידה", pricePerUnit: 16 },
-  { name: "נייר אלומיניום", unit: "גליל", pricePerUnit: 10 },
-  { name: "ניילון נצמד", unit: "גליל", pricePerUnit: 9 },
-  { name: "שקיות זבל גדולות", unit: "חבילה", pricePerUnit: 16 },
-  { name: "צלחות חד פעמיות", unit: "חבילה 50 יח'", pricePerUnit: 8 },
-  { name: "כוסות חד פעמיות", unit: "חבילה 50 יח'", pricePerUnit: 10 },
-  { name: "סכו\"ם חד פעמי", unit: "סט 50 יח'", pricePerUnit: 13 },
-  { name: "מגבות נייר", unit: "גליל", pricePerUnit: 6 },
-  { name: "סבון כלים", unit: "בקבוק", pricePerUnit: 9 },
-  { name: "ספוגי ניקוי", unit: "חבילה 5 יח'", pricePerUnit: 8 },
-  { name: "כפפות ניקוי חד פעמיות", unit: "חבילה", pricePerUnit: 10 },
-  { name: "שום קלוף", unit: "250 גרם", pricePerUnit: 7 },
-  { name: "בצל", unit: "ק\"ג", pricePerUnit: 5 },
-  { name: "לימונים", unit: "ק\"ג", pricePerUnit: 7 },
-  { name: "תבלינים בסיסיים", unit: "יחידה", pricePerUnit: 10 },
-  // Fresh produce
-  { name: "עגבניות", unit: "ק\"ג", pricePerUnit: 6 },
-  { name: "מלפפונים", unit: "ק\"ג", pricePerUnit: 6 },
-  { name: "גזר", unit: "ק\"ג", pricePerUnit: 5 },
-  { name: "תפוחי אדמה", unit: "ק\"ג", pricePerUnit: 5 },
-  { name: "פלפל אדום", unit: "ק\"ג", pricePerUnit: 8 },
-  { name: "כרוב לבן", unit: "ק\"ג", pricePerUnit: 4 },
-  { name: "קישואים", unit: "ק\"ג", pricePerUnit: 6 },
-  { name: "חסה", unit: "יחידה", pricePerUnit: 6 },
-  { name: "תפוחי עץ", unit: "ק\"ג", pricePerUnit: 8 },
-  { name: "בננות", unit: "ק\"ג", pricePerUnit: 7 },
-  { name: "אבטיח", unit: "ק\"ג", pricePerUnit: 3 },
-  // Protein
-  { name: "חזה עוף (שניצל)", unit: "ק\"ג", pricePerUnit: 42 },
-  { name: "בשר טחון/הודו טחון", unit: "ק\"ג", pricePerUnit: 40 },
-  { name: "נקניקיות", unit: "חבילה 400 גרם", pricePerUnit: 18 },
-  { name: "המבורגר קפוא", unit: "חבילה 4 יח'", pricePerUnit: 22 },
-  // Dairy & bread
-  { name: "חלב 3%", unit: "ליטר", pricePerUnit: 8 },
-  { name: "גבינה צהובה", unit: "200 גרם", pricePerUnit: 11 },
-  { name: "גבינת קוטג'", unit: "250 גרם", pricePerUnit: 7 },
-  { name: "יוגורט", unit: "חבילה 4 יח'", pricePerUnit: 12 },
-  { name: "חמאה", unit: "200 גרם", pricePerUnit: 10 },
-  { name: "לחם", unit: "כיכר", pricePerUnit: 9 },
-  // Breakfast/pantry
-  { name: "דגני בוקר", unit: "חבילה", pricePerUnit: 20 },
-  { name: "ריבה", unit: "צנצנת", pricePerUnit: 14 },
-  { name: "ממרח שוקולד", unit: "צנצנת", pricePerUnit: 18 },
-  // Drinks & snacks
-  { name: "מים מינרלים", unit: "מארז 6 בקבוקים", pricePerUnit: 14 },
-  { name: "משקה מוגז", unit: "בקבוק 1.5 ליטר", pricePerUnit: 8 },
-  { name: "מיץ פירות", unit: "קרטון 1 ליטר", pricePerUnit: 9 },
-  { name: "חטיפי אנרגיה", unit: "חבילה", pricePerUnit: 15 },
-  { name: "עוגיות", unit: "חבילה", pricePerUnit: 10 },
-  { name: "חטיף מלוח (במבה/ביסלי)", unit: "שקית", pricePerUnit: 7 },
-  { name: "אגוזים ובוטנים", unit: "שקית 200 גרם", pricePerUnit: 12 },
-  { name: "חטיפי שוקולד", unit: "חבילה", pricePerUnit: 15 },
-  // Cleaning/disposables
-  { name: "מגבונים לחים", unit: "חבילה", pricePerUnit: 10 },
-  { name: "אקונומיקה", unit: "בקבוק", pricePerUnit: 8 },
-  { name: "שקיות אשפה קטנות", unit: "חבילה", pricePerUnit: 8 },
-  { name: "נייר טואלט", unit: "חבילת 24", pricePerUnit: 35 },
-  // Other
-  { name: "סוללות AA", unit: "חבילת 4", pricePerUnit: 20 },
+  // ירקות ופירות
+  { category: "ירקות ופירות", name: "עגבניות", unit: "ק\"ג", pricePerUnit: 6 },
+  { category: "ירקות ופירות", name: "מלפפונים", unit: "ק\"ג", pricePerUnit: 6 },
+  { category: "ירקות ופירות", name: "גזר", unit: "ק\"ג", pricePerUnit: 5 },
+  { category: "ירקות ופירות", name: "תפוחי אדמה", unit: "ק\"ג", pricePerUnit: 5 },
+  { category: "ירקות ופירות", name: "בטטה", unit: "ק\"ג", pricePerUnit: 7 },
+  { category: "ירקות ופירות", name: "פלפל אדום", unit: "ק\"ג", pricePerUnit: 8 },
+  { category: "ירקות ופירות", name: "כרוב לבן", unit: "ק\"ג", pricePerUnit: 4 },
+  { category: "ירקות ופירות", name: "קישואים", unit: "ק\"ג", pricePerUnit: 6 },
+  { category: "ירקות ופירות", name: "חציל", unit: "ק\"ג", pricePerUnit: 6 },
+  { category: "ירקות ופירות", name: "חסה", unit: "יחידה", pricePerUnit: 6 },
+  { category: "ירקות ופירות", name: "בצל", unit: "ק\"ג", pricePerUnit: 5 },
+  { category: "ירקות ופירות", name: "שום קלוף", unit: "250 גרם", pricePerUnit: 7 },
+  { category: "ירקות ופירות", name: "לימונים", unit: "ק\"ג", pricePerUnit: 7 },
+  { category: "ירקות ופירות", name: "פטרוזיליה/כוסברה", unit: "חבילה", pricePerUnit: 4 },
+  { category: "ירקות ופירות", name: "אבוקדו", unit: "יחידה", pricePerUnit: 4 },
+  { category: "ירקות ופירות", name: "תפוחי עץ", unit: "ק\"ג", pricePerUnit: 8 },
+  { category: "ירקות ופירות", name: "בננות", unit: "ק\"ג", pricePerUnit: 7 },
+  { category: "ירקות ופירות", name: "תפוזים", unit: "ק\"ג", pricePerUnit: 6 },
+  { category: "ירקות ופירות", name: "ענבים", unit: "ק\"ג", pricePerUnit: 12 },
+  { category: "ירקות ופירות", name: "אבטיח", unit: "ק\"ג", pricePerUnit: 3 },
+  // חלבון ובשר
+  { category: "חלבון ובשר", name: "ביצים", unit: "תבנית 30 יח'", pricePerUnit: 28 },
+  { category: "חלבון ובשר", name: "חזה עוף (שניצל)", unit: "ק\"ג", pricePerUnit: 42 },
+  { category: "חלבון ובשר", name: "כרעיים עוף", unit: "ק\"ג", pricePerUnit: 28 },
+  { category: "חלבון ובשר", name: "בשר טחון/הודו טחון", unit: "ק\"ג", pricePerUnit: 40 },
+  { category: "חלבון ובשר", name: "נקניקיות", unit: "חבילה 400 גרם", pricePerUnit: 18 },
+  { category: "חלבון ובשר", name: "המבורגר קפוא", unit: "חבילה 4 יח'", pricePerUnit: 22 },
+  { category: "חלבון ובשר", name: "נקניק/סלמי ארוז", unit: "200 גרם", pricePerUnit: 16 },
+  { category: "חלבון ובשר", name: "פילה סלמון", unit: "ק\"ג", pricePerUnit: 85 },
+  { category: "חלבון ובשר", name: "קציצות דגים קפואות", unit: "חבילה", pricePerUnit: 25 },
+  { category: "חלבון ובשר", name: "טופו", unit: "יחידה", pricePerUnit: 10 },
+  // מוצרי חלב ולחם
+  { category: "מוצרי חלב ולחם", name: "חלב 3%", unit: "ליטר", pricePerUnit: 8 },
+  { category: "מוצרי חלב ולחם", name: "גבינה צהובה", unit: "200 גרם", pricePerUnit: 11 },
+  { category: "מוצרי חלב ולחם", name: "גבינה לבנה", unit: "אריזה", pricePerUnit: 6 },
+  { category: "מוצרי חלב ולחם", name: "גבינת קוטג'", unit: "250 גרם", pricePerUnit: 7 },
+  { category: "מוצרי חלב ולחם", name: "יוגורט", unit: "חבילה 4 יח'", pricePerUnit: 12 },
+  { category: "מוצרי חלב ולחם", name: "שמנת מתוקה/מטבח", unit: "אריזה", pricePerUnit: 7 },
+  { category: "מוצרי חלב ולחם", name: "חמאה", unit: "200 גרם", pricePerUnit: 10 },
+  { category: "מוצרי חלב ולחם", name: "לחם", unit: "כיכר", pricePerUnit: 9 },
+  { category: "מוצרי חלב ולחם", name: "לחם טוסט", unit: "אריזה", pricePerUnit: 12 },
+  { category: "מוצרי חלב ולחם", name: "פיתות", unit: "חבילה 10 יח'", pricePerUnit: 13 },
+  { category: "מוצרי חלב ולחם", name: "לחמניות המבורגר", unit: "חבילה 6 יח'", pricePerUnit: 12 },
+  { category: "מוצרי חלב ולחם", name: "בייגלה", unit: "חבילה", pricePerUnit: 10 },
+  // קטניות ושימורים
+  { category: "קטניות ושימורים", name: "שימורי טונה", unit: "יחידה 160 גרם", pricePerUnit: 7 },
+  { category: "קטניות ושימורים", name: "שימורי תירס", unit: "יחידה", pricePerUnit: 6 },
+  { category: "קטניות ושימורים", name: "שימורי אפונה וגזר", unit: "יחידה", pricePerUnit: 9 },
+  { category: "קטניות ושימורים", name: "רסק עגבניות", unit: "יחידה", pricePerUnit: 5 },
+  { category: "קטניות ושימורים", name: "חומוס וטחינה", unit: "יחידה", pricePerUnit: 16 },
+  { category: "קטניות ושימורים", name: "עדשים ירוקות", unit: "500 גרם", pricePerUnit: 4 },
+  { category: "קטניות ושימורים", name: "שעועית לבנה יבשה", unit: "500 גרם", pricePerUnit: 4 },
+  { category: "קטניות ושימורים", name: "שעועית אדומה משומרת", unit: "יחידה", pricePerUnit: 6 },
+  { category: "קטניות ושימורים", name: "גרגירי חומוס יבשים", unit: "500 גרם", pricePerUnit: 4 },
+  { category: "קטניות ושימורים", name: "קינואה", unit: "500 גרם", pricePerUnit: 5 },
+  // יבשים ומזווה
+  { category: "יבשים ומזווה", name: "שמן בישול", unit: "בקבוק 1 ליטר", pricePerUnit: 10 },
+  { category: "יבשים ומזווה", name: "שמן זית", unit: "בקבוק 750 מ\"ל", pricePerUnit: 25 },
+  { category: "יבשים ומזווה", name: "אורז", unit: "ק\"ג", pricePerUnit: 7 },
+  { category: "יבשים ומזווה", name: "פסטה", unit: "500 גרם", pricePerUnit: 3 },
+  { category: "יבשים ומזווה", name: "קוסקוס", unit: "500 גרם", pricePerUnit: 7 },
+  { category: "יבשים ומזווה", name: "בורגול/סולת", unit: "500 גרם", pricePerUnit: 6 },
+  { category: "יבשים ומזווה", name: "קמח", unit: "ק\"ג", pricePerUnit: 5 },
+  { category: "יבשים ומזווה", name: "מלח", unit: "ק\"ג", pricePerUnit: 4 },
+  { category: "יבשים ומזווה", name: "סוכר", unit: "ק\"ג", pricePerUnit: 5 },
+  // תבלינים ואפייה
+  { category: "תבלינים ואפייה", name: "תבלינים בסיסיים", unit: "יחידה", pricePerUnit: 10 },
+  { category: "תבלינים ואפייה", name: "פלפל שחור גרוס", unit: "יחידה", pricePerUnit: 12 },
+  { category: "תבלינים ואפייה", name: "פפריקה מתוקה", unit: "יחידה", pricePerUnit: 10 },
+  { category: "תבלינים ואפייה", name: "כמון", unit: "יחידה", pricePerUnit: 10 },
+  { category: "תבלינים ואפייה", name: "אבקת אפייה", unit: "שקית", pricePerUnit: 6 },
+  { category: "תבלינים ואפייה", name: "סוכר חום", unit: "ק\"ג", pricePerUnit: 7 },
+  { category: "תבלינים ואפייה", name: "דבש", unit: "צנצנת", pricePerUnit: 20 },
+  // רטבים ותוספות
+  { category: "רטבים ותוספות", name: "קטשופ", unit: "בקבוק 750 גרם", pricePerUnit: 10 },
+  { category: "רטבים ותוספות", name: "חרדל", unit: "בקבוק", pricePerUnit: 8 },
+  { category: "רטבים ותוספות", name: "מיונז", unit: "בקבוק 500 גרם", pricePerUnit: 12 },
+  { category: "רטבים ותוספות", name: "רוטב סויה", unit: "בקבוק", pricePerUnit: 12 },
+  { category: "רטבים ותוספות", name: "חומץ יין", unit: "בקבוק", pricePerUnit: 8 },
+  { category: "רטבים ותוספות", name: "שמן שומשום", unit: "בקבוק קטן", pricePerUnit: 15 },
+  // דגני בוקר וממרחים
+  { category: "דגני בוקר וממרחים", name: "דגני בוקר", unit: "חבילה", pricePerUnit: 20 },
+  { category: "דגני בוקר וממרחים", name: "ריבה", unit: "צנצנת", pricePerUnit: 14 },
+  { category: "דגני בוקר וממרחים", name: "ממרח שוקולד", unit: "צנצנת", pricePerUnit: 18 },
+  { category: "דגני בוקר וממרחים", name: "קפה נמס", unit: "צנצנת 200 גרם", pricePerUnit: 24 },
+  { category: "דגני בוקר וממרחים", name: "תה", unit: "קופסה 25 שקיקים", pricePerUnit: 10 },
+  // משקאות
+  { category: "משקאות", name: "מים מינרלים", unit: "מארז 6 בקבוקים", pricePerUnit: 14 },
+  { category: "משקאות", name: "משקה מוגז", unit: "בקבוק 1.5 ליטר", pricePerUnit: 8 },
+  { category: "משקאות", name: "מיץ פירות", unit: "קרטון 1 ליטר", pricePerUnit: 9 },
+  { category: "משקאות", name: "משקה אנרגיה", unit: "פחית", pricePerUnit: 7 },
+  // חטיפים וממתקים
+  { category: "חטיפים וממתקים", name: "חטיפי אנרגיה", unit: "חבילה", pricePerUnit: 15 },
+  { category: "חטיפים וממתקים", name: "עוגיות", unit: "חבילה", pricePerUnit: 10 },
+  { category: "חטיפים וממתקים", name: "חטיף מלוח (במבה/ביסלי)", unit: "שקית", pricePerUnit: 7 },
+  { category: "חטיפים וממתקים", name: "אגוזים ובוטנים", unit: "שקית 200 גרם", pricePerUnit: 12 },
+  { category: "חטיפים וממתקים", name: "חטיפי שוקולד", unit: "חבילה", pricePerUnit: 15 },
+  { category: "חטיפים וממתקים", name: "וופלים", unit: "חבילה", pricePerUnit: 10 },
+  { category: "חטיפים וממתקים", name: "מרשמלו (לגחלים)", unit: "שקית", pricePerUnit: 12 },
+  { category: "חטיפים וממתקים", name: "פופקורן", unit: "חבילה", pricePerUnit: 8 },
+  // חד פעמי ומגבות
+  { category: "חד פעמי ומגבות", name: "צלחות חד פעמיות", unit: "חבילה 50 יח'", pricePerUnit: 8 },
+  { category: "חד פעמי ומגבות", name: "כוסות חד פעמיות", unit: "חבילה 50 יח'", pricePerUnit: 10 },
+  { category: "חד פעמי ומגבות", name: "קעריות חד פעמיות", unit: "חבילה", pricePerUnit: 9 },
+  { category: "חד פעמי ומגבות", name: "סכו\"ם חד פעמי", unit: "סט 50 יח'", pricePerUnit: 13 },
+  { category: "חד פעמי ומגבות", name: "מפיות נייר", unit: "חבילה", pricePerUnit: 6 },
+  { category: "חד פעמי ומגבות", name: "מגבות נייר", unit: "גליל", pricePerUnit: 6 },
+  { category: "חד פעמי ומגבות", name: "נייר אלומיניום", unit: "גליל", pricePerUnit: 10 },
+  { category: "חד פעמי ומגבות", name: "ניילון נצמד", unit: "גליל", pricePerUnit: 9 },
+  { category: "חד פעמי ומגבות", name: "שקיות סנדוויץ'/הקפאה", unit: "חבילה", pricePerUnit: 10 },
+  { category: "חד פעמי ומגבות", name: "נייר טואלט", unit: "חבילת 24", pricePerUnit: 35 },
+  // ניקיון
+  { category: "ניקיון", name: "סבון כלים", unit: "בקבוק", pricePerUnit: 9 },
+  { category: "ניקיון", name: "ספוגי ניקוי", unit: "חבילה 5 יח'", pricePerUnit: 8 },
+  { category: "ניקיון", name: "כפפות ניקוי חד פעמיות", unit: "חבילה", pricePerUnit: 10 },
+  { category: "ניקיון", name: "שקיות זבל גדולות", unit: "חבילה", pricePerUnit: 16 },
+  { category: "ניקיון", name: "שקיות אשפה קטנות", unit: "חבילה", pricePerUnit: 8 },
+  { category: "ניקיון", name: "אקונומיקה", unit: "בקבוק", pricePerUnit: 8 },
+  { category: "ניקיון", name: "ספריי ניקוי כללי", unit: "בקבוק", pricePerUnit: 12 },
+  { category: "ניקיון", name: "מגבונים לחים", unit: "חבילה", pricePerUnit: 10 },
+  { category: "ניקיון", name: "אבקת כביסה", unit: "אריזה", pricePerUnit: 35 },
+  { category: "ניקיון", name: "מרכך כביסה", unit: "בקבוק", pricePerUnit: 15 },
+  // שונות
+  { category: "שונות", name: "סוללות AA", unit: "חבילת 4", pricePerUnit: 20 },
+  { category: "שונות", name: "גפרורים/מצית", unit: "יחידה", pricePerUnit: 5 },
 ];
 
 const TEAM_FILTERS = [...new Set(SHIFTS.map((s) => s.team))];
@@ -1077,7 +1130,17 @@ function CatalogItemPicker({ catalog, onAdd }) {
             className="w-full appearance-none pl-9 pr-3 py-2 rounded-xl text-sm outline-none"
             style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
           >
-            {catalog.map((c) => <option key={c.name} value={c.name}>{c.name} · ₪{c.pricePerUnit} ל{c.unit}</option>)}
+            {Object.entries(
+              catalog.reduce((groups, c) => {
+                const cat = c.category || "אחר";
+                (groups[cat] = groups[cat] || []).push(c);
+                return groups;
+              }, {})
+            ).map(([cat, items]) => (
+              <optgroup key={cat} label={cat}>
+                {items.map((c) => <option key={c.name} value={c.name}>{c.name} · ₪{c.pricePerUnit} ל{c.unit}</option>)}
+              </optgroup>
+            ))}
           </select>
           <ChevronDown size={15} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: COLORS.text }} />
         </div>
