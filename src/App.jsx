@@ -4756,7 +4756,7 @@ ${sections}
           style={{
             position: "absolute",
             inset: 0,
-            background: `linear-gradient(180deg, ${COLORS.surface}cc 0%, ${COLORS.surface}e6 60%, ${COLORS.surface} 100%)`,
+            background: `linear-gradient(180deg, ${COLORS.surface}40 0%, ${COLORS.surface}66 55%, ${COLORS.surface}b3 100%)`,
           }}
         />
         <div className="relative flex items-center gap-4 max-w-4xl mx-auto">
