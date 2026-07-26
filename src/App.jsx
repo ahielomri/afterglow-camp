@@ -2612,6 +2612,7 @@ export default function App() {
   const [teamFilter, setTeamFilter] = useState("הכל");
   const [shiftsView, setShiftsView] = useState("calendar");
   const [expandedTeam, setExpandedTeam] = useState(null);
+  const [expandedMemberShifts, setExpandedMemberShifts] = useState(null);
   const [contactingRideMember, setContactingRideMember] = useState(null);
   const [toast, setToast] = useState(null);
   const [pushStatus, setPushStatus] = useState("unsupported");
@@ -5034,25 +5035,47 @@ ${sections}
                   כמות המשמרות שכל חבר/ה שיבץ/ה את עצמו/ה אליהן (לא כולל פירוקים - כולם משתתפים בו). מי שאין לו/ה משמרת בכלל מוצג/ת עם 0.
                 </p>
                 <div className="space-y-1.5">
-                  {memberShiftCounts.map((m) => (
-                    <div
-                      key={m.name}
-                      className="flex items-center justify-between px-3 py-2 rounded-xl text-sm"
-                      style={{ background: m.count === 0 ? COLORS.accent2Light : COLORS.surface }}
-                    >
-                      <span>{m.name}</span>
-                      <span
-                        className="px-2.5 py-0.5 rounded-full text-xs font-bold"
-                        style={{
-                          fontFamily: FONT_NUM,
-                          background: m.count === 0 ? COLORS.accent2 : COLORS.accentLight,
-                          color: m.count === 0 ? COLORS.bg : COLORS.accentDark,
-                        }}
-                      >
-                        {m.count}
-                      </span>
-                    </div>
-                  ))}
+                  {memberShiftCounts.map((m) => {
+                    const open = expandedMemberShifts === m.name;
+                    const theirShifts = SHIFTS.filter((s) => s.id !== TEARDOWN_ID && (assignments[s.id] || []).includes(m.name));
+                    return (
+                      <div key={m.name} className="rounded-xl overflow-hidden" style={{ background: m.count === 0 ? COLORS.accent2Light : COLORS.surface }}>
+                        <button
+                          onClick={() => setExpandedMemberShifts(open ? null : m.name)}
+                          className="w-full flex items-center justify-between px-3 py-2 text-sm text-right"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <ChevronDown size={13} style={{ transform: open ? "rotate(180deg)" : "none", opacity: 0.6 }} />
+                            {m.name}
+                          </span>
+                          <span
+                            className="px-2.5 py-0.5 rounded-full text-xs font-bold"
+                            style={{
+                              fontFamily: FONT_NUM,
+                              background: m.count === 0 ? COLORS.accent2 : COLORS.accentLight,
+                              color: m.count === 0 ? COLORS.bg : COLORS.accentDark,
+                            }}
+                          >
+                            {m.count}
+                          </span>
+                        </button>
+                        {open && (
+                          <div className="px-3 pb-2.5 pt-0.5 space-y-1">
+                            {theirShifts.length === 0 ? (
+                              <p className="text-xs" style={{ color: COLORS.textMuted }}>אין משמרות משובצות.</p>
+                            ) : (
+                              theirShifts.map((s) => (
+                                <div key={s.id} className="text-xs rounded-lg px-2.5 py-1.5" style={{ background: COLORS.input }}>
+                                  <span className="font-semibold">{s.title}</span>
+                                  <span style={{ color: COLORS.textMuted }}> · {formatDate(s.date)}{!s.noTime ? ` · ${s.start}–${s.end}` : ""}</span>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
