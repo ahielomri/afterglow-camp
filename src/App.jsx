@@ -5713,7 +5713,14 @@ ${sections}
                               <TeardownTaskPicker selected={teardownTasks[identity] || []} onToggle={toggleTeardownTask} compact />
                             ) : (
                               <div className="flex items-center justify-between mt-2">
-                                <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: COLORS.accentLight, color: COLORS.accentDark, fontFamily: FONT_NUM }}>{s.noLimit ? "ללא הגבלה" : `${names.length}/${spots}`}</span>
+                                <div className="flex items-center gap-1.5">
+                                  {s.noLimit ? (
+                                    <div className="shrink-0 flex items-center justify-center rounded-full text-[10px] font-bold" style={{ width: 22, height: 22, background: COLORS.accentLight, color: COLORS.accentDark }}>∞</div>
+                                  ) : (
+                                    <FillRing filled={names.length} total={spots} size={22} />
+                                  )}
+                                  <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: COLORS.accentLight, color: COLORS.accentDark, fontFamily: FONT_NUM }}>{s.noLimit ? "ללא הגבלה" : `${names.length}/${spots}`}</span>
+                                </div>
                                 <button
                                   onClick={() => (joined ? leave(s) : join(s))}
                                   disabled={full}
