@@ -4324,7 +4324,15 @@ ${sections}
 
   const allMembers = useMemo(() => {
     const byName = new Map();
-    [...MEMBERS, ...extraMembers]
+    // Base list is the static roster + the locally-synced "extra members"
+    // cache (kv_store) - needed pre-login, when we can't read the real
+    // `members` table yet. Once logged in, `dbRoles` is a fresh
+    // `select name, role from members` from the real table, so it's
+    // unioned in too: that catches any member whose kv_store sync missed
+    // or raced (the same class of bug the activity log had), so a newly
+    // added member always shows up everywhere - including the dues list -
+    // even if the redundant local cache never got their name.
+    [...MEMBERS, ...extraMembers, ...Object.keys(dbRoles).map((name) => ({ name, role: dbRoles[name] }))]
       .filter((m) => !removedMembers.includes(m.name))
       .forEach((m) => {
         // Defensive de-dup: collapse repeated entries for the same name
