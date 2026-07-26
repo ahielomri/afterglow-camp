@@ -5326,10 +5326,15 @@ ${sections}
             <div className="grid grid-cols-3 gap-2 sm:gap-4">
               {[
                 { label: "המשמרות שלי", value: myShifts.length },
-                { label: "מקומות פנויים במשמרות", value: openShiftsCount },
+                { label: "מקומות פנויים במשמרות", value: openShiftsCount, onClick: () => setTab("shifts") },
                 { label: "ימים לפתיחת השערים", value: daysUntil() },
               ].map((c) => (
-                <div key={c.label} className="rounded-2xl p-2.5 sm:p-5" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                <div
+                  key={c.label}
+                  onClick={c.onClick}
+                  className="rounded-2xl p-2.5 sm:p-5"
+                  style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, cursor: c.onClick ? "pointer" : "default" }}
+                >
                   <div className="text-xl sm:text-3xl font-black mt-1" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
                   <div className="text-[10px] sm:text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
                 </div>
