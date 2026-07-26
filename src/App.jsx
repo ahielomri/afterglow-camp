@@ -6640,15 +6640,16 @@ ${sections}
               <span className="text-xs pb-2" style={{ color: COLORS.textMuted }}>חל אוטומטית על כל חברי הקמפ</span>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 mb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
               {[
-                { label: "סה\"כ לגבייה", value: paymentTotals.due },
-                { label: "סה\"כ נגבה", value: paymentTotals.paid },
-                { label: "יתרה לגבייה", value: paymentTotals.remaining },
+                { label: "חברי קמפ", value: allMembers.length, prefix: "" },
+                { label: "סה\"כ לגבייה", value: paymentTotals.due, prefix: "₪" },
+                { label: "סה\"כ נגבה", value: paymentTotals.paid, prefix: "₪" },
+                { label: "יתרה לגבייה", value: paymentTotals.remaining, prefix: "₪" },
               ].map((c) => (
                 <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                   <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: c.label === "יתרה לגבייה" && c.value > 0 ? COLORS.danger : COLORS.text }}>
-                    ₪{c.value.toLocaleString()}
+                    {c.prefix}{c.value.toLocaleString()}
                   </div>
                   <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
                 </div>
