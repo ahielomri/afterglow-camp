@@ -29,6 +29,8 @@ import {
   listLastSeen,
   notifyOwner,
   getDietaryPreferenceCounts,
+  insertActivityLog,
+  listActivityLog,
 } from "./storage.js";
 
 // ---------------------------------------------------------------------------
@@ -2639,7 +2641,7 @@ export default function App() {
       const [
         rawAssignments, rawBudget, rawCatBudget, rawTeardown, rawPayments, rawFee,
         rawLeads, rawPhones, rawRides, rawFeeOv, rawEmails, rawWhatsappConsent, rawPersonalCalendarAdds, rawChecklists,
-        rawManualTeam, rawLog, rawLogins, rawExtra, rawRemoved,
+        rawManualTeam, rawLogins, rawExtra, rawRemoved,
         rawAnn, rawPolls, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories, rawRideMatches,
         rawShoppingList, rawShoppingRequests, rawExtraTeams, rawCustomChecklists,
       ] = await Promise.all([
@@ -2658,7 +2660,6 @@ export default function App() {
         safeGet("personal-calendar-adds", true),
         safeGet("team-checklists", true),
         safeGet("manual-team-members", true),
-        safeGet("activity-log", true),
         safeGet("login-history", true),
         safeGet("extra-members", true),
         safeGet("removed-members", true),
@@ -2718,7 +2719,6 @@ export default function App() {
       setPersonalCalendarAddsState(rawPersonalCalendarAdds ? JSON.parse(rawPersonalCalendarAdds) : {});
       setChecklistState(rawChecklists ? JSON.parse(rawChecklists) : {});
       setManualTeamMembers(rawManualTeam ? JSON.parse(rawManualTeam) : {});
-      setActivityLog(rawLog ? JSON.parse(rawLog) : []);
       setLoginHistory(rawLogins ? JSON.parse(rawLogins) : []);
       {
         const parsedExtra = rawExtra ? JSON.parse(rawExtra) : [];
@@ -3338,13 +3338,18 @@ export default function App() {
   }
 
   async function logActivity(action, details, actorOverride) {
-    const entry = { ts: Date.now(), actor: actorOverride || identity || "לא ידוע", action, details: details || "" };
-    const latest = await getFreshShared("activity-log", activityLog);
-    const next = [entry, ...latest].slice(0, 200);
-    setActivityLog(next);
+    const actor = actorOverride || identity || "לא ידוע";
+    const entry = { ts: Date.now(), actor, action, details: details || "" };
+    // Optimistic local update so the owner's own screen reflects it
+    // immediately if they're looking at the logs tab; the real write below
+    // is a single INSERT (see storage.js) - no read-modify-write race, and
+    // only one round trip instead of two.
+    setActivityLog((prev) => [entry, ...prev].slice(0, 200));
     try {
-      await window.storage.set("activity-log", JSON.stringify(next), true);
-    } catch {}
+      await insertActivityLog(actor, action, details || "");
+    } catch (err) {
+      console.error("logActivity failed", err);
+    }
   }
 
   function overlaps(a, b) {
@@ -3388,7 +3393,7 @@ export default function App() {
     setLogsRefreshing(true);
     try {
       const [freshActivity, freshLogins, freshLastSeen] = await Promise.all([
-        getFreshShared("activity-log", activityLog),
+        listActivityLog().catch(() => activityLog),
         getFreshShared("login-history", loginHistory),
         listLastSeen().catch(() => lastSeenMap || {}),
       ]);

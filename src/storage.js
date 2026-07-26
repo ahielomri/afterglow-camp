@@ -198,6 +198,28 @@ export async function listLastSeen() {
   return map;
 }
 
+// Real table instead of a kv_store blob - a single INSERT can't race/clobber
+// another member's concurrent entry the way a read-modify-write of one
+// shared JSON array can, and it's one round trip instead of two (read the
+// latest array, then write it back), which made this the most likely write
+// in the whole app to get silently abandoned if someone navigated away
+// right after their action (exactly when it ran, at the very end of the
+// real action they cared about).
+export async function insertActivityLog(actor, action, details) {
+  const { error } = await supabase.from("activity_log").insert({ actor, action, details: details || "" });
+  if (error) throw error;
+}
+
+export async function listActivityLog(limit = 200) {
+  const { data, error } = await supabase
+    .from("activity_log")
+    .select("ts, actor, action, details")
+    .order("id", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
 // Bulk version used once per login to populate every member's role for
 // the roster/admin views.
 export async function getAllMemberRoles() {
