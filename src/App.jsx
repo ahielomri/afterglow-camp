@@ -5322,6 +5322,18 @@ ${sections}
                 </p>
               </div>
             )}
+            {profileComplete && myShifts.length === 0 && (
+              <button
+                onClick={() => setTab("shifts")}
+                className="w-full text-right rounded-2xl p-4 mb-4"
+                style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}
+              >
+                <div className="text-sm font-bold mb-1" style={{ color: COLORS.accentDark }}>⏰ עדיין לא נרשמת לאף משמרת</div>
+                <p className="text-xs" style={{ color: COLORS.textMuted }}>
+                  לחצו כאן כדי לעבור לשיבוץ עצמי ולבחור משמרת.
+                </p>
+              </button>
+            )}
 
             <div className="grid grid-cols-3 gap-2 sm:gap-4">
               {[
@@ -5629,12 +5641,15 @@ ${sections}
               </div>
             )}
             <div className="mb-4">
-              <div className="flex gap-2 flex-wrap justify-center mb-2">
+              <div
+                className="grid gap-2 justify-items-center mb-2"
+                style={{ gridTemplateColumns: `repeat(${Math.ceil((TEAM_FILTERS.length + 1) / 2)}, minmax(0, 1fr))` }}
+              >
                 {["הכל", ...TEAM_FILTERS].map((t) => (
                   <button
                     key={t}
                     onClick={() => setTeamFilter(t)}
-                    className="px-3 py-1.5 rounded-full text-xs font-semibold"
+                    className="w-full px-3 py-1.5 rounded-full text-xs font-semibold"
                     style={{
                       background: teamFilter === t ? COLORS.accent : COLORS.surface,
                       color: teamFilter === t ? COLORS.bg : COLORS.text,
@@ -5679,9 +5694,9 @@ ${sections}
                         const joined = isJoined(s.id);
                         const full = !s.noLimit && names.length >= spots && !joined;
                         return (
-                          <div key={s.id} className="rounded-2xl p-3" style={{ background: COLORS.input, borderRight: `3px solid ${joined ? COLORS.accent2 : COLORS.accent}` }}>
+                          <div key={s.id} className="rounded-2xl p-3" style={{ background: full ? COLORS.divider : COLORS.input, borderRight: `3px solid ${joined ? COLORS.accent2 : full ? COLORS.textMuted : COLORS.accent}`, opacity: full ? 0.75 : 1 }}>
                             {!isTeardown && !s.noTime && (
-                              <div className="text-xs flex items-center gap-1" style={{ color: COLORS.accentDark, fontFamily: FONT_NUM }}>
+                              <div className="text-xs flex items-center gap-1" style={{ color: full ? COLORS.textMuted : COLORS.accentDark, fontFamily: FONT_NUM }}>
                                 <Clock size={11} /> {s.start}–{s.end}
                               </div>
                             )}
@@ -5738,7 +5753,7 @@ ${sections}
                 const joined = isJoined(s.id);
                 const full = !s.noLimit && names.length >= spots && !joined;
                 return (
-                  <div key={s.id} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                  <div key={s.id} className="rounded-2xl p-4" style={{ background: full ? COLORS.divider : COLORS.surface, border: `1px solid ${COLORS.divider}`, opacity: full ? 0.75 : 1 }}>
                   <div className="flex items-center gap-4">
                     {s.noLimit ? (
                       <div className="shrink-0 flex items-center justify-center rounded-full text-base font-bold" style={{ width: 34, height: 34, background: COLORS.accentLight, color: COLORS.accentDark }}>∞</div>
@@ -5748,7 +5763,7 @@ ${sections}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold">{s.title}</span>
-                        <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>{s.team}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: full ? COLORS.surface2 : COLORS.accentLight, color: full ? COLORS.textMuted : COLORS.accentDark }}>{s.team}</span>
                         {isTeardown && <span className="text-xs" style={{ color: COLORS.textMuted }}>כולם משתתפים</span>}
                         {s.noLimit && <span className="text-xs" style={{ color: COLORS.textMuted }}>ללא הגבלת מקומות</span>}
                       </div>
