@@ -4767,7 +4767,7 @@ ${sections}
             <p className="text-sm" style={{ color: COLORS.textMuted }}>מערכת ניהול קמפ · מידברן 2026</p>
           </div>
           <div className="text-center px-2 py-1">
-            <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: "#2a6473", textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>{daysUntil()}</div>
+            <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.text, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>{daysUntil()}</div>
             <div className="text-xs font-bold" style={{ color: "#2a6473", textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>ימים לפתיחת השערים</div>
           </div>
         </div>
