@@ -2629,6 +2629,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("dashboard-personal");
   const [adminSubTab, setAdminSubTab] = useState("overview");
+  const [expandedNavCategory, setExpandedNavCategory] = useState(null);
   const [teamFilter, setTeamFilter] = useState("הכל");
   const [shiftsView, setShiftsView] = useState("calendar");
   const [expandedTeam, setExpandedTeam] = useState(null);
@@ -4669,6 +4670,37 @@ ${sections}
     { id: "equipment", label: "ציוד קמפ", icon: Package },
     { id: "shopping", label: "קניות מטבח", icon: ShoppingCart },
   ];
+  function renderNavItem(t, fullWidth) {
+    const locked = !profileComplete && !PROFILE_GATE_EXEMPT_TABS.includes(t.id);
+    const active = tab === t.id;
+    return (
+      <button
+        key={t.id}
+        onClick={() => {
+          if (locked) { showToast("כדי להמשיך להשתמש באפליקציה צריך קודם למלא את הפרטים החסרים בלוח הבקרה האישי", "error"); return; }
+          setTab(t.id);
+          setExpandedNavCategory(null);
+        }}
+        title={locked ? "יש להשלים קודם את הפרטים האישיים" : undefined}
+        className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors relative text-center"
+        style={{
+          flex: fullWidth ? "1 1 100%" : "1 1 calc(50% - 4px)",
+          background: active ? COLORS.accent : COLORS.bg,
+          color: active ? COLORS.bg : COLORS.text,
+          border: `1px solid ${active ? COLORS.accent : COLORS.divider}`,
+          opacity: locked ? 0.45 : 1,
+          cursor: locked ? "not-allowed" : "pointer",
+        }}
+      >
+        {locked ? <LockKeyhole size={14} /> : <t.icon size={14} />}
+        {t.label}
+        {t.id === "board" && !locked && hasNewBoardItems && (
+          <span className="rounded-full" style={{ position: "absolute", top: 4, insetInlineEnd: 4, width: 6, height: 6, background: COLORS.danger }} />
+        )}
+      </button>
+    );
+  }
+
   const visibleShifts = (teamFilter === "הכל" ? SHIFTS : SHIFTS.filter((s) => s.team === teamFilter))
     .slice()
     .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
@@ -4771,30 +4803,26 @@ ${sections}
 
         <div className="flex gap-2">
           {[
-            { key: "personal", label: "אישי", tabs: navPersonalTabs, landing: "dashboard-personal" },
-            { key: "camp", label: "קמפ", tabs: navCampTabs, landing: navCampTabs[0].id },
+            { key: "personal", label: "אישי", tabs: navPersonalTabs },
+            { key: "camp", label: "קמפ", tabs: navCampTabs },
           ].map((cat) => {
+            const open = expandedNavCategory === cat.key;
             const activeTabInCat = cat.tabs.find((t) => t.id === tab);
             const showBadge = cat.key === "personal" && hasNewBoardItems;
             return (
               <button
                 key={cat.key}
-                onClick={() => {
-                  if (!profileComplete && !PROFILE_GATE_EXEMPT_TABS.includes(cat.landing)) {
-                    showToast("כדי להמשיך להשתמש באפליקציה צריך קודם למלא את הפרטים החסרים בלוח הבקרה האישי", "error");
-                    return;
-                  }
-                  setTab(cat.landing);
-                }}
+                onClick={() => setExpandedNavCategory(open ? null : cat.key)}
                 className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl text-sm font-bold transition-colors"
                 style={{
                   position: "relative",
-                  background: activeTabInCat ? COLORS.accentLight : COLORS.surface,
-                  color: activeTabInCat ? COLORS.accentDark : COLORS.textMuted,
-                  border: `1px solid ${activeTabInCat ? COLORS.accent : COLORS.divider}`,
+                  background: open || activeTabInCat ? COLORS.accentLight : COLORS.surface,
+                  color: open || activeTabInCat ? COLORS.accentDark : COLORS.textMuted,
+                  border: `1px solid ${open ? COLORS.accent : COLORS.divider}`,
                 }}
               >
                 <span className="truncate">{activeTabInCat ? `${cat.label} | ${activeTabInCat.label}` : cat.label}</span>
+                <ChevronDown size={13} style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
                 {showBadge && (
                   <span className="rounded-full" style={{ position: "absolute", top: 6, insetInlineEnd: 10, width: 7, height: 7, background: COLORS.danger }} />
                 )}
@@ -4802,6 +4830,14 @@ ${sections}
             );
           })}
         </div>
+
+        {expandedNavCategory && (
+          <div className="mt-2 rounded-2xl p-3 flex flex-wrap gap-2" style={{ background: COLORS.input, border: `1px solid ${COLORS.divider}` }}>
+            {expandedNavCategory === "personal"
+              ? navPersonalTabs.map((t) => renderNavItem(t, t.id === "dashboard-personal"))
+              : navCampTabs.map((t) => renderNavItem(t))}
+          </div>
+        )}
       </div>
       </div>
 
@@ -5427,20 +5463,6 @@ ${sections}
                 </p>
               </button>
             )}
-
-            <button
-              onClick={() => setTab("board")}
-              className="w-full flex items-center justify-between gap-2 rounded-2xl p-3 mb-3 relative"
-              style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}
-            >
-              <span className="flex items-center gap-2 text-sm font-bold" style={{ color: COLORS.text }}>
-                <Megaphone size={16} style={{ color: COLORS.accentDark }} /> לוח מודעות
-              </span>
-              <ChevronDown size={15} style={{ transform: "rotate(-90deg)", color: COLORS.textMuted }} />
-              {hasNewBoardItems && (
-                <span className="rounded-full" style={{ position: "absolute", top: 8, insetInlineEnd: 10, width: 7, height: 7, background: COLORS.danger }} />
-              )}
-            </button>
 
             <div className="grid grid-cols-3 gap-2 sm:gap-4">
               {[
@@ -6163,19 +6185,6 @@ ${sections}
 
         {tab === "budget" && (
           <div>
-            <div className="flex flex-wrap gap-2 mb-5">
-              {navCampTabs.filter((t) => t.id !== "budget").map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setTab(t.id)}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold"
-                  style={{ background: COLORS.surface, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-                >
-                  <t.icon size={14} style={{ color: COLORS.accentDark }} /> {t.label}
-                </button>
-              ))}
-            </div>
-
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
               {[
                 { label: "תקציב מתוכנן", value: budgetTotals.planned, icon: Wallet, tint: COLORS.surface },
