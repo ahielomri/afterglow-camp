@@ -3504,7 +3504,7 @@ export default function App() {
     if (!amount) return;
     const latest = await getFreshShared("member-payments", memberPayments);
     const list = Array.isArray(latest[name]) ? latest[name] : [];
-    const next = { ...latest, [name]: [...list, { id: Date.now().toString(), amount: Number(amount), date }] };
+    const next = { ...latest, [name]: [...list, { id: Date.now().toString(), amount: Number(amount), date, recordedBy: identity, recordedAt: Date.now() }] };
     setMemberPayments(next);
     try {
       await window.storage.set("member-payments", JSON.stringify(next), true);
@@ -6717,7 +6717,15 @@ ${sections}
                           <div className="space-y-1">
                             {list.map((p) => (
                               <div key={p.id} className="flex items-center justify-between text-xs rounded-lg px-2.5 py-1.5" style={{ background: COLORS.input }}>
-                                <span>₪{Number(p.amount).toLocaleString()} · {p.date || "ללא תאריך"}</span>
+                                <span>
+                                  ₪{Number(p.amount).toLocaleString()} · {p.date || "ללא תאריך"}
+                                  {p.recordedBy && (
+                                    <span style={{ color: COLORS.textMuted }}>
+                                      {" · נרשם ע\"י "}{p.recordedBy}
+                                      {p.recordedAt ? ` · ${new Date(p.recordedAt).toLocaleString("he-IL")}` : ""}
+                                    </span>
+                                  )}
+                                </span>
                                 <button onClick={() => removePayment(m.name, p.id)} style={{ color: COLORS.textMuted }}>
                                   <Trash2 size={13} />
                                 </button>
