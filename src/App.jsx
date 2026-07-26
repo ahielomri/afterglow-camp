@@ -4491,6 +4491,18 @@ ${sections}
     () => allMembers.filter((m) => !SHIFTS.some((s) => s.id !== TEARDOWN_ID && (assignments[s.id] || []).includes(m.name))).length,
     [assignments, allMembers]
   );
+  // Per-member shift count for the admin "משמרות חברי קמפ" list - teardown
+  // excluded since everyone's on it by default, same convention as
+  // membersWithoutShift/unfilledShiftsCount above.
+  const memberShiftCounts = useMemo(() => {
+    const countedShifts = SHIFTS.filter((s) => s.id !== TEARDOWN_ID);
+    return allMembers
+      .map((m) => ({
+        name: m.name,
+        count: countedShifts.filter((s) => (assignments[s.id] || []).includes(m.name)).length,
+      }))
+      .sort((a, b) => a.count - b.count || a.name.localeCompare(b.name, "he"));
+  }, [allMembers, assignments]);
   // Same "count both budgetItems and budgetExpenses" fix as teamStats -
   // this used to only look at the legacy list, so a category whose actual
   // spend was entered entirely through the current expense form would
@@ -4618,6 +4630,7 @@ ${sections}
   const navPersonalTabs = [
     { id: "dashboard-personal", label: personalDashboardTab?.label || "לוח בקרה אישי", icon: Home },
     { id: "shifts", label: "שיבוץ עצמי", icon: CalendarDays },
+    { id: "my-shifts", label: "המשמרות שלי", icon: Check },
     { id: "board", label: "לוח מודעות", icon: Megaphone },
   ];
   const navCampTabs = [
@@ -4782,6 +4795,7 @@ ${sections}
               {[
                 { id: "overview", label: "סקירה", icon: LayoutDashboard },
                 { id: "members", label: "חברי קמפ", icon: Users },
+                { id: "member-shifts", label: "משמרות חברי קמפ", icon: CalendarDays },
                 { id: "comms", label: "תקשורת", icon: MessageCircle },
                 ...(isOwner ? [{ id: "logs", label: "יומנים", icon: History }] : []),
                 { id: "emergency", label: "חירום", icon: HeartPulse },
@@ -5011,6 +5025,36 @@ ${sections}
               </div>
             )}
               </>
+            )}
+
+            {adminSubTab === "member-shifts" && (
+              <div>
+                <h3 className="text-sm font-bold mb-3" style={{ color: COLORS.accentDark }}>משמרות חברי קמפ</h3>
+                <p className="text-xs mb-3" style={{ color: COLORS.textMuted }}>
+                  כמות המשמרות שכל חבר/ה שיבץ/ה את עצמו/ה אליהן (לא כולל פירוקים - כולם משתתפים בו). מי שאין לו/ה משמרת בכלל מוצג/ת עם 0.
+                </p>
+                <div className="space-y-1.5">
+                  {memberShiftCounts.map((m) => (
+                    <div
+                      key={m.name}
+                      className="flex items-center justify-between px-3 py-2 rounded-xl text-sm"
+                      style={{ background: m.count === 0 ? COLORS.accent2Light : COLORS.surface }}
+                    >
+                      <span>{m.name}</span>
+                      <span
+                        className="px-2.5 py-0.5 rounded-full text-xs font-bold"
+                        style={{
+                          fontFamily: FONT_NUM,
+                          background: m.count === 0 ? COLORS.accent2 : COLORS.accentLight,
+                          color: m.count === 0 ? COLORS.bg : COLORS.accentDark,
+                        }}
+                      >
+                        {m.count}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
 
             {adminSubTab === "comms" && (
@@ -5340,7 +5384,7 @@ ${sections}
 
             <div className="grid grid-cols-3 gap-2 sm:gap-4">
               {[
-                { label: "המשמרות שלי", value: myShifts.length },
+                { label: "המשמרות שלי", value: myShifts.length, onClick: () => setTab("my-shifts") },
                 { label: "מקומות פנויים במשמרות", value: openShiftsCount, onClick: () => setTab("shifts") },
                 { label: "ימים לפתיחת השערים", value: daysUntil() },
               ].map((c) => (
@@ -5373,47 +5417,6 @@ ${sections}
               )}
             </div>
 
-            <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
-              <h3 className="text-sm font-bold mb-3 flex items-center gap-2" style={{ color: COLORS.accentDark }}>
-                <CalendarDays size={15} /> היומן שלי
-              </h3>
-              {myShifts.length === 0 && myCalendarEvents.length === 0 ? (
-                <p className="text-xs" style={{ color: COLORS.textMuted }}>עדיין לא שיבצת אף משמרת, ואין אירועים ביומן. עבור/י לטאב "שיבוץ עצמי" כדי להצטרף למשמרת.</p>
-              ) : (
-                <div className="flex gap-3 overflow-x-auto pb-2">
-                  {myCalendarEvents.map((a) => (
-                    <div key={`event-${a.id}`} className="shrink-0 rounded-2xl px-4 py-3 min-w-[150px]" style={{ background: COLORS.accentLight, borderTop: `3px solid ${COLORS.accent2}` }}>
-                      <div className="text-xs font-bold" style={{ color: COLORS.accent2Dark }}>{a.eventDate ? formatDateShort(a.eventDate) : ""}{a.eventTime ? ` · ${a.eventTime}` : ""}</div>
-                      <div className="text-sm font-semibold mt-1">{a.text}</div>
-                      <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>אירוע · {a.author}</div>
-                      <button
-                        onClick={() => downloadMyCalendarIcs([], [a])}
-                        className="mt-2 text-[10px] px-2 py-1 rounded-full font-semibold"
-                        style={{ background: "rgba(255,255,255,0.6)", color: COLORS.accent2Dark }}
-                      >
-                        הוספה ליומן בטלפון
-                      </button>
-                    </div>
-                  ))}
-                  {myShifts.map((s) => (
-                    <div key={s.id} className="shrink-0 rounded-2xl px-4 py-3 min-w-[130px]" style={{ background: COLORS.surface, borderTop: `3px solid ${COLORS.accent}` }}>
-                      <div className="text-xs font-bold" style={{ color: COLORS.accentDark }}>{formatDateShort(s.date)}</div>
-                      <div className="text-sm font-semibold mt-1">{s.title}</div>
-                      {s.id !== TEARDOWN_ID && !s.noTime && (
-                        <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{s.start}–{s.end}</div>
-                      )}
-                      <button
-                        onClick={() => downloadMyCalendarIcs([s], [])}
-                        className="mt-2 text-[10px] px-2 py-1 rounded-full font-semibold"
-                        style={{ background: COLORS.input, color: COLORS.textMuted }}
-                      >
-                        הוספה ליומן בטלפון
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
 
             <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
               <button
@@ -5829,6 +5832,55 @@ ${sections}
                 );
               })}
             </div>
+            )}
+          </div>
+        )}
+
+        {tab === "my-shifts" && (
+          <div>
+            {myShifts.length === 0 && myCalendarEvents.length === 0 ? (
+              <p className="text-xs text-center py-8" style={{ color: COLORS.textMuted }}>
+                עדיין לא שיבצת אף משמרת, ואין אירועים ביומן. עבור/י לטאב "שיבוץ עצמי" כדי להצטרף למשמרת.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {myShifts.map((s) => (
+                  <div key={s.id} className="rounded-2xl p-4 flex items-center justify-between gap-3" style={{ background: COLORS.surface, borderRight: `3px solid ${COLORS.accent}` }}>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold" style={{ color: COLORS.accentDark }}>
+                        {formatDate(s.date)}{s.id !== TEARDOWN_ID && !s.noTime ? ` · ${s.start}–${s.end}` : ""}
+                      </div>
+                      <div className="text-sm font-semibold mt-1">{s.title}</div>
+                      <div className="text-xs mt-0.5" style={{ color: COLORS.textMuted }}>{s.team}</div>
+                    </div>
+                    <button
+                      onClick={() => downloadMyCalendarIcs([s], [])}
+                      className="shrink-0 text-[11px] px-3 py-1.5 rounded-full font-semibold"
+                      style={{ background: COLORS.input, color: COLORS.textMuted }}
+                    >
+                      הוספה ליומן בטלפון
+                    </button>
+                  </div>
+                ))}
+                {myCalendarEvents.map((a) => (
+                  <div key={`event-${a.id}`} className="rounded-2xl p-4 flex items-center justify-between gap-3" style={{ background: COLORS.accentLight, borderRight: `3px solid ${COLORS.accent2}` }}>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold" style={{ color: COLORS.accent2Dark }}>
+                        {a.eventDate ? formatDateShort(a.eventDate) : ""}{a.eventTime ? ` · ${a.eventTime}` : ""}
+                      </div>
+                      <div className="text-sm font-semibold mt-1">{a.text}</div>
+                      <div className="text-xs mt-0.5" style={{ color: COLORS.textMuted }}>אירוע · {a.author}</div>
+                    </div>
+                    <button
+                      onClick={() => downloadMyCalendarIcs([], [a])}
+                      className="shrink-0 text-[11px] px-3 py-1.5 rounded-full font-semibold"
+                      style={{ background: "rgba(255,255,255,0.6)", color: COLORS.accent2Dark }}
+                    >
+                      הוספה ליומן בטלפון
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         )}
