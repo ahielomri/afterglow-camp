@@ -4748,7 +4748,6 @@ ${sections}
             backgroundImage: `url(${heroDesert})`,
             backgroundSize: "cover",
             backgroundPosition: "center 60%",
-            filter: "blur(3px)",
           }}
         />
         <div
@@ -4767,9 +4766,9 @@ ${sections}
             </h1>
             <p className="text-sm" style={{ color: COLORS.textMuted }}>מערכת ניהול קמפ · מידברן 2026</p>
           </div>
-          <div className="text-center px-4 py-2 rounded-2xl" style={{ background: "#d9ecf1" }}>
-            <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: "#2a6473" }}>{daysUntil()}</div>
-            <div className="text-xs font-bold" style={{ color: "#2a6473" }}>ימים לפתיחת השערים</div>
+          <div className="text-center px-2 py-1">
+            <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: "#2a6473", textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>{daysUntil()}</div>
+            <div className="text-xs font-bold" style={{ color: "#2a6473", textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>ימים לפתיחת השערים</div>
           </div>
         </div>
 
