@@ -3192,6 +3192,24 @@ export default function App() {
 
   async function applyIdentity(name, logHistory = true) {
     setIdentity(name);
+    // Fired immediately and not awaited, before the slower calls below -
+    // this used to run last in a long sequential await chain, so a member
+    // who opened the app and navigated away (or hit a slow/failing call
+    // earlier in that chain) quickly would never reach it, and their login
+    // would never be recorded anywhere. Independent of everything else now.
+    (async () => {
+      try {
+        const touchKey = `last-seen-touched-${name}`;
+        const lastTouch = Number(localStorage.getItem(touchKey)) || 0;
+        if (Date.now() - lastTouch > 60 * 60 * 1000) {
+          await touchLastSeen(name);
+          localStorage.setItem(touchKey, String(Date.now()));
+          logActivity("כניסה לאפליקציה", "", name);
+        }
+      } catch (err) {
+        console.error("touchLastSeen/login-activity failed", err);
+      }
+    })();
     try {
       const roles = await getAllMemberRoles();
       setDbRoles(roles);
@@ -3222,22 +3240,6 @@ export default function App() {
     // PWA is the silent-restore path, not a password re-entry, so gating
     // this on logHistory (like login-history is) meant it almost never fired.
     notifyOwner("login");
-    // Throttled to once an hour per device - runs on every app open (fresh
-    // login or a restored session), not just first-time logins, so it
-    // actually reflects recent activity rather than just first-ever login.
-    // Also logged to the activity feed itself (with the same throttle) so
-    // logins show up in "היסטוריית שינויים" too, not only in the separate
-    // "כניסות לאפליקציה" last-seen table - actorOverride is required here
-    // since identity's closure value can still be stale at this point.
-    try {
-      const touchKey = `last-seen-touched-${name}`;
-      const lastTouch = Number(localStorage.getItem(touchKey)) || 0;
-      if (Date.now() - lastTouch > 60 * 60 * 1000) {
-        await touchLastSeen(name);
-        localStorage.setItem(touchKey, String(Date.now()));
-        logActivity("כניסה לאפליקציה", "", name);
-      }
-    } catch {}
   }
 
   async function handleLogin(name, password) {
@@ -5217,8 +5219,12 @@ ${sections}
                             <div key={m.name} className="text-xs rounded-lg px-3 py-1.5" style={{ background: COLORS.surface }}>
                               <div className="flex items-center justify-between">
                                 <b>{m.name}</b>
-                                <span style={{ color: seen ? COLORS.textMuted : COLORS.danger }}>
-                                  {seen ? new Date(seen).toLocaleString("he-IL") : "מעולם לא נראה/תה פעיל/ה"}
+                                <span style={{ color: seen ? COLORS.textMuted : everLoggedIn ? COLORS.accent2Dark : COLORS.danger }}>
+                                  {seen
+                                    ? new Date(seen).toLocaleString("he-IL")
+                                    : everLoggedIn
+                                    ? "נכנס/ה בעבר (תאריך אחרון לא נרשם)"
+                                    : "מעולם לא נראה/תה פעיל/ה"}
                                 </span>
                               </div>
                               {!everLoggedIn && (
