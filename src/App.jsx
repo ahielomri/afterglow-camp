@@ -283,13 +283,14 @@ const EQUIPMENT_CONDITIONS = ["תקין", "דורש תיקון", "חסר / אב�
 // Price catalog for the kitchen shopping list - common camp staples with
 // an approximate per-unit price (₪, VAT included, as on an Israeli shelf
 // price tag). There's no live connection to a real supermarket price feed
-// from this environment (Shufersal's own site blocks direct fetches), so
-// most of these were cross-checked via web search against real current
-// listings on Israeli price-comparison sites (Pricez/CHP/Zap Market,
-// looking at Shufersal-specific prices where available) rather than pure
-// guesses - but they're still real-world snapshots, not a live feed, so
-// the kitchen team should correct them as actual receipts come in (either
-// by editing the item after adding it, or updating this list).
+// from this environment (Shufersal/Rami Levy block direct fetches, and a
+// real Shufersal price-transparency export that was tried turned out to
+// only cover ~18 essentially random SKUs from one store - not usable as a
+// catalog), so these were cross-checked via web search against real
+// current listings and price-comparison sites (Pricez/Zap Market) rather
+// than pure guesses - but they're still real-world snapshots, not a live
+// feed, so the kitchen team should correct them as actual receipts come in
+// (either by editing the item after adding it, or updating this list).
 const SHOPPING_CATALOG = [
   { name: "שמן בישול", unit: "בקבוק 1 ליטר", pricePerUnit: 10 },
   { name: "מלח", unit: "ק\"ג", pricePerUnit: 4 },
@@ -321,6 +322,50 @@ const SHOPPING_CATALOG = [
   { name: "בצל", unit: "ק\"ג", pricePerUnit: 5 },
   { name: "לימונים", unit: "ק\"ג", pricePerUnit: 7 },
   { name: "תבלינים בסיסיים", unit: "יחידה", pricePerUnit: 10 },
+  // Fresh produce
+  { name: "עגבניות", unit: "ק\"ג", pricePerUnit: 6 },
+  { name: "מלפפונים", unit: "ק\"ג", pricePerUnit: 6 },
+  { name: "גזר", unit: "ק\"ג", pricePerUnit: 5 },
+  { name: "תפוחי אדמה", unit: "ק\"ג", pricePerUnit: 5 },
+  { name: "פלפל אדום", unit: "ק\"ג", pricePerUnit: 8 },
+  { name: "כרוב לבן", unit: "ק\"ג", pricePerUnit: 4 },
+  { name: "קישואים", unit: "ק\"ג", pricePerUnit: 6 },
+  { name: "חסה", unit: "יחידה", pricePerUnit: 6 },
+  { name: "תפוחי עץ", unit: "ק\"ג", pricePerUnit: 8 },
+  { name: "בננות", unit: "ק\"ג", pricePerUnit: 7 },
+  { name: "אבטיח", unit: "ק\"ג", pricePerUnit: 3 },
+  // Protein
+  { name: "חזה עוף (שניצל)", unit: "ק\"ג", pricePerUnit: 42 },
+  { name: "בשר טחון/הודו טחון", unit: "ק\"ג", pricePerUnit: 40 },
+  { name: "נקניקיות", unit: "חבילה 400 גרם", pricePerUnit: 18 },
+  { name: "המבורגר קפוא", unit: "חבילה 4 יח'", pricePerUnit: 22 },
+  // Dairy & bread
+  { name: "חלב 3%", unit: "ליטר", pricePerUnit: 8 },
+  { name: "גבינה צהובה", unit: "200 גרם", pricePerUnit: 11 },
+  { name: "גבינת קוטג'", unit: "250 גרם", pricePerUnit: 7 },
+  { name: "יוגורט", unit: "חבילה 4 יח'", pricePerUnit: 12 },
+  { name: "חמאה", unit: "200 גרם", pricePerUnit: 10 },
+  { name: "לחם", unit: "כיכר", pricePerUnit: 9 },
+  // Breakfast/pantry
+  { name: "דגני בוקר", unit: "חבילה", pricePerUnit: 20 },
+  { name: "ריבה", unit: "צנצנת", pricePerUnit: 14 },
+  { name: "ממרח שוקולד", unit: "צנצנת", pricePerUnit: 18 },
+  // Drinks & snacks
+  { name: "מים מינרלים", unit: "מארז 6 בקבוקים", pricePerUnit: 14 },
+  { name: "משקה מוגז", unit: "בקבוק 1.5 ליטר", pricePerUnit: 8 },
+  { name: "מיץ פירות", unit: "קרטון 1 ליטר", pricePerUnit: 9 },
+  { name: "חטיפי אנרגיה", unit: "חבילה", pricePerUnit: 15 },
+  { name: "עוגיות", unit: "חבילה", pricePerUnit: 10 },
+  { name: "חטיף מלוח (במבה/ביסלי)", unit: "שקית", pricePerUnit: 7 },
+  { name: "אגוזים ובוטנים", unit: "שקית 200 גרם", pricePerUnit: 12 },
+  { name: "חטיפי שוקולד", unit: "חבילה", pricePerUnit: 15 },
+  // Cleaning/disposables
+  { name: "מגבונים לחים", unit: "חבילה", pricePerUnit: 10 },
+  { name: "אקונומיקה", unit: "בקבוק", pricePerUnit: 8 },
+  { name: "שקיות אשפה קטנות", unit: "חבילה", pricePerUnit: 8 },
+  { name: "נייר טואלט", unit: "חבילת 24", pricePerUnit: 35 },
+  // Other
+  { name: "סוללות AA", unit: "חבילת 4", pricePerUnit: 20 },
 ];
 
 const TEAM_FILTERS = [...new Set(SHIFTS.map((s) => s.team))];
