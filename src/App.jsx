@@ -49,6 +49,7 @@ const COLORS = {
   accent2Dark: "#c96b34",
   accent2Light: "#fce1c7",
   danger: "#c43d3d",
+  fullBg: "#ddd6d1",
 };
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;500;600;700;800&family=Frank+Ruhl+Libre:wght@500;700;900&family=Assistant:wght@400;500;600;700&display=swap');
@@ -5694,7 +5695,7 @@ ${sections}
                         const joined = isJoined(s.id);
                         const full = !s.noLimit && names.length >= spots && !joined;
                         return (
-                          <div key={s.id} className="rounded-2xl p-3" style={{ background: full ? COLORS.divider : COLORS.input, borderRight: `3px solid ${joined ? COLORS.accent2 : full ? COLORS.textMuted : COLORS.accent}`, opacity: full ? 0.75 : 1 }}>
+                          <div key={s.id} className="rounded-2xl p-3" style={{ background: full ? COLORS.fullBg : COLORS.input, borderRight: `3px solid ${joined ? COLORS.accent2 : full ? COLORS.textMuted : COLORS.accent}` }}>
                             {!isTeardown && !s.noTime && (
                               <div className="text-xs flex items-center gap-1" style={{ color: full ? COLORS.textMuted : COLORS.accentDark, fontFamily: FONT_NUM }}>
                                 <Clock size={11} /> {s.start}–{s.end}
@@ -5753,7 +5754,7 @@ ${sections}
                 const joined = isJoined(s.id);
                 const full = !s.noLimit && names.length >= spots && !joined;
                 return (
-                  <div key={s.id} className="rounded-2xl p-4" style={{ background: full ? COLORS.divider : COLORS.surface, border: `1px solid ${COLORS.divider}`, opacity: full ? 0.75 : 1 }}>
+                  <div key={s.id} className="rounded-2xl p-4" style={{ background: full ? COLORS.fullBg : COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                   <div className="flex items-center gap-4">
                     {s.noLimit ? (
                       <div className="shrink-0 flex items-center justify-center rounded-full text-base font-bold" style={{ width: 34, height: 34, background: COLORS.accentLight, color: COLORS.accentDark }}>∞</div>
