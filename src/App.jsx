@@ -56,10 +56,10 @@ import {
 //   fullBg: "#ddd6d1",
 // };
 const COLORS = {
-  bg: "#f7e4c8",
-  surface: "#f0d6ab",
-  surface2: "#e3c184",
-  input: "#fdf6e9",
+  bg: "#fbebd6",
+  surface: "#f8dfbe",
+  surface2: "#ebcb99",
+  input: "#fffbf2",
   text: "#4a342b",
   textMuted: "rgba(74,52,43,0.65)",
   divider: "rgba(74,52,43,0.16)",
@@ -4739,8 +4739,27 @@ ${sections}
       <style>{FONT_IMPORT}</style>
 
       {/* Header */}
-      <div className="px-6 pt-8 pb-6" style={{ background: COLORS.surface, borderBottom: `1px solid ${COLORS.divider}` }}>
-        <div className="flex items-center gap-4 max-w-4xl mx-auto">
+      <div className="relative px-6 pt-8 pb-6 overflow-hidden" style={{ borderBottom: `1px solid ${COLORS.divider}` }}>
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: "-20px",
+            backgroundImage: `url(${heroDesert})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center 60%",
+            filter: "blur(10px)",
+          }}
+        />
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: `linear-gradient(180deg, ${COLORS.surface}cc 0%, ${COLORS.surface}e6 60%, ${COLORS.surface} 100%)`,
+          }}
+        />
+        <div className="relative flex items-center gap-4 max-w-4xl mx-auto">
           <SunsetMark size={64} />
           <div className="flex-1">
             <h1 style={{ fontFamily: FONT_HEADING }} className="text-3xl tracking-tight">
@@ -4748,13 +4767,13 @@ ${sections}
             </h1>
             <p className="text-sm" style={{ color: COLORS.textMuted }}>מערכת ניהול קמפ · מידברן 2026</p>
           </div>
-          <div className="text-center px-4 py-2 rounded-2xl" style={{ background: COLORS.accentLight }}>
-            <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{daysUntil()}</div>
-            <div className="text-xs" style={{ color: COLORS.accentDark }}>ימים לפתיחת השערים</div>
+          <div className="text-center px-4 py-2 rounded-2xl" style={{ background: "#d9ecf1" }}>
+            <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: "#2a6473" }}>{daysUntil()}</div>
+            <div className="text-xs font-bold" style={{ color: "#2a6473" }}>ימים לפתיחת השערים</div>
           </div>
         </div>
 
-        <div className="max-w-4xl mx-auto mt-5 flex items-center justify-between">
+        <div className="relative max-w-4xl mx-auto mt-5 flex items-center justify-between">
           <span className="text-sm">
             שלום, <b style={{ color: COLORS.accentDark }}>{identity}</b>
           </span>
