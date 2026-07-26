@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart } from "lucide-react";
 import { pushSupported, pushPermission, enablePush, disablePush, isPushSubscribed, resetPush } from "./push.js";
+import heroDesert from "./assets/hero-desert.jpg";
 import {
   uploadFile,
   signInMember,
@@ -55,10 +56,10 @@ import {
 //   fullBg: "#ddd6d1",
 // };
 const COLORS = {
-  bg: "#fff1e4",
-  surface: "#ffe7d1",
-  surface2: "#f2d4ae",
-  input: "#fffaf3",
+  bg: "#f7e4c8",
+  surface: "#f0d6ab",
+  surface2: "#e3c184",
+  input: "#fdf6e9",
   text: "#4a342b",
   textMuted: "rgba(74,52,43,0.65)",
   divider: "rgba(74,52,43,0.16)",
@@ -626,7 +627,7 @@ function LoginScreen({ members, onLogin, onSetup }) {
 
   return (
     <div className="flex items-center justify-center min-h-[500px] px-6">
-      <div className="w-full max-w-sm rounded-3xl p-6" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <div className="w-full max-w-sm rounded-3xl p-6" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, boxShadow: "0 10px 34px rgba(74,52,43,0.28)" }}>
         <SunsetMark size={48} />
         <h2 style={{ fontFamily: FONT_HEADING }} className="text-xl mt-4 mb-1">כניסה למחנה</h2>
         <p className="text-xs mb-5" style={{ color: COLORS.textMuted }}>
@@ -4715,7 +4716,18 @@ ${sections}
 
   if (!identity) {
     return (
-      <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 700, fontWeight: 700 }}>
+      <div
+        dir="rtl"
+        style={{
+          fontFamily: FONT_BODY,
+          color: COLORS.text,
+          minHeight: 700,
+          fontWeight: 700,
+          backgroundImage: `linear-gradient(180deg, rgba(255,250,240,0.35) 0%, rgba(255,250,240,0.1) 30%, rgba(74,52,43,0.15) 100%), url(${heroDesert})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center 65%",
+        }}
+      >
         <style>{FONT_IMPORT}</style>
         <LoginScreen members={allMembers} onLogin={handleLogin} onSetup={handleSetup} />
       </div>
@@ -5447,7 +5459,7 @@ ${sections}
                   style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, cursor: c.onClick ? "pointer" : "default" }}
                 >
                   <div className="text-xl sm:text-3xl font-black mt-1" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
-                  <div className="text-[10px] sm:text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                  <div className="text-[10px] sm:text-xs mt-1 font-bold" style={{ color: COLORS.text }}>{c.label}</div>
                 </div>
               ))}
               {(campFee > 0 || feeOverrides[identity] !== undefined) && (
