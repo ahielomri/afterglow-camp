@@ -5695,11 +5695,16 @@ ${sections}
                         const names = (isTeardown ? allMembers.map((m) => m.name) : (assignments[s.id] || [])).filter((n) => !removedMembers.includes(n));
                         const spots = isTeardown ? allMembers.length : s.spots;
                         const joined = isJoined(s.id);
-                        const full = !s.noLimit && names.length >= spots && !joined;
+                        // isAtCapacity is a pure fact about the shift (no room left) -
+                        // shown regardless of whether the viewer is one of the people
+                        // filling it. `full` (which excludes shifts the viewer already
+                        // joined) is only for whether the join button should be disabled.
+                        const isAtCapacity = !s.noLimit && names.length >= spots;
+                        const full = isAtCapacity && !joined;
                         return (
-                          <div key={s.id} className="rounded-2xl p-3" style={{ background: full ? COLORS.fullBg : COLORS.input, borderRight: `3px solid ${joined ? COLORS.accent2 : full ? COLORS.textMuted : COLORS.accent}` }}>
+                          <div key={s.id} className="rounded-2xl p-3" style={{ background: isAtCapacity ? COLORS.fullBg : COLORS.input, borderRight: `3px solid ${joined ? COLORS.accent2 : isAtCapacity ? COLORS.textMuted : COLORS.accent}` }}>
                             {!isTeardown && !s.noTime && (
-                              <div className="text-xs flex items-center gap-1" style={{ color: full ? COLORS.textMuted : COLORS.accentDark, fontFamily: FONT_NUM }}>
+                              <div className="text-xs flex items-center gap-1" style={{ color: isAtCapacity ? COLORS.textMuted : COLORS.accentDark, fontFamily: FONT_NUM }}>
                                 <Clock size={11} /> {s.start}–{s.end}
                               </div>
                             )}
@@ -5754,9 +5759,10 @@ ${sections}
                 const names = (isTeardown ? allMembers.map((m) => m.name) : (assignments[s.id] || [])).filter((n) => !removedMembers.includes(n));
                 const spots = isTeardown ? allMembers.length : s.spots;
                 const joined = isJoined(s.id);
-                const full = !s.noLimit && names.length >= spots && !joined;
+                const isAtCapacity = !s.noLimit && names.length >= spots;
+                const full = isAtCapacity && !joined;
                 return (
-                  <div key={s.id} className="rounded-2xl p-4" style={{ background: full ? COLORS.fullBg : COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                  <div key={s.id} className="rounded-2xl p-4" style={{ background: isAtCapacity ? COLORS.fullBg : COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                   <div className="flex items-center gap-4">
                     {s.noLimit ? (
                       <div className="shrink-0 flex items-center justify-center rounded-full text-base font-bold" style={{ width: 34, height: 34, background: COLORS.accentLight, color: COLORS.accentDark }}>∞</div>
@@ -5766,7 +5772,7 @@ ${sections}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold">{s.title}</span>
-                        <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: full ? COLORS.surface2 : COLORS.accentLight, color: full ? COLORS.textMuted : COLORS.accentDark }}>{s.team}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: isAtCapacity ? COLORS.surface2 : COLORS.accentLight, color: isAtCapacity ? COLORS.textMuted : COLORS.accentDark }}>{s.team}</span>
                         {isTeardown && <span className="text-xs" style={{ color: COLORS.textMuted }}>כולם משתתפים</span>}
                         {s.noLimit && <span className="text-xs" style={{ color: COLORS.textMuted }}>ללא הגבלת מקומות</span>}
                       </div>
