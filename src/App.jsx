@@ -34,24 +34,42 @@ import {
 } from "./storage.js";
 
 // ---------------------------------------------------------------------------
-// Design tokens - "Organic" palette (matches the shared design-system folder)
+// Design tokens - "Afterglow sunset" palette
 // ---------------------------------------------------------------------------
+// Previous ("baby pink") palette, kept here as a backup in case we revert:
+// const COLORS = {
+//   bg: "#fdf1f0",
+//   surface: "#f7dce0",
+//   surface2: "#f0c9d2",
+//   input: "#fff7f5",
+//   text: "#3a222a",
+//   textMuted: "rgba(58,34,42,0.65)",
+//   divider: "rgba(58,34,42,0.16)",
+//   accent: "#e0607a",
+//   accentDark: "#b8415c",
+//   accentLight: "#fbd8e0",
+//   accent2: "#f2935a",
+//   accent2Dark: "#c96b34",
+//   accent2Light: "#fce1c7",
+//   danger: "#c43d3d",
+//   fullBg: "#ddd6d1",
+// };
 const COLORS = {
-  bg: "#fdf1f0",
-  surface: "#f7dce0",
-  surface2: "#f0c9d2",
-  input: "#fff7f5",
-  text: "#3a222a",
-  textMuted: "rgba(58,34,42,0.65)",
-  divider: "rgba(58,34,42,0.16)",
-  accent: "#e0607a",
-  accentDark: "#b8415c",
-  accentLight: "#fbd8e0",
-  accent2: "#f2935a",
-  accent2Dark: "#c96b34",
-  accent2Light: "#fce1c7",
+  bg: "#fff1e4",
+  surface: "#ffe7d1",
+  surface2: "#f2d4ae",
+  input: "#fffaf3",
+  text: "#4a342b",
+  textMuted: "rgba(74,52,43,0.65)",
+  divider: "rgba(74,52,43,0.16)",
+  accent: "#e15d5d",
+  accentDark: "#b0392f",
+  accentLight: "#fbdcd2",
+  accent2: "#b36aa3",
+  accent2Dark: "#7d4a72",
+  accent2Light: "#f4e5ef",
   danger: "#c43d3d",
-  fullBg: "#ddd6d1",
+  fullBg: "#e3d6c9",
 };
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;500;600;700;800&family=Frank+Ruhl+Libre:wght@500;700;900&family=Assistant:wght@400;500;600;700&display=swap');
