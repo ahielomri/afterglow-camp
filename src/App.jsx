@@ -1107,13 +1107,20 @@ function ShoppingItemForm({ onAdd, initial, onCancel }) {
 }
 
 function CatalogItemPicker({ catalog, onAdd }) {
-  const [selectedName, setSelectedName] = useState(catalog[0]?.name || "");
+  const categories = [...new Set(catalog.map((c) => c.category || "אחר"))];
+  const [selectedCategory, setSelectedCategory] = useState(categories[0] || "");
+  const itemsInCategory = catalog.filter((c) => (c.category || "אחר") === selectedCategory);
+  const [selectedName, setSelectedName] = useState(itemsInCategory[0]?.name || "");
   const [qty, setQty] = useState(1);
   useEffect(() => {
-    if (!catalog.some((c) => c.name === selectedName)) setSelectedName(catalog[0]?.name || "");
+    if (!categories.includes(selectedCategory)) setSelectedCategory(categories[0] || "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catalog]);
-  const item = catalog.find((c) => c.name === selectedName);
+  useEffect(() => {
+    if (!itemsInCategory.some((c) => c.name === selectedName)) setSelectedName(itemsInCategory[0]?.name || "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCategory, catalog]);
+  const item = itemsInCategory.find((c) => c.name === selectedName);
   const totalPrice = item ? Math.round((Number(qty) || 0) * item.pricePerUnit * 100) / 100 : 0;
 
   function submit() {
@@ -1124,23 +1131,23 @@ function CatalogItemPicker({ catalog, onAdd }) {
   return (
     <div className="rounded-2xl p-4 space-y-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
       <div className="grid sm:grid-cols-3 gap-2">
-        <div className="relative sm:col-span-2">
+        <div className="relative">
+          <select
+            value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}
+            className="w-full appearance-none pl-9 pr-3 py-2 rounded-xl text-sm outline-none font-semibold"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          >
+            {categories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+          </select>
+          <ChevronDown size={15} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: COLORS.text }} />
+        </div>
+        <div className="relative">
           <select
             value={selectedName} onChange={(e) => setSelectedName(e.target.value)}
             className="w-full appearance-none pl-9 pr-3 py-2 rounded-xl text-sm outline-none"
             style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
           >
-            {Object.entries(
-              catalog.reduce((groups, c) => {
-                const cat = c.category || "אחר";
-                (groups[cat] = groups[cat] || []).push(c);
-                return groups;
-              }, {})
-            ).map(([cat, items]) => (
-              <optgroup key={cat} label={cat}>
-                {items.map((c) => <option key={c.name} value={c.name}>{c.name} · ₪{c.pricePerUnit} ל{c.unit}</option>)}
-              </optgroup>
-            ))}
+            {itemsInCategory.map((c) => <option key={c.name} value={c.name}>{c.name} · ₪{c.pricePerUnit} ל{c.unit}</option>)}
           </select>
           <ChevronDown size={15} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: COLORS.text }} />
         </div>
