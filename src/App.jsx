@@ -458,9 +458,10 @@ const POOL_EVENT_BUTTON_LABEL = `${POOL_EVENT_NAME} | ${POOL_EVENT_DATE_LABEL} |
 // Deliberately outside the app's usual salmon/pink COLORS palette - this one
 // button is meant to stand out as a one-off festive invite, not blend in
 // with the regular nav.
-const POOL_EVENT_COLOR_DARK = "#4a1760";
-const POOL_EVENT_COLOR_PURPLE = "#c9a6f5";
-const POOL_EVENT_COLOR_PINK = "#ffc2e6";
+// Pulled from the event poster itself (deep pool blue -> bright turquoise)
+// instead of an arbitrary palette, per feedback to match the image's tones.
+const POOL_EVENT_COLOR_DEEP = "#0d3b66";
+const POOL_EVENT_COLOR_TEAL = "#22a6c7";
 
 // Verbatim copy supplied for the event's own info tab.
 const POOL_EVENT_INTRO_TEXT = `פותחים את העונה כמו שצריך: בריכה, אנשים טובים ואווירת Afterglow.
@@ -1248,6 +1249,12 @@ function ShoppingRequestForm({ onAdd }) {
 // to a local one-day gathering.
 function PoolRideWizard({ name, data, onChange }) {
   const d = data || {};
+  const hasSavedAnswer = d.attending !== undefined;
+  // Once a choice was saved, show a compact summary with an explicit
+  // "עריכה" button instead of always re-showing the full form - makes it
+  // obvious a saved answer can still be changed, rather than relying on
+  // people to notice the same form is still live/editable underneath.
+  const [editing, setEditing] = useState(!hasSavedAnswer);
   const [local, setLocal] = useState({
     attending: d.attending,
     hasCar: d.hasCar,
@@ -1257,8 +1264,40 @@ function PoolRideWizard({ name, data, onChange }) {
     city: d.city || "",
     departureTime: d.departureTime || "",
   });
-  const [saved, setSaved] = useState(false);
-  const set = (patch) => { setLocal({ ...local, ...patch }); setSaved(false); };
+  const set = (patch) => setLocal({ ...local, ...patch });
+
+  function summaryText() {
+    if (d.attending === "no") return "לא מגיע/ה למפגש הפעם.";
+    if (d.hasCar === "yes") {
+      return d.offerRide === "yes"
+        ? `מגיע/ה עם רכב · מציע/ה טרמפ${d.city ? ` מ${d.city}` : ""}${d.departureTime ? ` בשעה ${d.departureTime}` : ""}${d.seats ? ` · ${d.seats} מקומות` : ""}`
+        : "מגיע/ה עם רכב · לא מציע/ה טרמפ לאחרים";
+    }
+    if (d.hasCar === "no") {
+      return d.hasWay === "yes"
+        ? "מגיע/ה בלי רכב · כבר יש דרך להגיע"
+        : `מגיע/ה בלי רכב · מחפש/ת טרמפ${d.city ? ` מ${d.city}` : ""}${d.departureTime ? ` סביב השעה ${d.departureTime}` : ""}`;
+    }
+    return "מגיע/ה - עדיין לא מולאו פרטי רכב/טרמפ";
+  }
+
+  if (!editing) {
+    return (
+      <div className="rounded-2xl p-4 flex items-center justify-between gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+        <div className="min-w-0">
+          <div className="text-sm font-bold" style={{ color: COLORS.accentDark }}>{name}</div>
+          <div className="mt-0.5 text-xs" style={{ color: COLORS.textMuted }}>{summaryText()}</div>
+        </div>
+        <button
+          onClick={() => setEditing(true)}
+          className="px-3 py-1.5 rounded-full text-xs font-bold shrink-0"
+          style={{ background: COLORS.accent2, color: COLORS.bg }}
+        >
+          עריכה
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl p-4 space-y-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
@@ -1353,13 +1392,17 @@ function PoolRideWizard({ name, data, onChange }) {
 
       <div className="flex items-center gap-3 pt-1">
         <button
-          onClick={() => { onChange({ ...local, seats: Number(local.seats) || 0 }); setSaved(true); }}
+          onClick={() => { onChange({ ...local, seats: Number(local.seats) || 0 }); setEditing(false); }}
           className="px-4 py-2 rounded-full text-sm font-semibold"
           style={{ background: COLORS.accent2, color: COLORS.bg }}
         >
           שמירה
         </button>
-        {saved && <span className="text-xs" style={{ color: COLORS.accent2Dark }}>✓ נשמר</span>}
+        {hasSavedAnswer && (
+          <button onClick={() => setEditing(false)} className="text-xs font-bold" style={{ color: COLORS.textMuted }}>
+            ביטול
+          </button>
+        )}
       </div>
     </div>
   );
@@ -3556,15 +3599,17 @@ export default function App() {
   }
 
   // Content-idea suggestions for the gathering (music, games, activities) -
-  // same shape/permissions as the kitchen "בקשות מיוחדות" board above.
+  // each person only ever sees their own suggestions in the festive tab
+  // itself (rendered client-side below); the full list, for approval, lives
+  // in the admin dashboard's "יום גיבוש" panel.
   async function addPoolEventContentIdea(text) {
     if (!text.trim()) return;
     const latest = await getFreshShared("pool-event-content", poolEventContent);
-    const next = [{ id: Date.now().toString(), text: text.trim(), author: identity, ts: Date.now() }, ...latest];
+    const next = [{ id: Date.now().toString(), text: text.trim(), author: identity, ts: Date.now(), approved: null }, ...latest];
     setPoolEventContent(next);
     try {
       await window.storage.set("pool-event-content", JSON.stringify(next), true);
-      showToast("הרעיון נוסף", "ok");
+      showToast("הרעיון נשלח לצוות המארגן/ות", "ok");
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3573,6 +3618,19 @@ export default function App() {
   async function removePoolEventContentIdea(id) {
     const latest = await getFreshShared("pool-event-content", poolEventContent);
     const next = latest.filter((c) => c.id !== id);
+    setPoolEventContent(next);
+    try {
+      await window.storage.set("pool-event-content", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  // Admin-only (checked client-side, same trust model as the rest of the
+  // admin dashboard): marks a suggestion approved/rejected for the day.
+  async function setPoolEventContentApproval(id, approved) {
+    const latest = await getFreshShared("pool-event-content", poolEventContent);
+    const next = latest.map((c) => (c.id === id ? { ...c, approved } : c));
     setPoolEventContent(next);
     try {
       await window.storage.set("pool-event-content", JSON.stringify(next), true);
@@ -5090,6 +5148,16 @@ ${sections}
   const membersWithExtraAllocation = allMembers.filter((m) => allocationInfo[m.name]?.hasExtra === "yes");
   const membersWithoutAllocationInfo = allMembers.filter((m) => !allocationInfo[m.name]);
 
+  // "גלאו גלאו אפטר מי" (1.8.26) aggregates - hoisted out of the festive
+  // page itself so the admin dashboard's "יום גיבוש" panel can show the
+  // exact same live picture (attendance/rides/food/content) without
+  // recomputing it differently in two places.
+  const poolEventAttendingYes = allMembers.filter((m) => poolEventRides[m.name]?.attending === "yes");
+  const poolEventAttendingNo = allMembers.filter((m) => poolEventRides[m.name]?.attending === "no");
+  const poolEventNoAnswer = allMembers.filter((m) => !poolEventRides[m.name]?.attending);
+  const poolEventOfferingRides = allMembers.filter((m) => poolEventRides[m.name]?.hasCar === "yes" && poolEventRides[m.name]?.offerRide === "yes");
+  const poolEventLookingForRide = allMembers.filter((m) => poolEventRides[m.name]?.hasCar === "no" && poolEventRides[m.name]?.hasWay === "no");
+
   const myPrivateMessages = privateMessages
     .filter((m) => m.to === identity || m.from === identity)
     .sort((a, b) => b.ts - a.ts);
@@ -5253,12 +5321,12 @@ ${sections}
           onClick={() => setTab("pool-event")}
           className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-sm font-bold transition-colors mb-2"
           style={{
-            background: `linear-gradient(90deg, ${POOL_EVENT_COLOR_PURPLE}, ${POOL_EVENT_COLOR_PINK}, ${POOL_EVENT_COLOR_PURPLE})`,
-            color: POOL_EVENT_COLOR_DARK,
-            border: `1px solid ${POOL_EVENT_COLOR_PURPLE}`,
+            background: `linear-gradient(90deg, ${POOL_EVENT_COLOR_DEEP}, ${POOL_EVENT_COLOR_TEAL}, ${POOL_EVENT_COLOR_DEEP})`,
+            color: "white",
+            border: `1px solid ${POOL_EVENT_COLOR_TEAL}`,
             boxShadow: tab === "pool-event"
-              ? `0 0 0 2px ${POOL_EVENT_COLOR_PINK}88, 0 4px 14px ${POOL_EVENT_COLOR_PURPLE}55`
-              : `0 2px 8px ${POOL_EVENT_COLOR_PURPLE}33`,
+              ? `0 0 0 2px ${POOL_EVENT_COLOR_TEAL}88, 0 4px 14px ${POOL_EVENT_COLOR_DEEP}66`
+              : `0 2px 8px ${POOL_EVENT_COLOR_DEEP}33`,
           }}
         >
           <PartyPopper size={16} /> {POOL_EVENT_BUTTON_LABEL} <Sparkles size={16} />
@@ -5386,13 +5454,14 @@ ${sections}
                 <div>
                   <p className="font-bold" style={{ color: COLORS.accentDark }}>מי שחפצה נפשו בתוכן:</p>
                   <p>ותוסיף משפט.</p>
+                  <p>גם לכן יש מקום.</p>
                 </div>
               </div>
             )}
 
             {poolEventSubTab === "rides" && (() => {
-              const offeringRidesPool = allMembers.filter((m) => poolEventRides[m.name]?.hasCar === "yes" && poolEventRides[m.name]?.offerRide === "yes");
-              const lookingForRidePool = allMembers.filter((m) => poolEventRides[m.name]?.hasCar === "no" && poolEventRides[m.name]?.hasWay === "no");
+              const offeringRidesPool = poolEventOfferingRides;
+              const lookingForRidePool = poolEventLookingForRide;
               const RideRow = ({ name, subtitle }) => (
                 <div className="rounded-xl px-3 py-2 flex items-center justify-between gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                   <div className="min-w-0 text-xs">
@@ -5502,34 +5571,36 @@ ${sections}
               );
             })()}
 
-            {poolEventSubTab === "content" && (
-              <div>
-                <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
-                  רעיון למוזיקה, משחק, טקס קטן או כל דבר אחר שירצה/תרצה להביא למפגש? אפשר להציע כאן.
-                </p>
-                <p className="text-xs mb-3" style={{ color: COLORS.accentDark }}>
-                  הרעיונות מועברים לצוות המארגן/ות, שיבחרו מה נכנס בפועל לתוכנית - הצעות של אחרים לא מוצגות כאן.
-                </p>
-                <PoolEventContentForm onAdd={addPoolEventContentIdea} />
-                {isAdmin && (
+            {poolEventSubTab === "content" && (() => {
+              const myIdeas = poolEventContent.filter((c) => c.author === identity);
+              const approvalLabel = (c) => c.approved === true ? "אושר ✓" : c.approved === false ? "לא נכנס הפעם" : "ממתין לאישור";
+              const approvalColor = (c) => c.approved === true ? COLORS.accentDark : c.approved === false ? COLORS.textMuted : COLORS.accent2Dark;
+              return (
+                <div>
+                  <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
+                    רעיון למוזיקה, משחק, טקס קטן או כל דבר אחר שירצה/תרצה להביא למפגש? אפשר להציע כאן.
+                  </p>
+                  <p className="text-xs mb-3" style={{ color: COLORS.accentDark }}>
+                    ההצעות מועברות לצוות המארגן/ות לאישור. את ההצעות של עצמך את/ה רואה כאן - של אחרים, לא.
+                  </p>
+                  <PoolEventContentForm onAdd={addPoolEventContentIdea} />
                   <div className="space-y-1.5 mt-3">
-                    {poolEventContent.map((c) => (
+                    {myIdeas.map((c) => (
                       <div key={c.id} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                         <div className="min-w-0">
-                          <div className="font-semibold text-sm" style={{ color: COLORS.accentDark }}>{c.author}</div>
-                          <div className="mt-0.5">{c.text}</div>
-                          <div className="mt-0.5 text-[10px]" style={{ color: COLORS.textMuted }}>{new Date(c.ts).toLocaleDateString("he-IL")}</div>
+                          <div>{c.text}</div>
+                          <div className="mt-0.5 font-semibold" style={{ color: approvalColor(c) }}>{approvalLabel(c)}</div>
                         </div>
                         <button onClick={() => removePoolEventContentIdea(c.id)} style={{ color: COLORS.textMuted }} className="shrink-0"><Trash2 size={14} /></button>
                       </div>
                     ))}
-                    {poolEventContent.length === 0 && (
-                      <p className="text-xs text-center py-4" style={{ color: COLORS.textMuted }}>אין עדיין רעיונות לתוכן.</p>
+                    {myIdeas.length === 0 && (
+                      <p className="text-xs text-center py-4" style={{ color: COLORS.textMuted }}>עדיין לא הצעת רעיון.</p>
                     )}
                   </div>
-                )}
-              </div>
-            )}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -5545,6 +5616,7 @@ ${sections}
                 { id: "comms", label: "תקשורת", icon: MessageCircle },
                 ...(isOwner ? [{ id: "logs", label: "יומנים", icon: History }] : []),
                 { id: "emergency", label: "חירום", icon: HeartPulse },
+                { id: "gibush", label: "יום גיבוש", icon: PartyPopper },
               ].map((s) => (
                 <button
                   key={s.id}
@@ -6031,6 +6103,114 @@ ${sections}
             )}
               </>
             )}
+
+            {adminSubTab === "gibush" && (() => {
+              const foodCategories = [...new Set(poolEventFood.map((it) => it.category))];
+              const pendingContent = poolEventContent.filter((c) => c.approved === null || c.approved === undefined);
+              const decidedContent = poolEventContent.filter((c) => c.approved === true || c.approved === false);
+              return (
+                <div>
+                  <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>
+                    כל הנתונים של "{POOL_EVENT_NAME}" ({POOL_EVENT_DATE_LABEL}) במקום אחד.
+                  </p>
+
+                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>מי מגיע</h3>
+                  <div className="grid grid-cols-3 gap-3 mb-3">
+                    {[
+                      { label: "מגיעים", value: poolEventAttendingYes.length },
+                      { label: "לא מגיעים", value: poolEventAttendingNo.length },
+                      { label: "טרם ענו", value: poolEventNoAnswer.length },
+                    ].map((c) => (
+                      <div key={c.label} className="rounded-2xl p-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                        <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
+                        <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mb-6">
+                    {poolEventAttendingYes.map((m) => (
+                      <span key={m.name} className="text-xs px-2 py-0.5 rounded-full" style={{ background: COLORS.accent2Light, color: COLORS.accent2Dark }}>{m.name}</span>
+                    ))}
+                  </div>
+
+                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>טרמפים - מציעים ({poolEventOfferingRides.length})</h3>
+                  <div className="space-y-1.5 mb-4">
+                    {poolEventOfferingRides.map((m) => {
+                      const d = poolEventRides[m.name];
+                      const parts = [d.city && `מ${d.city}`, d.departureTime && `בשעה ${d.departureTime}`, d.seats && `${d.seats} מקומות`].filter(Boolean);
+                      return (
+                        <div key={m.name} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                          <span className="font-semibold">{m.name}</span>{parts.length > 0 && <span style={{ color: COLORS.textMuted }}> · {parts.join(" · ")}</span>}
+                        </div>
+                      );
+                    })}
+                    {poolEventOfferingRides.length === 0 && <p className="text-xs" style={{ color: COLORS.textMuted }}>אין עדיין מציעי טרמפ.</p>}
+                  </div>
+
+                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>טרמפים - צריכים ({poolEventLookingForRide.length})</h3>
+                  <div className="space-y-1.5 mb-6">
+                    {poolEventLookingForRide.map((m) => {
+                      const d = poolEventRides[m.name];
+                      const parts = [d.city && `מ${d.city}`, d.departureTime && `סביב השעה ${d.departureTime}`].filter(Boolean);
+                      return (
+                        <div key={m.name} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                          <span className="font-semibold">{m.name}</span>{parts.length > 0 && <span style={{ color: COLORS.textMuted }}> · {parts.join(" · ")}</span>}
+                        </div>
+                      );
+                    })}
+                    {poolEventLookingForRide.length === 0 && <p className="text-xs" style={{ color: COLORS.textMuted }}>אין עדיין מי שצריך/ה טרמפ.</p>}
+                  </div>
+
+                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>מי מביא מה</h3>
+                  <div className="space-y-3 mb-6">
+                    {foodCategories.map((cat) => (
+                      <div key={cat}>
+                        <div className="text-xs font-bold mb-1" style={{ color: COLORS.accentDark }}>{cat}</div>
+                        <div className="space-y-1">
+                          {poolEventFood.filter((it) => it.category === cat).map((it) => (
+                            <div key={it.id} className="text-xs px-2 py-1 rounded-lg flex items-center justify-between" style={{ background: COLORS.surface }}>
+                              <span>{it.item}</span>
+                              <span style={{ color: it.broughtBy ? COLORS.accentDark : COLORS.textMuted }}>{it.broughtBy || "לא נתפס"}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>תוכן לאישור ({pendingContent.length} ממתינים)</h3>
+                  <div className="space-y-1.5">
+                    {pendingContent.map((c) => (
+                      <div key={c.id} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                        <div className="min-w-0">
+                          <div className="font-semibold" style={{ color: COLORS.accentDark }}>{c.author}</div>
+                          <div className="mt-0.5">{c.text}</div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button onClick={() => setPoolEventContentApproval(c.id, true)} className="px-2.5 py-1 rounded-full font-bold" style={{ background: COLORS.accent2, color: COLORS.bg }}>אישור</button>
+                          <button onClick={() => setPoolEventContentApproval(c.id, false)} className="px-2.5 py-1 rounded-full font-bold" style={{ background: COLORS.input, color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}>דחייה</button>
+                        </div>
+                      </div>
+                    ))}
+                    {pendingContent.length === 0 && <p className="text-xs" style={{ color: COLORS.textMuted }}>אין הצעות ממתינות.</p>}
+                  </div>
+
+                  {decidedContent.length > 0 && (
+                    <div className="space-y-1.5 mt-3">
+                      {decidedContent.map((c) => (
+                        <div key={c.id} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-xs" style={{ background: COLORS.input, opacity: 0.75 }}>
+                          <div className="min-w-0">
+                            <div className="font-semibold" style={{ color: COLORS.textMuted }}>{c.author}</div>
+                            <div className="mt-0.5">{c.text}</div>
+                          </div>
+                          <span className="shrink-0 font-bold" style={{ color: c.approved ? COLORS.accentDark : COLORS.textMuted }}>{c.approved ? "אושר" : "נדחה"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 
