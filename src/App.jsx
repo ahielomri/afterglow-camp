@@ -448,9 +448,21 @@ function daysUntil() {
 // above, but built the exact same way (shared kv_store list, attributed to
 // the logged-in member).
 // ---------------------------------------------------------------------------
-const POOL_EVENT_NAME = "גלאו גלאו אפטר מי";
-const POOL_EVENT_DATE_LABEL = "שבת, 1.8.26";
-const POOL_EVENT_TIME_LABEL = "נפגשים בשעה 15:00";
+const POOL_EVENT_NAME = "גלאו גלאו אפטר מי לגיבוש";
+const POOL_EVENT_DATE_LABEL = "1.8.26";
+const POOL_EVENT_WEEKDAY_LABEL = "יום שבת";
+const POOL_EVENT_TIME_LABEL = "15:00";
+const POOL_EVENT_ADDRESS = "קיבוץ גלויות 11, בצרה";
+const POOL_EVENT_BUTTON_LABEL = `${POOL_EVENT_NAME} | ${POOL_EVENT_DATE_LABEL} | ${POOL_EVENT_WEEKDAY_LABEL} | ${POOL_EVENT_TIME_LABEL}`;
+
+// Verbatim copy supplied for the event's own info tab.
+const POOL_EVENT_INTRO_TEXT = `פותחים את העונה כמו שצריך: בריכה, אנשים טובים ואווירת Afterglow.
+
+קמפ יציב נבנה קודם כול מהאנשים שבו. מהיכרות, מחיבור, מאמון ומהיכולת להיות שם אחד בשביל השני, גם כשמישהו שוב שכח לעדכן בטבלה.
+
+חיבורים נוצרים כשנפגשים באמת, מדברים, צוחקים ומתחילים להרגיש בנוח אחד עם השני. וזה סוד הקסם.
+
+כדי שהכול יהיה שקוף וקל, ריכזנו כאן את כל מה שצריך:`;
 
 // Seeds the "מי מביא מה" board the first time anyone opens it - matches the
 // categories from the event's own planning sheet. Members can still add
@@ -1222,43 +1234,103 @@ function ShoppingRequestForm({ onAdd }) {
   );
 }
 
-// Pool-gathering (1.8.26) rides board - one post per member ("מציע/ה" or
-// "מחפש/ת"), attributed automatically to whoever's logged in.
-function PoolEventRideForm({ onAdd }) {
-  const [type, setType] = useState("offering");
-  const [details, setDetails] = useState("");
+// Pool-gathering (1.8.26) rides board - one record per member (like the
+// main camp's RideWizard/rideInfo above), just lighter: attending? then
+// with-a-car? then the same regular offer/need follow-ups, without the
+// playa-specific arrival day/tow-hitch/trailer questions that don't apply
+// to a local one-day gathering.
+function PoolRideWizard({ name, data, onChange }) {
+  const d = data || {};
+  const [local, setLocal] = useState({
+    attending: d.attending,
+    hasCar: d.hasCar,
+    offerRide: d.offerRide,
+    seats: d.seats || "",
+    hasWay: d.hasWay,
+    city: d.city || "",
+  });
+  const [saved, setSaved] = useState(false);
+  const set = (patch) => { setLocal({ ...local, ...patch }); setSaved(false); };
+
   return (
-    <div className="rounded-2xl p-4 space-y-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-      <div className="flex gap-2">
-        {[{ v: "offering", l: "מציע/ה טרמפ" }, { v: "need", l: "מחפש/ת טרמפ" }].map((o) => (
-          <button
-            key={o.v}
-            onClick={() => setType(o.v)}
-            className="flex-1 px-3 py-2 rounded-xl text-xs font-bold"
-            style={{
-              background: type === o.v ? COLORS.accent2 : COLORS.input,
-              color: type === o.v ? COLORS.bg : COLORS.textMuted,
-              border: `1px solid ${type === o.v ? COLORS.accent2 : COLORS.divider}`,
-            }}
-          >
-            {o.l}
-          </button>
-        ))}
+    <div className="rounded-2xl p-4 space-y-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <div className="text-sm font-bold" style={{ color: COLORS.accentDark }}>{name}</div>
+
+      <div>
+        <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>מגיע/ה למפגש?</label>
+        <YesNoButtons value={local.attending} onChange={(v) => set({ attending: v, hasCar: undefined, offerRide: undefined, hasWay: undefined })} />
       </div>
-      <input
-        value={details}
-        onChange={(e) => setDetails(e.target.value)}
-        placeholder='למשל: "יוצא/ת מתל אביב ב-14:00, יש 2 מקומות פנויים"'
-        className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-      />
-      <button
-        onClick={() => { onAdd(type, details); setDetails(""); }}
-        className="px-4 py-2 rounded-full text-sm font-semibold"
-        style={{ background: COLORS.accent2, color: COLORS.bg }}
-      >
-        פרסום ללוח
-      </button>
+
+      {local.attending === "yes" && (
+        <>
+          <div>
+            <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>מגיע/ה עם רכב?</label>
+            <YesNoButtons value={local.hasCar} onChange={(v) => set({ hasCar: v, offerRide: undefined, hasWay: undefined })} />
+          </div>
+
+          {local.hasCar === "yes" && (
+            <>
+              <div>
+                <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>מוכן/ה לקחת עוד אנשים איתך בדרך?</label>
+                <YesNoButtons value={local.offerRide} onChange={(v) => set({ offerRide: v })} />
+                {local.offerRide === "yes" && (
+                  <input
+                    type="number"
+                    value={local.seats}
+                    onChange={(e) => set({ seats: e.target.value })}
+                    placeholder="כמה מקומות פנויים?"
+                    className="w-full mt-2 px-3 py-2 rounded-xl text-sm outline-none"
+                    style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                  />
+                )}
+              </div>
+              <div>
+                <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>מאיזה עיר יוצא/ת?</label>
+                <input
+                  value={local.city}
+                  onChange={(e) => set({ city: e.target.value })}
+                  placeholder="עיר יציאה"
+                  className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                  style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                />
+              </div>
+            </>
+          )}
+
+          {local.hasCar === "no" && (
+            <div>
+              <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>כבר יש לך איך להגיע?</label>
+              <YesNoButtons value={local.hasWay} onChange={(v) => set({ hasWay: v })} />
+              {local.hasWay === "no" && (
+                <input
+                  value={local.city}
+                  onChange={(e) => set({ city: e.target.value })}
+                  placeholder="מאיזה עיר?"
+                  className="w-full mt-2 px-3 py-2 rounded-xl text-sm outline-none"
+                  style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                />
+              )}
+              {local.hasWay === "yes" && (
+                <p className="text-xs mt-1.5" style={{ color: COLORS.textMuted }}>מעולה - לא תפורסם/י כמחפש/ת טרמפ.</p>
+              )}
+              {local.hasWay === "no" && (
+                <p className="text-xs mt-1.5" style={{ color: COLORS.textMuted }}>תפורסם/י ברשימת "מחפשים טרמפ".</p>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="flex items-center gap-3 pt-1">
+        <button
+          onClick={() => { onChange({ ...local, seats: Number(local.seats) || 0 }); setSaved(true); }}
+          className="px-4 py-2 rounded-full text-sm font-semibold"
+          style={{ background: COLORS.accent2, color: COLORS.bg }}
+        >
+          שמירה
+        </button>
+        {saved && <span className="text-xs" style={{ color: COLORS.accent2Dark }}>✓ נשמר</span>}
+      </div>
     </div>
   );
 }
@@ -2886,11 +2958,11 @@ export default function App() {
   // profile-completeness gate below doesn't nag forever after a real "no".
   const [pushDecisionMade, setPushDecisionMade] = useState(() => localStorage.getItem("push-decision-made") === "1");
   const [sendingTestPush, setSendingTestPush] = useState(false);
-  const [poolEventRides, setPoolEventRides] = useState([]);
+  const [poolEventRides, setPoolEventRides] = useState({});
   const [poolEventFood, setPoolEventFood] = useState([]);
   const [poolEventContent, setPoolEventContent] = useState([]);
   const [poolEventSubTab, setPoolEventSubTab] = useState("info");
-  const [contactingPoolRideId, setContactingPoolRideId] = useState(null);
+  const [contactingPoolRideName, setContactingPoolRideName] = useState(null);
   const loadSharedDataRef = useRef(null);
 
   useEffect(() => {
@@ -3031,7 +3103,7 @@ export default function App() {
       setExtraTeams(rawExtraTeams ? JSON.parse(rawExtraTeams) : []);
       setCustomChecklists(rawCustomChecklists ? JSON.parse(rawCustomChecklists) : {});
 
-      setPoolEventRides(rawPoolRides ? JSON.parse(rawPoolRides) : []);
+      setPoolEventRides(rawPoolRides ? JSON.parse(rawPoolRides) : {});
       setPoolEventContent(rawPoolContent ? JSON.parse(rawPoolContent) : []);
       if (rawPoolFood) {
         setPoolEventFood(JSON.parse(rawPoolFood));
@@ -3394,25 +3466,13 @@ export default function App() {
     }
   }
 
-  // "גלאו גלאו אפטר מי" (1.8.26 pool gathering) - rides board. One entry
-  // per member per posting; attributed to whoever's logged in (matches the
-  // camp roster, not a free-text name), removable by its author or an admin.
-  async function addPoolEventRide(type, details) {
-    if (!details.trim()) return;
+  // "גלאו גלאו אפטר מי" (1.8.26 pool gathering) - rides board. Same shape
+  // as the main camp's rideInfo (one record per member, keyed by name) -
+  // a much lighter version of it, since there's no playa arrival day/tow
+  // hitch/trailer logistics to ask about for a local one-day gathering.
+  async function setPoolEventRideData(data) {
     const latest = await getFreshShared("pool-event-rides", poolEventRides);
-    const next = [{ id: Date.now().toString(), name: identity, type, details: details.trim(), ts: Date.now() }, ...latest];
-    setPoolEventRides(next);
-    try {
-      await window.storage.set("pool-event-rides", JSON.stringify(next), true);
-      showToast("הפרטים נוספו ללוח הטרמפים", "ok");
-    } catch {
-      showToast("שמירה נכשלה", "error");
-    }
-  }
-
-  async function removePoolEventRide(id) {
-    const latest = await getFreshShared("pool-event-rides", poolEventRides);
-    const next = latest.filter((r) => r.id !== id);
+    const next = { ...latest, [identity]: data };
     setPoolEventRides(next);
     try {
       await window.storage.set("pool-event-rides", JSON.stringify(next), true);
@@ -5168,7 +5228,7 @@ ${sections}
             border: `1px solid ${tab === "pool-event" ? COLORS.accent : COLORS.accent2}`,
           }}
         >
-          <PartyPopper size={16} /> {POOL_EVENT_NAME} · {POOL_EVENT_DATE_LABEL} <Sparkles size={16} />
+          <PartyPopper size={16} /> {POOL_EVENT_BUTTON_LABEL} <Sparkles size={16} />
         </button>
 
         {roleDashboardTab && (
@@ -5230,11 +5290,11 @@ ${sections}
         {tab === "pool-event" && (
           <div>
             <div className="rounded-2xl overflow-hidden mb-4" style={{ border: `1px solid ${COLORS.divider}` }}>
-              <img src={poolEventImage} alt={POOL_EVENT_NAME} className="w-full block" style={{ maxHeight: 340, objectFit: "cover" }} />
+              <img src={poolEventImage} alt={POOL_EVENT_NAME} className="w-full block" style={{ maxHeight: 340, objectFit: "cover", objectPosition: "top" }} />
             </div>
             <div className="text-center mb-4">
               <h2 className="text-2xl" style={{ fontFamily: FONT_HEADING, color: COLORS.accentDark }}>{POOL_EVENT_NAME}</h2>
-              <p className="text-sm font-bold mt-1" style={{ color: COLORS.text }}>{POOL_EVENT_DATE_LABEL} · {POOL_EVENT_TIME_LABEL}</p>
+              <p className="text-sm font-bold mt-1" style={{ color: COLORS.text }}>{POOL_EVENT_DATE_LABEL} · {POOL_EVENT_WEEKDAY_LABEL} · {POOL_EVENT_TIME_LABEL}</p>
             </div>
 
             <div className="flex gap-2 mb-4 flex-wrap">
@@ -5260,53 +5320,81 @@ ${sections}
             </div>
 
             {poolEventSubTab === "info" && (
-              <div className="rounded-2xl p-4 space-y-3 text-sm" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                <p>
-                  לפני שהקמפ עולה למידברן, נפגשים כולנו לגיבוש קליל ליד הבריכה - שתייה קרה, אוכל טוב ובעיקר להיות ביחד.
-                  מוזמנות ומוזמנים כל חברות וחברי הקמפ, בלי קשר לתפקיד.
-                </p>
-                <p><b style={{ color: COLORS.accentDark }}>מתי:</b> {POOL_EVENT_DATE_LABEL} · {POOL_EVENT_TIME_LABEL}</p>
-                <p style={{ color: COLORS.textMuted }}>
-                  בלשוניות למעלה אפשר לתאם טרמפ, לראות/לסמן מה כל אחד/ת מביא/ה, ולהציע רעיונות לתוכן של המפגש.
-                </p>
-              </div>
-            )}
+              <div className="rounded-2xl p-4 space-y-4 text-sm" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                <p style={{ whiteSpace: "pre-line" }}>{POOL_EVENT_INTRO_TEXT}</p>
 
-            {poolEventSubTab === "rides" && (
-              <div>
-                <PoolEventRideForm onAdd={addPoolEventRide} />
-                <div className="space-y-1.5 mt-3">
-                  {poolEventRides.length === 0 && (
-                    <p className="text-xs text-center py-4" style={{ color: COLORS.textMuted }}>עדיין לא פורסם שום דבר בלוח הטרמפים.</p>
-                  )}
-                  {poolEventRides.map((r) => (
-                    <div key={r.id} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                      <div className="min-w-0 text-xs">
-                        <div className="font-semibold text-sm">
-                          {r.name} <span style={{ color: r.type === "offering" ? COLORS.accentDark : COLORS.accent2Dark }}>· {r.type === "offering" ? "מציע/ה טרמפ" : "מחפש/ת טרמפ"}</span>
-                        </div>
-                        <div className="mt-0.5" style={{ color: COLORS.textMuted }}>{r.details}</div>
-                        {contactingPoolRideId === r.id && (
-                          <div className="mt-1" style={{ color: COLORS.accentDark }}>
-                            {memberPhones[r.name] ? `טלפון: ${memberPhones[r.name]}` : "אין מספר טלפון רשום - אפשר לפנות דרך לוח חברי הקמפ"}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {r.name !== identity && (
-                          <button onClick={() => setContactingPoolRideId(contactingPoolRideId === r.id ? null : r.id)} className="text-xs font-bold" style={{ color: COLORS.accentDark }}>
-                            יצירת קשר
-                          </button>
-                        )}
-                        {(r.name === identity || isAdmin) && (
-                          <button onClick={() => removePoolEventRide(r.id)} style={{ color: COLORS.textMuted }}><Trash2 size={14} /></button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                <div>
+                  <h3 className="text-xs font-bold mb-1" style={{ color: COLORS.accentDark }}>פרטי האירוע</h3>
+                  <p>{POOL_EVENT_WEEKDAY_LABEL}, {POOL_EVENT_DATE_LABEL}</p>
+                  <p>מתחילים בשעה {POOL_EVENT_TIME_LABEL} ועד לאידע (?!)</p>
+                  <p>כתובת: {POOL_EVENT_ADDRESS}</p>
+                </div>
+
+                <div>
+                  <h3 className="text-xs font-bold mb-1" style={{ color: COLORS.accentDark }}>לוח טרמפים</h3>
+                  <p>צריכים טרמפ או שיש לכם מקום ברכב? זה המקום לעדכן ולהתחבר.</p>
+                </div>
+
+                <div>
+                  <h3 className="text-xs font-bold mb-1" style={{ color: COLORS.accentDark }}>מי מביא מה</h3>
+                  <p>נכנסים לטבלה, בוחרים מה מביאים ומעדכנים, כדי שיהיה מהכול ולא שבעה סלטי פסטה.</p>
                 </div>
               </div>
             )}
+
+            {poolEventSubTab === "rides" && (() => {
+              const offeringRidesPool = allMembers.filter((m) => poolEventRides[m.name]?.hasCar === "yes" && poolEventRides[m.name]?.offerRide === "yes");
+              const lookingForRidePool = allMembers.filter((m) => poolEventRides[m.name]?.hasCar === "no" && poolEventRides[m.name]?.hasWay === "no");
+              const RideRow = ({ name, subtitle }) => (
+                <div className="rounded-xl px-3 py-2 flex items-center justify-between gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                  <div className="min-w-0 text-xs">
+                    <div className="font-semibold text-sm">{name}</div>
+                    {subtitle && <div className="mt-0.5" style={{ color: COLORS.textMuted }}>{subtitle}</div>}
+                    {contactingPoolRideName === name && (
+                      <div className="mt-1" style={{ color: COLORS.accentDark }}>
+                        {memberPhones[name] ? `טלפון: ${memberPhones[name]}` : "אין מספר טלפון רשום - אפשר לפנות דרך לוח חברי הקמפ"}
+                      </div>
+                    )}
+                  </div>
+                  {name !== identity && (
+                    <button onClick={() => setContactingPoolRideName(contactingPoolRideName === name ? null : name)} className="text-xs font-bold shrink-0" style={{ color: COLORS.accentDark }}>
+                      יצירת קשר
+                    </button>
+                  )}
+                </div>
+              );
+              return (
+                <div>
+                  <PoolRideWizard name={identity} data={poolEventRides[identity]} onChange={setPoolEventRideData} />
+
+                  <div className="mt-4">
+                    <h3 className="text-xs font-bold mb-1.5" style={{ color: COLORS.textMuted }}>מציעים טרמפ ({offeringRidesPool.length})</h3>
+                    <div className="space-y-1.5">
+                      {offeringRidesPool.map((m) => {
+                        const d = poolEventRides[m.name];
+                        return <RideRow key={m.name} name={m.name} subtitle={`${d.city ? `יוצא/ת מ${d.city}` : ""}${d.seats ? `${d.city ? " · " : ""}${d.seats} מקומות פנויים` : ""}`} />;
+                      })}
+                      {offeringRidesPool.length === 0 && (
+                        <p className="text-xs text-center py-3" style={{ color: COLORS.textMuted }}>עדיין אין מי שמציע/ה טרמפ.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <h3 className="text-xs font-bold mb-1.5" style={{ color: COLORS.textMuted }}>מחפשים טרמפ ({lookingForRidePool.length})</h3>
+                    <div className="space-y-1.5">
+                      {lookingForRidePool.map((m) => {
+                        const d = poolEventRides[m.name];
+                        return <RideRow key={m.name} name={m.name} subtitle={d.city ? `מ${d.city}` : ""} />;
+                      })}
+                      {lookingForRidePool.length === 0 && (
+                        <p className="text-xs text-center py-3" style={{ color: COLORS.textMuted }}>עדיין אין מי שמחפש/ת טרמפ.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {poolEventSubTab === "food" && (() => {
               const categories = [...new Set(poolEventFood.map((it) => it.category))];
@@ -5367,8 +5455,9 @@ ${sections}
                   {poolEventContent.map((c) => (
                     <div key={c.id} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                       <div className="min-w-0">
-                        <div>{c.text}</div>
-                        <div className="mt-0.5" style={{ color: COLORS.textMuted }}>{c.author} · {new Date(c.ts).toLocaleDateString("he-IL")}</div>
+                        <div className="font-semibold text-sm" style={{ color: COLORS.accentDark }}>{c.author}</div>
+                        <div className="mt-0.5">{c.text}</div>
+                        <div className="mt-0.5 text-[10px]" style={{ color: COLORS.textMuted }}>{new Date(c.ts).toLocaleDateString("he-IL")}</div>
                       </div>
                       {(c.author === identity || isAdmin) && (
                         <button onClick={() => removePoolEventContentIdea(c.id)} style={{ color: COLORS.textMuted }} className="shrink-0"><Trash2 size={14} /></button>
