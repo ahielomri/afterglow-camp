@@ -213,7 +213,11 @@ export async function insertActivityLog(actor, action, details) {
   if (error) throw error;
 }
 
-export async function listActivityLog(limit = 200) {
+// High default on purpose - every action ever logged stays permanently in
+// the table (nothing here ever deletes rows), and the admin log view should
+// show the whole history, not just a recent slice, now that logging itself
+// actually works (see insertActivityLog's ts fix).
+export async function listActivityLog(limit = 5000) {
   const { data, error } = await supabase
     .from("activity_log")
     .select("ts, actor, action, details")
