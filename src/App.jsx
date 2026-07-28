@@ -453,6 +453,7 @@ const POOL_EVENT_DATE_LABEL = "1.8.26";
 const POOL_EVENT_WEEKDAY_LABEL = "יום שבת";
 const POOL_EVENT_TIME_LABEL = "15:00";
 const POOL_EVENT_ADDRESS = "קיבוץ גלויות 11, בצרה";
+const POOL_EVENT_WAZE_URL = "https://www.waze.com/live-map/directions/קיבוץ-גלויות-11-בצרה?to=place.w.22872386.228592789.439379";
 const POOL_EVENT_BUTTON_LABEL = `${POOL_EVENT_NAME} | ${POOL_EVENT_DATE_LABEL} | ${POOL_EVENT_WEEKDAY_LABEL} | ${POOL_EVENT_TIME_LABEL}`;
 // Deliberately outside the app's usual salmon/pink COLORS palette - this one
 // button is meant to stand out as a one-off festive invite, not blend in
@@ -460,7 +461,6 @@ const POOL_EVENT_BUTTON_LABEL = `${POOL_EVENT_NAME} | ${POOL_EVENT_DATE_LABEL} |
 const POOL_EVENT_COLOR_DARK = "#4a1760";
 const POOL_EVENT_COLOR_PURPLE = "#c9a6f5";
 const POOL_EVENT_COLOR_PINK = "#ffc2e6";
-const POOL_EVENT_COLOR_FUCHSIA = "#e83fc0";
 
 // Verbatim copy supplied for the event's own info tab.
 const POOL_EVENT_INTRO_TEXT = `פותחים את העונה כמו שצריך: בריכה, אנשים טובים ואווירת Afterglow.
@@ -5253,12 +5253,12 @@ ${sections}
           onClick={() => setTab("pool-event")}
           className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-sm font-bold transition-colors mb-2"
           style={{
-            background: `linear-gradient(90deg, ${POOL_EVENT_COLOR_PURPLE}, ${POOL_EVENT_COLOR_PINK}, ${POOL_EVENT_COLOR_FUCHSIA}, ${POOL_EVENT_COLOR_PURPLE})`,
+            background: `linear-gradient(90deg, ${POOL_EVENT_COLOR_PURPLE}, ${POOL_EVENT_COLOR_PINK}, ${POOL_EVENT_COLOR_PURPLE})`,
             color: POOL_EVENT_COLOR_DARK,
-            border: `1px solid ${POOL_EVENT_COLOR_FUCHSIA}`,
+            border: `1px solid ${POOL_EVENT_COLOR_PURPLE}`,
             boxShadow: tab === "pool-event"
-              ? `0 0 0 2px ${POOL_EVENT_COLOR_FUCHSIA}66, 0 4px 14px ${POOL_EVENT_COLOR_FUCHSIA}55`
-              : `0 2px 8px ${POOL_EVENT_COLOR_FUCHSIA}33`,
+              ? `0 0 0 2px ${POOL_EVENT_COLOR_PINK}88, 0 4px 14px ${POOL_EVENT_COLOR_PURPLE}55`
+              : `0 2px 8px ${POOL_EVENT_COLOR_PURPLE}33`,
           }}
         >
           <PartyPopper size={16} /> {POOL_EVENT_BUTTON_LABEL} <Sparkles size={16} />
@@ -5357,19 +5357,35 @@ ${sections}
                 <p style={{ whiteSpace: "pre-line" }}>{POOL_EVENT_INTRO_TEXT}</p>
 
                 <div>
-                  <h3 className="text-sm font-bold mb-1" style={{ color: COLORS.accentDark }}>פרטי האירוע</h3>
-                  <p><b>מתי?</b> {POOL_EVENT_WEEKDAY_LABEL}, {POOL_EVENT_DATE_LABEL} · מתחילים בשעה {POOL_EVENT_TIME_LABEL} ועד לאידע (?!)</p>
-                  <p><b>איפה?</b> {POOL_EVENT_ADDRESS}</p>
+                  <p className="font-bold" style={{ color: COLORS.accentDark }}>מתי?</p>
+                  <p>{POOL_EVENT_WEEKDAY_LABEL}, {POOL_EVENT_DATE_LABEL} ·</p>
+                  <p>מתחילים בשעה {POOL_EVENT_TIME_LABEL} ועד לאידע (?!)</p>
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-bold mb-1" style={{ color: COLORS.accentDark }}>לוח טרמפים</h3>
-                  <p>צריכים טרמפ או שיש לכם מקום ברכב? זה המקום לעדכן ולהתחבר.</p>
+                  <p className="font-bold" style={{ color: COLORS.accentDark }}>איפה?</p>
+                  <p>
+                    <a href={POOL_EVENT_WAZE_URL} target="_blank" rel="noreferrer" style={{ color: COLORS.accentDark, textDecoration: "underline" }}>
+                      {POOL_EVENT_ADDRESS}
+                    </a>
+                  </p>
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-bold mb-1" style={{ color: COLORS.accentDark }}>מי מביא מה</h3>
-                  <p>נכנסים לטבלה, בוחרים מה מביאים ומעדכנים, כדי שיהיה מהכול ולא שבעה סלטי פסטה.</p>
+                  <p className="font-bold" style={{ color: COLORS.accentDark }}>לוח טרמפים:</p>
+                  <p>צריכים טרמפ או שיש לכם מקום ברכב?</p>
+                  <p>זה המקום לעדכן.</p>
+                </div>
+
+                <div>
+                  <p className="font-bold" style={{ color: COLORS.accentDark }}>מי מביא מה:</p>
+                  <p>נכנסים, בוחרים מה מביאים.</p>
+                  <p>כדי שיהיה מהכול ולא שבעה סלטי פסטה.</p>
+                </div>
+
+                <div>
+                  <p className="font-bold" style={{ color: COLORS.accentDark }}>מי שחפצה נפשו בתוכן:</p>
+                  <p>ותוסיף משפט.</p>
                 </div>
               </div>
             )}
