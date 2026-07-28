@@ -472,6 +472,11 @@ const POOL_EVENT_INTRO_TEXT = `פותחים את העונה כמו שצריך: �
 
 כדי שהכול יהיה שקוף וקל, הכל מרוכז כאן:`;
 
+// How many members can claim the same "מי מביא מה" item at once - with 33
+// campers and a handful of items per category, one claimant per item was
+// too restrictive, so several people can now bring the same thing together.
+const POOL_EVENT_FOOD_MAX_CLAIMS = 8;
+
 // Seeds the "מי מביא מה" board the first time anyone opens it - matches the
 // categories from the event's own planning sheet. Members can still add
 // their own extra items on top of these.
@@ -3179,14 +3184,21 @@ export default function App() {
       setPoolEventRides(rawPoolRides ? JSON.parse(rawPoolRides) : {});
       setPoolEventContent(rawPoolContent ? JSON.parse(rawPoolContent) : []);
       if (rawPoolFood) {
-        setPoolEventFood(JSON.parse(rawPoolFood));
+        // Older saved data had a single "broughtBy" name (or null) per item -
+        // normalize to an array of names so multi-claim items work
+        // regardless of when the item was first added/claimed.
+        const parsedFood = JSON.parse(rawPoolFood).map((it) => ({
+          ...it,
+          broughtBy: Array.isArray(it.broughtBy) ? it.broughtBy : (it.broughtBy ? [it.broughtBy] : []),
+        }));
+        setPoolEventFood(parsedFood);
       } else {
         const seeded = POOL_EVENT_FOOD_CATALOG.map((c, i) => ({
           id: `seed-${i}`,
           category: c.category,
           item: c.suggestion,
           notes: c.notes,
-          broughtBy: null,
+          broughtBy: [],
         }));
         setPoolEventFood(seeded);
         window.storage.set("pool-event-food", JSON.stringify(seeded), true).catch(() => {});
@@ -3559,7 +3571,7 @@ export default function App() {
   async function addPoolEventFoodItem(category, item, notes) {
     if (!item.trim()) return;
     const latest = await getFreshShared("pool-event-food", poolEventFood);
-    const next = [...latest, { id: Date.now().toString(), category: category.trim() || "שונות", item: item.trim(), notes: notes.trim(), broughtBy: null, addedBy: identity }];
+    const next = [...latest, { id: Date.now().toString(), category: category.trim() || "שונות", item: item.trim(), notes: notes.trim(), broughtBy: [], addedBy: identity }];
     setPoolEventFood(next);
     try {
       await window.storage.set("pool-event-food", JSON.stringify(next), true);
@@ -3569,16 +3581,24 @@ export default function App() {
     }
   }
 
+  // Up to POOL_EVENT_FOOD_MAX_CLAIMS members can claim the same item -
+  // clicking again removes just your own name from it, never anyone else's.
   async function togglePoolEventFoodClaim(id) {
     const latest = await getFreshShared("pool-event-food", poolEventFood);
+    let blocked = false;
     const next = latest.map((it) => {
       if (it.id !== id) return it;
-      if (it.broughtBy) {
-        if (it.broughtBy !== identity && !isAdmin) return it;
-        return { ...it, broughtBy: null };
+      const claimants = Array.isArray(it.broughtBy) ? it.broughtBy : (it.broughtBy ? [it.broughtBy] : []);
+      if (claimants.includes(identity)) {
+        return { ...it, broughtBy: claimants.filter((n) => n !== identity) };
       }
-      return { ...it, broughtBy: identity };
+      if (claimants.length >= POOL_EVENT_FOOD_MAX_CLAIMS) {
+        blocked = true;
+        return it;
+      }
+      return { ...it, broughtBy: [...claimants, identity] };
     });
+    if (blocked) return showToast(`הפריט הזה כבר מלא (${POOL_EVENT_FOOD_MAX_CLAIMS}/${POOL_EVENT_FOOD_MAX_CLAIMS})`, "error");
     setPoolEventFood(next);
     try {
       await window.storage.set("pool-event-food", JSON.stringify(next), true);
@@ -5538,28 +5558,30 @@ ${sections}
                         <h3 className="text-xs font-bold mb-1.5" style={{ color: COLORS.textMuted }}>{cat}</h3>
                         <div className="space-y-1.5">
                           {poolEventFood.filter((it) => it.category === cat).map((it) => {
-                            const claimedByOther = !!it.broughtBy && it.broughtBy !== identity && !isAdmin;
+                            const claimants = Array.isArray(it.broughtBy) ? it.broughtBy : (it.broughtBy ? [it.broughtBy] : []);
+                            const iClaimed = claimants.includes(identity);
+                            const full = claimants.length >= POOL_EVENT_FOOD_MAX_CLAIMS && !iClaimed;
                             return (
                               <div key={it.id} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                                 <div className="min-w-0 text-xs">
                                   <div className="font-semibold text-sm">{it.item}</div>
                                   {it.notes && <div style={{ color: COLORS.textMuted }}>{it.notes}</div>}
-                                  <div className="mt-0.5" style={{ color: it.broughtBy ? COLORS.accentDark : COLORS.textMuted }}>
-                                    {it.broughtBy ? `מביא/ה: ${it.broughtBy}` : "עדיין לא נתפס"}
+                                  <div className="mt-0.5" style={{ color: claimants.length > 0 ? COLORS.accentDark : COLORS.textMuted }}>
+                                    {claimants.length > 0 ? `מביאים: ${claimants.join(", ")}` : "עדיין לא נתפס"} · {claimants.length}/{POOL_EVENT_FOOD_MAX_CLAIMS}
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                   <button
                                     onClick={() => togglePoolEventFoodClaim(it.id)}
-                                    disabled={claimedByOther}
+                                    disabled={full}
                                     className="px-3 py-1.5 rounded-full text-xs font-bold"
                                     style={{
-                                      background: it.broughtBy ? COLORS.surface2 : COLORS.accent2,
-                                      color: it.broughtBy ? COLORS.textMuted : COLORS.bg,
-                                      opacity: claimedByOther ? 0.5 : 1,
+                                      background: iClaimed ? COLORS.surface2 : COLORS.accent2,
+                                      color: iClaimed ? COLORS.textMuted : COLORS.bg,
+                                      opacity: full ? 0.5 : 1,
                                     }}
                                   >
-                                    {it.broughtBy ? (it.broughtBy === identity || isAdmin ? "ביטול" : "נתפס") : "אני מביא/ה"}
+                                    {iClaimed ? "ביטול" : full ? "מלא" : claimants.length > 0 ? "גם אני מביא/ה" : "אני מביא/ה"}
                                   </button>
                                   {(it.addedBy === identity || isAdmin) && (
                                     <button onClick={() => removePoolEventFoodItem(it.id)} style={{ color: COLORS.textMuted }}><Trash2 size={14} /></button>
@@ -6172,12 +6194,17 @@ ${sections}
                       <div key={cat}>
                         <div className="text-xs font-bold mb-1" style={{ color: COLORS.accentDark }}>{cat}</div>
                         <div className="space-y-1">
-                          {poolEventFood.filter((it) => it.category === cat).map((it) => (
-                            <div key={it.id} className="text-xs px-2 py-1 rounded-lg flex items-center justify-between" style={{ background: COLORS.surface }}>
-                              <span>{it.item}</span>
-                              <span style={{ color: it.broughtBy ? COLORS.accentDark : COLORS.textMuted }}>{it.broughtBy || "לא נתפס"}</span>
-                            </div>
-                          ))}
+                          {poolEventFood.filter((it) => it.category === cat).map((it) => {
+                            const claimants = Array.isArray(it.broughtBy) ? it.broughtBy : (it.broughtBy ? [it.broughtBy] : []);
+                            return (
+                              <div key={it.id} className="text-xs px-2 py-1 rounded-lg flex items-center justify-between" style={{ background: COLORS.surface }}>
+                                <span>{it.item}</span>
+                                <span style={{ color: claimants.length > 0 ? COLORS.accentDark : COLORS.textMuted }}>
+                                  {claimants.length > 0 ? claimants.join(", ") : "לא נתפס"} ({claimants.length}/{POOL_EVENT_FOOD_MAX_CLAIMS})
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     ))}
