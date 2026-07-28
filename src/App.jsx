@@ -454,6 +454,11 @@ const POOL_EVENT_WEEKDAY_LABEL = "יום שבת";
 const POOL_EVENT_TIME_LABEL = "15:00";
 const POOL_EVENT_ADDRESS = "קיבוץ גלויות 11, בצרה";
 const POOL_EVENT_BUTTON_LABEL = `${POOL_EVENT_NAME} | ${POOL_EVENT_DATE_LABEL} | ${POOL_EVENT_WEEKDAY_LABEL} | ${POOL_EVENT_TIME_LABEL}`;
+// Deliberately outside the app's usual salmon/pink COLORS palette - this one
+// button is meant to stand out as a one-off festive invite, not blend in
+// with the regular nav.
+const POOL_EVENT_COLOR_DARK = "#3d1a52";
+const POOL_EVENT_COLOR_LIGHT = "#ffb3e6";
 
 // Verbatim copy supplied for the event's own info tab.
 const POOL_EVENT_INTRO_TEXT = `פותחים את העונה כמו שצריך: בריכה, אנשים טובים ואווירת Afterglow.
@@ -5223,9 +5228,12 @@ ${sections}
           onClick={() => setTab("pool-event")}
           className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-sm font-bold transition-colors mb-2"
           style={{
-            background: tab === "pool-event" ? `linear-gradient(90deg, ${COLORS.accent2}, ${COLORS.accent})` : `linear-gradient(90deg, ${COLORS.accent2Light}, ${COLORS.accentLight})`,
-            color: tab === "pool-event" ? "white" : COLORS.accentDark,
-            border: `1px solid ${tab === "pool-event" ? COLORS.accent : COLORS.accent2}`,
+            background: `linear-gradient(90deg, ${POOL_EVENT_COLOR_DARK}, ${POOL_EVENT_COLOR_LIGHT})`,
+            color: "white",
+            border: `1px solid ${POOL_EVENT_COLOR_DARK}`,
+            boxShadow: tab === "pool-event"
+              ? `0 0 0 2px ${POOL_EVENT_COLOR_LIGHT}88, 0 4px 14px ${POOL_EVENT_COLOR_DARK}66`
+              : `0 2px 8px ${POOL_EVENT_COLOR_DARK}33`,
           }}
         >
           <PartyPopper size={16} /> {POOL_EVENT_BUTTON_LABEL} <Sparkles size={16} />
