@@ -5289,13 +5289,18 @@ ${sections}
           }}
         />
         <div className="relative flex items-center gap-4 max-w-4xl mx-auto">
-          <SunsetMark size={64} />
-          <div className="flex-1">
-            <h1 style={{ fontFamily: FONT_HEADING }} className="text-3xl tracking-tight">
-              Afterglow
-            </h1>
-            <p className="text-sm" style={{ color: COLORS.textMuted }}>מערכת ניהול קמפ · מידברן 2026</p>
-          </div>
+          <button
+            onClick={() => { setTab("dashboard-personal"); setExpandedNavCategory(null); }}
+            className="flex items-center gap-4 flex-1 text-right"
+          >
+            <SunsetMark size={64} />
+            <div>
+              <h1 style={{ fontFamily: FONT_HEADING }} className="text-3xl tracking-tight">
+                Afterglow
+              </h1>
+              <p className="text-sm" style={{ color: COLORS.textMuted }}>מערכת ניהול קמפ · מידברן 2026</p>
+            </div>
+          </button>
           <div className="text-center px-2 py-1">
             <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.text, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>{daysUntil()}</div>
             <div className="text-xs font-bold" style={{ color: COLORS.text, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>ימים לפתיחת השערים</div>
