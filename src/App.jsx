@@ -457,8 +457,10 @@ const POOL_EVENT_BUTTON_LABEL = `${POOL_EVENT_NAME} | ${POOL_EVENT_DATE_LABEL} |
 // Deliberately outside the app's usual salmon/pink COLORS palette - this one
 // button is meant to stand out as a one-off festive invite, not blend in
 // with the regular nav.
-const POOL_EVENT_COLOR_DARK = "#3d1a52";
-const POOL_EVENT_COLOR_LIGHT = "#ffb3e6";
+const POOL_EVENT_COLOR_DARK = "#4a1760";
+const POOL_EVENT_COLOR_PURPLE = "#c9a6f5";
+const POOL_EVENT_COLOR_PINK = "#ffc2e6";
+const POOL_EVENT_COLOR_FUCHSIA = "#e83fc0";
 
 // Verbatim copy supplied for the event's own info tab.
 const POOL_EVENT_INTRO_TEXT = `פותחים את העונה כמו שצריך: בריכה, אנשים טובים ואווירת Afterglow.
@@ -467,7 +469,7 @@ const POOL_EVENT_INTRO_TEXT = `פותחים את העונה כמו שצריך: �
 
 חיבורים נוצרים כשנפגשים באמת, מדברים, צוחקים ומתחילים להרגיש בנוח אחד עם השני. וזה סוד הקסם.
 
-כדי שהכול יהיה שקוף וקל, ריכזנו כאן את כל מה שצריך:`;
+כדי שהכול יהיה שקוף וקל, הכל מרוכז כאן:`;
 
 // Seeds the "מי מביא מה" board the first time anyone opens it - matches the
 // categories from the event's own planning sheet. Members can still add
@@ -1253,6 +1255,7 @@ function PoolRideWizard({ name, data, onChange }) {
     seats: d.seats || "",
     hasWay: d.hasWay,
     city: d.city || "",
+    departureTime: d.departureTime || "",
   });
   const [saved, setSaved] = useState(false);
   const set = (patch) => { setLocal({ ...local, ...patch }); setSaved(false); };
@@ -1289,15 +1292,27 @@ function PoolRideWizard({ name, data, onChange }) {
                   />
                 )}
               </div>
-              <div>
-                <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>מאיזה עיר יוצא/ת?</label>
-                <input
-                  value={local.city}
-                  onChange={(e) => set({ city: e.target.value })}
-                  placeholder="עיר יציאה"
-                  className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-                  style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-                />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>מאיזה עיר יוצא/ת?</label>
+                  <input
+                    value={local.city}
+                    onChange={(e) => set({ city: e.target.value })}
+                    placeholder="עיר יציאה"
+                    className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                    style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>שעת יציאה</label>
+                  <input
+                    type="time"
+                    value={local.departureTime}
+                    onChange={(e) => set({ departureTime: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                    style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                  />
+                </div>
               </div>
             </>
           )}
@@ -1307,13 +1322,23 @@ function PoolRideWizard({ name, data, onChange }) {
               <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>כבר יש לך איך להגיע?</label>
               <YesNoButtons value={local.hasWay} onChange={(v) => set({ hasWay: v })} />
               {local.hasWay === "no" && (
-                <input
-                  value={local.city}
-                  onChange={(e) => set({ city: e.target.value })}
-                  placeholder="מאיזה עיר?"
-                  className="w-full mt-2 px-3 py-2 rounded-xl text-sm outline-none"
-                  style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-                />
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <input
+                    value={local.city}
+                    onChange={(e) => set({ city: e.target.value })}
+                    placeholder="מאיזה עיר?"
+                    className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                    style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                  />
+                  <input
+                    type="time"
+                    value={local.departureTime}
+                    onChange={(e) => set({ departureTime: e.target.value })}
+                    placeholder="שעת יציאה רצויה"
+                    className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                    style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                  />
+                </div>
               )}
               {local.hasWay === "yes" && (
                 <p className="text-xs mt-1.5" style={{ color: COLORS.textMuted }}>מעולה - לא תפורסם/י כמחפש/ת טרמפ.</p>
@@ -5228,12 +5253,12 @@ ${sections}
           onClick={() => setTab("pool-event")}
           className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-sm font-bold transition-colors mb-2"
           style={{
-            background: `linear-gradient(90deg, ${POOL_EVENT_COLOR_DARK}, ${POOL_EVENT_COLOR_LIGHT})`,
-            color: "white",
-            border: `1px solid ${POOL_EVENT_COLOR_DARK}`,
+            background: `linear-gradient(90deg, ${POOL_EVENT_COLOR_PURPLE}, ${POOL_EVENT_COLOR_PINK}, ${POOL_EVENT_COLOR_FUCHSIA}, ${POOL_EVENT_COLOR_PURPLE})`,
+            color: POOL_EVENT_COLOR_DARK,
+            border: `1px solid ${POOL_EVENT_COLOR_FUCHSIA}`,
             boxShadow: tab === "pool-event"
-              ? `0 0 0 2px ${POOL_EVENT_COLOR_LIGHT}88, 0 4px 14px ${POOL_EVENT_COLOR_DARK}66`
-              : `0 2px 8px ${POOL_EVENT_COLOR_DARK}33`,
+              ? `0 0 0 2px ${POOL_EVENT_COLOR_FUCHSIA}66, 0 4px 14px ${POOL_EVENT_COLOR_FUCHSIA}55`
+              : `0 2px 8px ${POOL_EVENT_COLOR_FUCHSIA}33`,
           }}
         >
           <PartyPopper size={16} /> {POOL_EVENT_BUTTON_LABEL} <Sparkles size={16} />
@@ -5305,7 +5330,7 @@ ${sections}
               <p className="text-sm font-bold mt-1" style={{ color: COLORS.text }}>{POOL_EVENT_DATE_LABEL} · {POOL_EVENT_WEEKDAY_LABEL} · {POOL_EVENT_TIME_LABEL}</p>
             </div>
 
-            <div className="flex gap-2 mb-4 flex-wrap">
+            <div className="flex gap-1.5 mb-4 overflow-x-auto">
               {[
                 { id: "info", label: "פרטי האירוע", icon: PartyPopper },
                 { id: "rides", label: "לוח טרמפים", icon: Car },
@@ -5315,36 +5340,35 @@ ${sections}
                 <button
                   key={s.id}
                   onClick={() => setPoolEventSubTab(s.id)}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-xs font-bold"
+                  className="flex-1 shrink-0 whitespace-nowrap flex items-center justify-center gap-1 px-2 py-2 rounded-xl text-[11px] font-bold"
                   style={{
                     background: poolEventSubTab === s.id ? COLORS.accent2 : COLORS.surface,
                     color: poolEventSubTab === s.id ? COLORS.bg : COLORS.textMuted,
                     border: `1px solid ${poolEventSubTab === s.id ? COLORS.accent2 : COLORS.divider}`,
                   }}
                 >
-                  <s.icon size={14} /> {s.label}
+                  <s.icon size={13} /> {s.label}
                 </button>
               ))}
             </div>
 
             {poolEventSubTab === "info" && (
-              <div className="rounded-2xl p-4 space-y-4 text-sm" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+              <div className="rounded-2xl p-5 space-y-5 text-base" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                 <p style={{ whiteSpace: "pre-line" }}>{POOL_EVENT_INTRO_TEXT}</p>
 
                 <div>
-                  <h3 className="text-xs font-bold mb-1" style={{ color: COLORS.accentDark }}>פרטי האירוע</h3>
-                  <p>{POOL_EVENT_WEEKDAY_LABEL}, {POOL_EVENT_DATE_LABEL}</p>
-                  <p>מתחילים בשעה {POOL_EVENT_TIME_LABEL} ועד לאידע (?!)</p>
-                  <p>כתובת: {POOL_EVENT_ADDRESS}</p>
+                  <h3 className="text-sm font-bold mb-1" style={{ color: COLORS.accentDark }}>פרטי האירוע</h3>
+                  <p><b>מתי?</b> {POOL_EVENT_WEEKDAY_LABEL}, {POOL_EVENT_DATE_LABEL} · מתחילים בשעה {POOL_EVENT_TIME_LABEL} ועד לאידע (?!)</p>
+                  <p><b>איפה?</b> {POOL_EVENT_ADDRESS}</p>
                 </div>
 
                 <div>
-                  <h3 className="text-xs font-bold mb-1" style={{ color: COLORS.accentDark }}>לוח טרמפים</h3>
+                  <h3 className="text-sm font-bold mb-1" style={{ color: COLORS.accentDark }}>לוח טרמפים</h3>
                   <p>צריכים טרמפ או שיש לכם מקום ברכב? זה המקום לעדכן ולהתחבר.</p>
                 </div>
 
                 <div>
-                  <h3 className="text-xs font-bold mb-1" style={{ color: COLORS.accentDark }}>מי מביא מה</h3>
+                  <h3 className="text-sm font-bold mb-1" style={{ color: COLORS.accentDark }}>מי מביא מה</h3>
                   <p>נכנסים לטבלה, בוחרים מה מביאים ומעדכנים, כדי שיהיה מהכול ולא שבעה סלטי פסטה.</p>
                 </div>
               </div>
@@ -5380,7 +5404,12 @@ ${sections}
                     <div className="space-y-1.5">
                       {offeringRidesPool.map((m) => {
                         const d = poolEventRides[m.name];
-                        return <RideRow key={m.name} name={m.name} subtitle={`${d.city ? `יוצא/ת מ${d.city}` : ""}${d.seats ? `${d.city ? " · " : ""}${d.seats} מקומות פנויים` : ""}`} />;
+                        const parts = [
+                          d.city && `יוצא/ת מ${d.city}`,
+                          d.departureTime && `בשעה ${d.departureTime}`,
+                          d.seats && `${d.seats} מקומות פנויים`,
+                        ].filter(Boolean);
+                        return <RideRow key={m.name} name={m.name} subtitle={parts.join(" · ")} />;
                       })}
                       {offeringRidesPool.length === 0 && (
                         <p className="text-xs text-center py-3" style={{ color: COLORS.textMuted }}>עדיין אין מי שמציע/ה טרמפ.</p>
@@ -5393,7 +5422,11 @@ ${sections}
                     <div className="space-y-1.5">
                       {lookingForRidePool.map((m) => {
                         const d = poolEventRides[m.name];
-                        return <RideRow key={m.name} name={m.name} subtitle={d.city ? `מ${d.city}` : ""} />;
+                        const parts = [
+                          d.city && `מ${d.city}`,
+                          d.departureTime && `סביב השעה ${d.departureTime}`,
+                        ].filter(Boolean);
+                        return <RideRow key={m.name} name={m.name} subtitle={parts.join(" · ")} />;
                       })}
                       {lookingForRidePool.length === 0 && (
                         <p className="text-xs text-center py-3" style={{ color: COLORS.textMuted }}>עדיין אין מי שמחפש/ת טרמפ.</p>
@@ -5458,24 +5491,27 @@ ${sections}
                 <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
                   רעיון למוזיקה, משחק, טקס קטן או כל דבר אחר שירצה/תרצה להביא למפגש? אפשר להציע כאן.
                 </p>
+                <p className="text-xs mb-3" style={{ color: COLORS.accentDark }}>
+                  הרעיונות מועברים לצוות המארגן/ות, שיבחרו מה נכנס בפועל לתוכנית - הצעות של אחרים לא מוצגות כאן.
+                </p>
                 <PoolEventContentForm onAdd={addPoolEventContentIdea} />
-                <div className="space-y-1.5 mt-2">
-                  {poolEventContent.map((c) => (
-                    <div key={c.id} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                      <div className="min-w-0">
-                        <div className="font-semibold text-sm" style={{ color: COLORS.accentDark }}>{c.author}</div>
-                        <div className="mt-0.5">{c.text}</div>
-                        <div className="mt-0.5 text-[10px]" style={{ color: COLORS.textMuted }}>{new Date(c.ts).toLocaleDateString("he-IL")}</div>
-                      </div>
-                      {(c.author === identity || isAdmin) && (
+                {isAdmin && (
+                  <div className="space-y-1.5 mt-3">
+                    {poolEventContent.map((c) => (
+                      <div key={c.id} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                        <div className="min-w-0">
+                          <div className="font-semibold text-sm" style={{ color: COLORS.accentDark }}>{c.author}</div>
+                          <div className="mt-0.5">{c.text}</div>
+                          <div className="mt-0.5 text-[10px]" style={{ color: COLORS.textMuted }}>{new Date(c.ts).toLocaleDateString("he-IL")}</div>
+                        </div>
                         <button onClick={() => removePoolEventContentIdea(c.id)} style={{ color: COLORS.textMuted }} className="shrink-0"><Trash2 size={14} /></button>
-                      )}
-                    </div>
-                  ))}
-                  {poolEventContent.length === 0 && (
-                    <p className="text-xs text-center py-4" style={{ color: COLORS.textMuted }}>אין עדיין רעיונות לתוכן.</p>
-                  )}
-                </div>
+                      </div>
+                    ))}
+                    {poolEventContent.length === 0 && (
+                      <p className="text-xs text-center py-4" style={{ color: COLORS.textMuted }}>אין עדיין רעיונות לתוכן.</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
