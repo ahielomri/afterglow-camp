@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart } from "lucide-react";
+import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart, PartyPopper, Sparkles, Utensils, Lightbulb } from "lucide-react";
 import { pushSupported, pushPermission, enablePush, disablePush, isPushSubscribed, resetPush } from "./push.js";
 import heroDesert from "./assets/hero-desert.jpg";
+import poolEventImage from "./assets/event-0108.jpg";
 import {
   uploadFile,
   signInMember,
@@ -439,6 +440,31 @@ const EVENT_START = new Date(2026, 10, 2);
 function daysUntil() {
   return Math.ceil((EVENT_START - new Date()) / (1000 * 60 * 60 * 24));
 }
+
+// ---------------------------------------------------------------------------
+// "גלאו גלאו אפטר מי" - שבת 1.8.26: a one-off camp get-together (pool
+// gathering) ahead of the main event, open to every camper regardless of
+// role - a lighter, simpler board than the main-event shopping/ride systems
+// above, but built the exact same way (shared kv_store list, attributed to
+// the logged-in member).
+// ---------------------------------------------------------------------------
+const POOL_EVENT_NAME = "גלאו גלאו אפטר מי";
+const POOL_EVENT_DATE_LABEL = "שבת, 1.8.26";
+const POOL_EVENT_TIME_LABEL = "נפגשים בשעה 15:00";
+
+// Seeds the "מי מביא מה" board the first time anyone opens it - matches the
+// categories from the event's own planning sheet. Members can still add
+// their own extra items on top of these.
+const POOL_EVENT_FOOD_CATALOG = [
+  { category: "שתייה קלה", suggestion: "מים / מוגז / מיצים / תרכיזים", notes: "2-3 בקבוקים קרים" },
+  { category: "אלכוהול ובירות", suggestion: "בירות קרות / יין / אלכוהול קל", notes: "לא לשכוח קרח!" },
+  { category: "מפנק / עיקרי", suggestion: "פשטידה / מאפה / קיש", notes: "חתוך ומוכן להגשה" },
+  { category: "סלטים", suggestion: "סלט ירוק / סלט פסטה / סלט עשיר", notes: "רוטב בצד" },
+  { category: "חטיפים ונשנושים", suggestion: "חטיפים מלוחים / פיצוחים / זיתים", notes: "" },
+  { category: "מתוקים וקינוחים", suggestion: "עוגה / עוגיות / פירות חתוכים", notes: "פירות מרעננים לבריכה" },
+  { category: "חד\"פ וכללי", suggestion: "כוסות, צלחות, מפיות, שקיות זבל", notes: "מעדיפים אקולוגי/רב-פעמי" },
+  { category: "שונות / קרח", suggestion: "שקיות קרח / צידנית", notes: "" },
+];
 
 // "committed" = the full cost regardless of payment status, "paid" = what's
 // actually been paid so far (the full amount unless marked partial).
@@ -1191,6 +1217,107 @@ function ShoppingRequestForm({ onAdd }) {
         style={{ background: COLORS.accent2, color: COLORS.bg }}
       >
         שליחת בקשה
+      </button>
+    </div>
+  );
+}
+
+// Pool-gathering (1.8.26) rides board - one post per member ("מציע/ה" or
+// "מחפש/ת"), attributed automatically to whoever's logged in.
+function PoolEventRideForm({ onAdd }) {
+  const [type, setType] = useState("offering");
+  const [details, setDetails] = useState("");
+  return (
+    <div className="rounded-2xl p-4 space-y-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <div className="flex gap-2">
+        {[{ v: "offering", l: "מציע/ה טרמפ" }, { v: "need", l: "מחפש/ת טרמפ" }].map((o) => (
+          <button
+            key={o.v}
+            onClick={() => setType(o.v)}
+            className="flex-1 px-3 py-2 rounded-xl text-xs font-bold"
+            style={{
+              background: type === o.v ? COLORS.accent2 : COLORS.input,
+              color: type === o.v ? COLORS.bg : COLORS.textMuted,
+              border: `1px solid ${type === o.v ? COLORS.accent2 : COLORS.divider}`,
+            }}
+          >
+            {o.l}
+          </button>
+        ))}
+      </div>
+      <input
+        value={details}
+        onChange={(e) => setDetails(e.target.value)}
+        placeholder='למשל: "יוצא/ת מתל אביב ב-14:00, יש 2 מקומות פנויים"'
+        className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      />
+      <button
+        onClick={() => { onAdd(type, details); setDetails(""); }}
+        className="px-4 py-2 rounded-full text-sm font-semibold"
+        style={{ background: COLORS.accent2, color: COLORS.bg }}
+      >
+        פרסום ללוח
+      </button>
+    </div>
+  );
+}
+
+// "מי מביא מה" - adding a brand-new item (beyond the seeded catalog).
+function PoolEventFoodForm({ onAdd }) {
+  const [category, setCategory] = useState("");
+  const [item, setItem] = useState("");
+  const [notes, setNotes] = useState("");
+  return (
+    <div className="rounded-2xl p-4 space-y-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <div className="grid sm:grid-cols-2 gap-2">
+        <input
+          value={category} onChange={(e) => setCategory(e.target.value)}
+          placeholder="קטגוריה (למשל: קינוחים)"
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        <input
+          value={item} onChange={(e) => setItem(e.target.value)}
+          placeholder="מה מביאים?"
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+      </div>
+      <input
+        value={notes} onChange={(e) => setNotes(e.target.value)}
+        placeholder="הערות (אופציונלי)"
+        className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      />
+      <button
+        onClick={() => { onAdd(category, item, notes); setCategory(""); setItem(""); setNotes(""); }}
+        className="px-4 py-2 rounded-full text-sm font-semibold"
+        style={{ background: COLORS.accent2, color: COLORS.bg }}
+      >
+        הוספה לרשימה
+      </button>
+    </div>
+  );
+}
+
+function PoolEventContentForm({ onAdd }) {
+  const [text, setText] = useState("");
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder='למשל: "פלייליסט", "משחק מים", "טקס שקיעה קצר"'
+        className="flex-1 px-3 py-2 rounded-xl text-sm outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      />
+      <button
+        onClick={() => { onAdd(text); setText(""); }}
+        className="px-4 py-2 rounded-full text-sm font-semibold shrink-0"
+        style={{ background: COLORS.accent2, color: COLORS.bg }}
+      >
+        הוספת רעיון
       </button>
     </div>
   );
@@ -2759,6 +2886,11 @@ export default function App() {
   // profile-completeness gate below doesn't nag forever after a real "no".
   const [pushDecisionMade, setPushDecisionMade] = useState(() => localStorage.getItem("push-decision-made") === "1");
   const [sendingTestPush, setSendingTestPush] = useState(false);
+  const [poolEventRides, setPoolEventRides] = useState([]);
+  const [poolEventFood, setPoolEventFood] = useState([]);
+  const [poolEventContent, setPoolEventContent] = useState([]);
+  const [poolEventSubTab, setPoolEventSubTab] = useState("info");
+  const [contactingPoolRideId, setContactingPoolRideId] = useState(null);
   const loadSharedDataRef = useRef(null);
 
   useEffect(() => {
@@ -2778,6 +2910,7 @@ export default function App() {
         rawManualTeam, rawLogins, rawExtra, rawRemoved,
         rawAnn, rawPolls, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories, rawRideMatches,
         rawShoppingList, rawShoppingRequests, rawExtraTeams, rawCustomChecklists,
+        rawPoolRides, rawPoolFood, rawPoolContent,
       ] = await Promise.all([
         safeGet("shift-assignments", true),
         safeGet("budget-items", true),
@@ -2808,6 +2941,9 @@ export default function App() {
         safeGet("kitchen-shopping-requests", true),
         safeGet("extra-teams", true),
         safeGet("team-checklist-items", true),
+        safeGet("pool-event-rides", true),
+        safeGet("pool-event-food", true),
+        safeGet("pool-event-content", true),
       ]);
 
       async function safeCall(fn, fallback) {
@@ -2894,6 +3030,22 @@ export default function App() {
       setShoppingRequests(rawShoppingRequests ? JSON.parse(rawShoppingRequests) : []);
       setExtraTeams(rawExtraTeams ? JSON.parse(rawExtraTeams) : []);
       setCustomChecklists(rawCustomChecklists ? JSON.parse(rawCustomChecklists) : {});
+
+      setPoolEventRides(rawPoolRides ? JSON.parse(rawPoolRides) : []);
+      setPoolEventContent(rawPoolContent ? JSON.parse(rawPoolContent) : []);
+      if (rawPoolFood) {
+        setPoolEventFood(JSON.parse(rawPoolFood));
+      } else {
+        const seeded = POOL_EVENT_FOOD_CATALOG.map((c, i) => ({
+          id: `seed-${i}`,
+          category: c.category,
+          item: c.suggestion,
+          notes: c.notes,
+          broughtBy: null,
+        }));
+        setPoolEventFood(seeded);
+        window.storage.set("pool-event-food", JSON.stringify(seeded), true).catch(() => {});
+      }
     }
     loadSharedDataRef.current = loadSharedData;
 
@@ -3237,6 +3389,103 @@ export default function App() {
     setShoppingRequests(next);
     try {
       await window.storage.set("kitchen-shopping-requests", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  // "גלאו גלאו אפטר מי" (1.8.26 pool gathering) - rides board. One entry
+  // per member per posting; attributed to whoever's logged in (matches the
+  // camp roster, not a free-text name), removable by its author or an admin.
+  async function addPoolEventRide(type, details) {
+    if (!details.trim()) return;
+    const latest = await getFreshShared("pool-event-rides", poolEventRides);
+    const next = [{ id: Date.now().toString(), name: identity, type, details: details.trim(), ts: Date.now() }, ...latest];
+    setPoolEventRides(next);
+    try {
+      await window.storage.set("pool-event-rides", JSON.stringify(next), true);
+      showToast("הפרטים נוספו ללוח הטרמפים", "ok");
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function removePoolEventRide(id) {
+    const latest = await getFreshShared("pool-event-rides", poolEventRides);
+    const next = latest.filter((r) => r.id !== id);
+    setPoolEventRides(next);
+    try {
+      await window.storage.set("pool-event-rides", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  // "מי מביא מה" board - claiming/unclaiming an existing (catalog or
+  // member-added) item, plus adding new items not already on the list.
+  async function addPoolEventFoodItem(category, item, notes) {
+    if (!item.trim()) return;
+    const latest = await getFreshShared("pool-event-food", poolEventFood);
+    const next = [...latest, { id: Date.now().toString(), category: category.trim() || "שונות", item: item.trim(), notes: notes.trim(), broughtBy: null, addedBy: identity }];
+    setPoolEventFood(next);
+    try {
+      await window.storage.set("pool-event-food", JSON.stringify(next), true);
+      showToast(`"${item.trim()}" נוסף לרשימה`, "ok");
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function togglePoolEventFoodClaim(id) {
+    const latest = await getFreshShared("pool-event-food", poolEventFood);
+    const next = latest.map((it) => {
+      if (it.id !== id) return it;
+      if (it.broughtBy) {
+        if (it.broughtBy !== identity && !isAdmin) return it;
+        return { ...it, broughtBy: null };
+      }
+      return { ...it, broughtBy: identity };
+    });
+    setPoolEventFood(next);
+    try {
+      await window.storage.set("pool-event-food", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function removePoolEventFoodItem(id) {
+    const latest = await getFreshShared("pool-event-food", poolEventFood);
+    const next = latest.filter((it) => it.id !== id);
+    setPoolEventFood(next);
+    try {
+      await window.storage.set("pool-event-food", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  // Content-idea suggestions for the gathering (music, games, activities) -
+  // same shape/permissions as the kitchen "בקשות מיוחדות" board above.
+  async function addPoolEventContentIdea(text) {
+    if (!text.trim()) return;
+    const latest = await getFreshShared("pool-event-content", poolEventContent);
+    const next = [{ id: Date.now().toString(), text: text.trim(), author: identity, ts: Date.now() }, ...latest];
+    setPoolEventContent(next);
+    try {
+      await window.storage.set("pool-event-content", JSON.stringify(next), true);
+      showToast("הרעיון נוסף", "ok");
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function removePoolEventContentIdea(id) {
+    const latest = await getFreshShared("pool-event-content", poolEventContent);
+    const next = latest.filter((c) => c.id !== id);
+    setPoolEventContent(next);
+    try {
+      await window.storage.set("pool-event-content", JSON.stringify(next), true);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -4556,7 +4805,7 @@ ${sections}
   // else stays gated since it either shows/collects personal data
   // (contacts, teams, rides) or needs the profile to be meaningful (finances,
   // budget, equipment).
-  const PROFILE_GATE_EXEMPT_TABS = ["dashboard-personal", "shifts", "board"];
+  const PROFILE_GATE_EXEMPT_TABS = ["dashboard-personal", "shifts", "board", "pool-event"];
 
   // Keep anyone with missing profile fields on their personal dashboard
   // until they've filled everything in - except the exempt tabs above,
@@ -4910,6 +5159,18 @@ ${sections}
           not just for a moment right after picking a tab. */}
       <div className="sticky top-0 z-30 pb-2" style={{ background: COLORS.bg, borderBottom: `1px solid ${COLORS.divider}` }}>
       <div className="max-w-4xl mx-auto px-6 pt-4">
+        <button
+          onClick={() => setTab("pool-event")}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-sm font-bold transition-colors mb-2"
+          style={{
+            background: tab === "pool-event" ? `linear-gradient(90deg, ${COLORS.accent2}, ${COLORS.accent})` : `linear-gradient(90deg, ${COLORS.accent2Light}, ${COLORS.accentLight})`,
+            color: tab === "pool-event" ? "white" : COLORS.accentDark,
+            border: `1px solid ${tab === "pool-event" ? COLORS.accent : COLORS.accent2}`,
+          }}
+        >
+          <PartyPopper size={16} /> {POOL_EVENT_NAME} · {POOL_EVENT_DATE_LABEL} <Sparkles size={16} />
+        </button>
+
         {roleDashboardTab && (
           <button
             onClick={() => setTab(roleDashboardTab.id)}
@@ -4966,6 +5227,163 @@ ${sections}
 
       {/* Content */}
       <div className="max-w-4xl mx-auto px-6 py-6">
+        {tab === "pool-event" && (
+          <div>
+            <div className="rounded-2xl overflow-hidden mb-4" style={{ border: `1px solid ${COLORS.divider}` }}>
+              <img src={poolEventImage} alt={POOL_EVENT_NAME} className="w-full block" style={{ maxHeight: 340, objectFit: "cover" }} />
+            </div>
+            <div className="text-center mb-4">
+              <h2 className="text-2xl" style={{ fontFamily: FONT_HEADING, color: COLORS.accentDark }}>{POOL_EVENT_NAME}</h2>
+              <p className="text-sm font-bold mt-1" style={{ color: COLORS.text }}>{POOL_EVENT_DATE_LABEL} · {POOL_EVENT_TIME_LABEL}</p>
+            </div>
+
+            <div className="flex gap-2 mb-4 flex-wrap">
+              {[
+                { id: "info", label: "פרטי האירוע", icon: PartyPopper },
+                { id: "rides", label: "לוח טרמפים", icon: Car },
+                { id: "food", label: "מי מביא מה", icon: Utensils },
+                { id: "content", label: "רעיונות לתוכן", icon: Lightbulb },
+              ].map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setPoolEventSubTab(s.id)}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-xs font-bold"
+                  style={{
+                    background: poolEventSubTab === s.id ? COLORS.accent2 : COLORS.surface,
+                    color: poolEventSubTab === s.id ? COLORS.bg : COLORS.textMuted,
+                    border: `1px solid ${poolEventSubTab === s.id ? COLORS.accent2 : COLORS.divider}`,
+                  }}
+                >
+                  <s.icon size={14} /> {s.label}
+                </button>
+              ))}
+            </div>
+
+            {poolEventSubTab === "info" && (
+              <div className="rounded-2xl p-4 space-y-3 text-sm" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                <p>
+                  לפני שהקמפ עולה למידברן, נפגשים כולנו לגיבוש קליל ליד הבריכה - שתייה קרה, אוכל טוב ובעיקר להיות ביחד.
+                  מוזמנות ומוזמנים כל חברות וחברי הקמפ, בלי קשר לתפקיד.
+                </p>
+                <p><b style={{ color: COLORS.accentDark }}>מתי:</b> {POOL_EVENT_DATE_LABEL} · {POOL_EVENT_TIME_LABEL}</p>
+                <p style={{ color: COLORS.textMuted }}>
+                  בלשוניות למעלה אפשר לתאם טרמפ, לראות/לסמן מה כל אחד/ת מביא/ה, ולהציע רעיונות לתוכן של המפגש.
+                </p>
+              </div>
+            )}
+
+            {poolEventSubTab === "rides" && (
+              <div>
+                <PoolEventRideForm onAdd={addPoolEventRide} />
+                <div className="space-y-1.5 mt-3">
+                  {poolEventRides.length === 0 && (
+                    <p className="text-xs text-center py-4" style={{ color: COLORS.textMuted }}>עדיין לא פורסם שום דבר בלוח הטרמפים.</p>
+                  )}
+                  {poolEventRides.map((r) => (
+                    <div key={r.id} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                      <div className="min-w-0 text-xs">
+                        <div className="font-semibold text-sm">
+                          {r.name} <span style={{ color: r.type === "offering" ? COLORS.accentDark : COLORS.accent2Dark }}>· {r.type === "offering" ? "מציע/ה טרמפ" : "מחפש/ת טרמפ"}</span>
+                        </div>
+                        <div className="mt-0.5" style={{ color: COLORS.textMuted }}>{r.details}</div>
+                        {contactingPoolRideId === r.id && (
+                          <div className="mt-1" style={{ color: COLORS.accentDark }}>
+                            {memberPhones[r.name] ? `טלפון: ${memberPhones[r.name]}` : "אין מספר טלפון רשום - אפשר לפנות דרך לוח חברי הקמפ"}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {r.name !== identity && (
+                          <button onClick={() => setContactingPoolRideId(contactingPoolRideId === r.id ? null : r.id)} className="text-xs font-bold" style={{ color: COLORS.accentDark }}>
+                            יצירת קשר
+                          </button>
+                        )}
+                        {(r.name === identity || isAdmin) && (
+                          <button onClick={() => removePoolEventRide(r.id)} style={{ color: COLORS.textMuted }}><Trash2 size={14} /></button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {poolEventSubTab === "food" && (() => {
+              const categories = [...new Set(poolEventFood.map((it) => it.category))];
+              return (
+                <div>
+                  <PoolEventFoodForm onAdd={addPoolEventFoodItem} />
+                  <div className="mt-3 space-y-4">
+                    {categories.map((cat) => (
+                      <div key={cat}>
+                        <h3 className="text-xs font-bold mb-1.5" style={{ color: COLORS.textMuted }}>{cat}</h3>
+                        <div className="space-y-1.5">
+                          {poolEventFood.filter((it) => it.category === cat).map((it) => {
+                            const claimedByOther = !!it.broughtBy && it.broughtBy !== identity && !isAdmin;
+                            return (
+                              <div key={it.id} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                                <div className="min-w-0 text-xs">
+                                  <div className="font-semibold text-sm">{it.item}</div>
+                                  {it.notes && <div style={{ color: COLORS.textMuted }}>{it.notes}</div>}
+                                  <div className="mt-0.5" style={{ color: it.broughtBy ? COLORS.accentDark : COLORS.textMuted }}>
+                                    {it.broughtBy ? `מביא/ה: ${it.broughtBy}` : "עדיין לא נתפס"}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button
+                                    onClick={() => togglePoolEventFoodClaim(it.id)}
+                                    disabled={claimedByOther}
+                                    className="px-3 py-1.5 rounded-full text-xs font-bold"
+                                    style={{
+                                      background: it.broughtBy ? COLORS.surface2 : COLORS.accent2,
+                                      color: it.broughtBy ? COLORS.textMuted : COLORS.bg,
+                                      opacity: claimedByOther ? 0.5 : 1,
+                                    }}
+                                  >
+                                    {it.broughtBy ? (it.broughtBy === identity || isAdmin ? "ביטול" : "נתפס") : "אני מביא/ה"}
+                                  </button>
+                                  {(it.addedBy === identity || isAdmin) && (
+                                    <button onClick={() => removePoolEventFoodItem(it.id)} style={{ color: COLORS.textMuted }}><Trash2 size={14} /></button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {poolEventSubTab === "content" && (
+              <div>
+                <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
+                  רעיון למוזיקה, משחק, טקס קטן או כל דבר אחר שירצה/תרצה להביא למפגש? אפשר להציע כאן.
+                </p>
+                <PoolEventContentForm onAdd={addPoolEventContentIdea} />
+                <div className="space-y-1.5 mt-2">
+                  {poolEventContent.map((c) => (
+                    <div key={c.id} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                      <div className="min-w-0">
+                        <div>{c.text}</div>
+                        <div className="mt-0.5" style={{ color: COLORS.textMuted }}>{c.author} · {new Date(c.ts).toLocaleDateString("he-IL")}</div>
+                      </div>
+                      {(c.author === identity || isAdmin) && (
+                        <button onClick={() => removePoolEventContentIdea(c.id)} style={{ color: COLORS.textMuted }} className="shrink-0"><Trash2 size={14} /></button>
+                      )}
+                    </div>
+                  ))}
+                  {poolEventContent.length === 0 && (
+                    <p className="text-xs text-center py-4" style={{ color: COLORS.textMuted }}>אין עדיין רעיונות לתוכן.</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {tab === "dashboard-admin" && isAdmin && (
           <div>
             <h2 className="text-sm font-bold mb-3" style={{ color: COLORS.accentDark }}>לוח בקרה למנהל</h2>
