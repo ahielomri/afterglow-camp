@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart } from "lucide-react";
+import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart, PartyPopper, Sparkles, Utensils, Lightbulb } from "lucide-react";
 import { pushSupported, pushPermission, enablePush, disablePush, isPushSubscribed, resetPush } from "./push.js";
 import heroDesert from "./assets/hero-desert.jpg";
+import poolEventImage from "./assets/event-0108.jpg";
 import {
   uploadFile,
   signInMember,
@@ -439,6 +440,56 @@ const EVENT_START = new Date(2026, 10, 2);
 function daysUntil() {
   return Math.ceil((EVENT_START - new Date()) / (1000 * 60 * 60 * 24));
 }
+
+// ---------------------------------------------------------------------------
+// "גלאו גלאו אפטר מי" - שבת 1.8.26: a one-off camp get-together (pool
+// gathering) ahead of the main event, open to every camper regardless of
+// role - a lighter, simpler board than the main-event shopping/ride systems
+// above, but built the exact same way (shared kv_store list, attributed to
+// the logged-in member).
+// ---------------------------------------------------------------------------
+const POOL_EVENT_NAME = "גלאו גלאו אפטר מי לגיבוש";
+const POOL_EVENT_DATE_LABEL = "1.8.26";
+const POOL_EVENT_WEEKDAY_LABEL = "יום שבת";
+const POOL_EVENT_TIME_LABEL = "15:00";
+const POOL_EVENT_ADDRESS = "קיבוץ גלויות 11, בצרה";
+const POOL_EVENT_WAZE_URL = "https://www.waze.com/live-map/directions/קיבוץ-גלויות-11-בצרה?to=place.w.22872386.228592789.439379";
+const POOL_EVENT_BUTTON_LABEL = `${POOL_EVENT_NAME} | ${POOL_EVENT_DATE_LABEL} | ${POOL_EVENT_WEEKDAY_LABEL} | ${POOL_EVENT_TIME_LABEL}`;
+// Deliberately outside the app's usual salmon/pink COLORS palette - this one
+// button is meant to stand out as a one-off festive invite, not blend in
+// with the regular nav.
+// Pulled from the event poster itself (deep pool blue -> bright turquoise)
+// instead of an arbitrary palette, per feedback to match the image's tones.
+const POOL_EVENT_COLOR_DEEP = "#0d3b66";
+const POOL_EVENT_COLOR_TEAL = "#22a6c7";
+
+// Verbatim copy supplied for the event's own info tab.
+const POOL_EVENT_INTRO_TEXT = `פותחים את העונה כמו שצריך: בריכה, אנשים טובים ואווירת Afterglow.
+
+קמפ יציב נבנה קודם כול מהאנשים שבו. מהיכרות, מחיבור, מאמון ומהיכולת להיות שם אחד בשביל השני, גם כשמישהו שוב שכח לעדכן בטבלה.
+
+חיבורים נוצרים כשנפגשים באמת, מדברים, צוחקים ומתחילים להרגיש בנוח אחד עם השני. וזה סוד הקסם.
+
+כדי שהכול יהיה שקוף וקל, הכל מרוכז כאן:`;
+
+// How many members can claim the same "מי מביא מה" item at once - with 33
+// campers and a handful of items per category, one claimant per item was
+// too restrictive, so several people can now bring the same thing together.
+const POOL_EVENT_FOOD_MAX_CLAIMS = 8;
+
+// Seeds the "מי מביא מה" board the first time anyone opens it - matches the
+// categories from the event's own planning sheet. Members can still add
+// their own extra items on top of these.
+const POOL_EVENT_FOOD_CATALOG = [
+  { category: "שתייה קלה", suggestion: "מים / מוגז / מיצים / תרכיזים", notes: "2-3 בקבוקים קרים" },
+  { category: "אלכוהול ובירות", suggestion: "בירות קרות / יין / אלכוהול קל", notes: "לא לשכוח קרח!" },
+  { category: "מפנק / עיקרי", suggestion: "פשטידה / מאפה / קיש", notes: "חתוך ומוכן להגשה" },
+  { category: "סלטים", suggestion: "סלט ירוק / סלט פסטה / סלט עשיר", notes: "רוטב בצד" },
+  { category: "חטיפים ונשנושים", suggestion: "חטיפים מלוחים / פיצוחים / זיתים", notes: "" },
+  { category: "מתוקים וקינוחים", suggestion: "עוגה / עוגיות / פירות חתוכים", notes: "פירות מרעננים לבריכה" },
+  { category: "חד\"פ וכללי", suggestion: "כוסות, צלחות, מפיות, שקיות זבל", notes: "מעדיפים אקולוגי/רב-פעמי" },
+  { category: "שונות / קרח", suggestion: "שקיות קרח / צידנית", notes: "" },
+];
 
 // "committed" = the full cost regardless of payment status, "paid" = what's
 // actually been paid so far (the full amount unless marked partial).
@@ -1191,6 +1242,232 @@ function ShoppingRequestForm({ onAdd }) {
         style={{ background: COLORS.accent2, color: COLORS.bg }}
       >
         שליחת בקשה
+      </button>
+    </div>
+  );
+}
+
+// Pool-gathering (1.8.26) rides board - one record per member (like the
+// main camp's RideWizard/rideInfo above), just lighter: attending? then
+// with-a-car? then the same regular offer/need follow-ups, without the
+// playa-specific arrival day/tow-hitch/trailer questions that don't apply
+// to a local one-day gathering.
+function PoolRideWizard({ name, data, onChange }) {
+  const d = data || {};
+  const hasSavedAnswer = d.attending !== undefined;
+  // Once a choice was saved, show a compact summary with an explicit
+  // "עריכה" button instead of always re-showing the full form - makes it
+  // obvious a saved answer can still be changed, rather than relying on
+  // people to notice the same form is still live/editable underneath.
+  const [editing, setEditing] = useState(!hasSavedAnswer);
+  const [local, setLocal] = useState({
+    attending: d.attending,
+    hasCar: d.hasCar,
+    offerRide: d.offerRide,
+    seats: d.seats || "",
+    hasWay: d.hasWay,
+    city: d.city || "",
+    departureTime: d.departureTime || "",
+  });
+  const set = (patch) => setLocal({ ...local, ...patch });
+
+  function summaryText() {
+    if (d.attending === "no") return "לא מגיע/ה למפגש הפעם.";
+    if (d.hasCar === "yes") {
+      return d.offerRide === "yes"
+        ? `מגיע/ה עם רכב · מציע/ה טרמפ${d.city ? ` מ${d.city}` : ""}${d.departureTime ? ` בשעה ${d.departureTime}` : ""}${d.seats ? ` · ${d.seats} מקומות` : ""}`
+        : "מגיע/ה עם רכב · לא מציע/ה טרמפ לאחרים";
+    }
+    if (d.hasCar === "no") {
+      return d.hasWay === "yes"
+        ? "מגיע/ה בלי רכב · כבר יש דרך להגיע"
+        : `מגיע/ה בלי רכב · מחפש/ת טרמפ${d.city ? ` מ${d.city}` : ""}${d.departureTime ? ` סביב השעה ${d.departureTime}` : ""}`;
+    }
+    return "מגיע/ה - עדיין לא מולאו פרטי רכב/טרמפ";
+  }
+
+  if (!editing) {
+    return (
+      <div className="rounded-2xl p-4 flex items-center justify-between gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+        <div className="min-w-0">
+          <div className="text-sm font-bold" style={{ color: COLORS.accentDark }}>{name}</div>
+          <div className="mt-0.5 text-xs" style={{ color: COLORS.textMuted }}>{summaryText()}</div>
+        </div>
+        <button
+          onClick={() => setEditing(true)}
+          className="px-3 py-1.5 rounded-full text-xs font-bold shrink-0"
+          style={{ background: COLORS.accent2, color: COLORS.bg }}
+        >
+          עריכה
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl p-4 space-y-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <div className="text-sm font-bold" style={{ color: COLORS.accentDark }}>{name}</div>
+
+      <div>
+        <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>מגיע/ה למפגש?</label>
+        <YesNoButtons value={local.attending} onChange={(v) => set({ attending: v, hasCar: undefined, offerRide: undefined, hasWay: undefined })} />
+      </div>
+
+      {local.attending === "yes" && (
+        <>
+          <div>
+            <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>מגיע/ה עם רכב?</label>
+            <YesNoButtons value={local.hasCar} onChange={(v) => set({ hasCar: v, offerRide: undefined, hasWay: undefined })} />
+          </div>
+
+          {local.hasCar === "yes" && (
+            <>
+              <div>
+                <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>מוכן/ה לקחת עוד אנשים איתך בדרך?</label>
+                <YesNoButtons value={local.offerRide} onChange={(v) => set({ offerRide: v })} />
+                {local.offerRide === "yes" && (
+                  <input
+                    type="number"
+                    value={local.seats}
+                    onChange={(e) => set({ seats: e.target.value })}
+                    placeholder="כמה מקומות פנויים?"
+                    className="w-full mt-2 px-3 py-2 rounded-xl text-sm outline-none"
+                    style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                  />
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>מאיזה עיר יוצא/ת?</label>
+                  <input
+                    value={local.city}
+                    onChange={(e) => set({ city: e.target.value })}
+                    placeholder="עיר יציאה"
+                    className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                    style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>שעת יציאה</label>
+                  <input
+                    type="time"
+                    value={local.departureTime}
+                    onChange={(e) => set({ departureTime: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                    style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {local.hasCar === "no" && (
+            <div>
+              <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>כבר יש לך איך להגיע?</label>
+              <YesNoButtons value={local.hasWay} onChange={(v) => set({ hasWay: v })} />
+              {local.hasWay === "no" && (
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <input
+                    value={local.city}
+                    onChange={(e) => set({ city: e.target.value })}
+                    placeholder="מאיזה עיר?"
+                    className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                    style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                  />
+                  <input
+                    type="time"
+                    value={local.departureTime}
+                    onChange={(e) => set({ departureTime: e.target.value })}
+                    placeholder="שעת יציאה רצויה"
+                    className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                    style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                  />
+                </div>
+              )}
+              {local.hasWay === "yes" && (
+                <p className="text-xs mt-1.5" style={{ color: COLORS.textMuted }}>מעולה - לא תפורסם/י כמחפש/ת טרמפ.</p>
+              )}
+              {local.hasWay === "no" && (
+                <p className="text-xs mt-1.5" style={{ color: COLORS.textMuted }}>תפורסם/י ברשימת "מחפשים טרמפ".</p>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="flex items-center gap-3 pt-1">
+        <button
+          onClick={() => { onChange({ ...local, seats: Number(local.seats) || 0 }); setEditing(false); }}
+          className="px-4 py-2 rounded-full text-sm font-semibold"
+          style={{ background: COLORS.accent2, color: COLORS.bg }}
+        >
+          שמירה
+        </button>
+        {hasSavedAnswer && (
+          <button onClick={() => setEditing(false)} className="text-xs font-bold" style={{ color: COLORS.textMuted }}>
+            ביטול
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// "מי מביא מה" - adding a brand-new item (beyond the seeded catalog).
+function PoolEventFoodForm({ onAdd }) {
+  const [category, setCategory] = useState("");
+  const [item, setItem] = useState("");
+  const [notes, setNotes] = useState("");
+  return (
+    <div className="rounded-2xl p-4 space-y-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <div className="grid sm:grid-cols-2 gap-2">
+        <input
+          value={category} onChange={(e) => setCategory(e.target.value)}
+          placeholder="קטגוריה (למשל: קינוחים)"
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        <input
+          value={item} onChange={(e) => setItem(e.target.value)}
+          placeholder="מה מביאים?"
+          className="px-3 py-2 rounded-xl text-sm outline-none"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+      </div>
+      <input
+        value={notes} onChange={(e) => setNotes(e.target.value)}
+        placeholder="הערות (אופציונלי)"
+        className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      />
+      <button
+        onClick={() => { onAdd(category, item, notes); setCategory(""); setItem(""); setNotes(""); }}
+        className="px-4 py-2 rounded-full text-sm font-semibold"
+        style={{ background: COLORS.accent2, color: COLORS.bg }}
+      >
+        הוספה לרשימה
+      </button>
+    </div>
+  );
+}
+
+function PoolEventContentForm({ onAdd }) {
+  const [text, setText] = useState("");
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder='למשל: "פלייליסט", "משחק מים", "טקס שקיעה קצר"'
+        className="flex-1 px-3 py-2 rounded-xl text-sm outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      />
+      <button
+        onClick={() => { onAdd(text); setText(""); }}
+        className="px-4 py-2 rounded-full text-sm font-semibold shrink-0"
+        style={{ background: COLORS.accent2, color: COLORS.bg }}
+      >
+        הוספת רעיון
       </button>
     </div>
   );
@@ -2759,6 +3036,11 @@ export default function App() {
   // profile-completeness gate below doesn't nag forever after a real "no".
   const [pushDecisionMade, setPushDecisionMade] = useState(() => localStorage.getItem("push-decision-made") === "1");
   const [sendingTestPush, setSendingTestPush] = useState(false);
+  const [poolEventRides, setPoolEventRides] = useState({});
+  const [poolEventFood, setPoolEventFood] = useState([]);
+  const [poolEventContent, setPoolEventContent] = useState([]);
+  const [poolEventSubTab, setPoolEventSubTab] = useState("info");
+  const [contactingPoolRideName, setContactingPoolRideName] = useState(null);
   const loadSharedDataRef = useRef(null);
 
   useEffect(() => {
@@ -2778,6 +3060,7 @@ export default function App() {
         rawManualTeam, rawLogins, rawExtra, rawRemoved,
         rawAnn, rawPolls, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories, rawRideMatches,
         rawShoppingList, rawShoppingRequests, rawExtraTeams, rawCustomChecklists,
+        rawPoolRides, rawPoolFood, rawPoolContent,
       ] = await Promise.all([
         safeGet("shift-assignments", true),
         safeGet("budget-items", true),
@@ -2808,6 +3091,9 @@ export default function App() {
         safeGet("kitchen-shopping-requests", true),
         safeGet("extra-teams", true),
         safeGet("team-checklist-items", true),
+        safeGet("pool-event-rides", true),
+        safeGet("pool-event-food", true),
+        safeGet("pool-event-content", true),
       ]);
 
       async function safeCall(fn, fallback) {
@@ -2894,6 +3180,29 @@ export default function App() {
       setShoppingRequests(rawShoppingRequests ? JSON.parse(rawShoppingRequests) : []);
       setExtraTeams(rawExtraTeams ? JSON.parse(rawExtraTeams) : []);
       setCustomChecklists(rawCustomChecklists ? JSON.parse(rawCustomChecklists) : {});
+
+      setPoolEventRides(rawPoolRides ? JSON.parse(rawPoolRides) : {});
+      setPoolEventContent(rawPoolContent ? JSON.parse(rawPoolContent) : []);
+      if (rawPoolFood) {
+        // Older saved data had a single "broughtBy" name (or null) per item -
+        // normalize to an array of names so multi-claim items work
+        // regardless of when the item was first added/claimed.
+        const parsedFood = JSON.parse(rawPoolFood).map((it) => ({
+          ...it,
+          broughtBy: Array.isArray(it.broughtBy) ? it.broughtBy : (it.broughtBy ? [it.broughtBy] : []),
+        }));
+        setPoolEventFood(parsedFood);
+      } else {
+        const seeded = POOL_EVENT_FOOD_CATALOG.map((c, i) => ({
+          id: `seed-${i}`,
+          category: c.category,
+          item: c.suggestion,
+          notes: c.notes,
+          broughtBy: [],
+        }));
+        setPoolEventFood(seeded);
+        window.storage.set("pool-event-food", JSON.stringify(seeded), true).catch(() => {});
+      }
     }
     loadSharedDataRef.current = loadSharedData;
 
@@ -3237,6 +3546,114 @@ export default function App() {
     setShoppingRequests(next);
     try {
       await window.storage.set("kitchen-shopping-requests", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  // "גלאו גלאו אפטר מי" (1.8.26 pool gathering) - rides board. Same shape
+  // as the main camp's rideInfo (one record per member, keyed by name) -
+  // a much lighter version of it, since there's no playa arrival day/tow
+  // hitch/trailer logistics to ask about for a local one-day gathering.
+  async function setPoolEventRideData(data) {
+    const latest = await getFreshShared("pool-event-rides", poolEventRides);
+    const next = { ...latest, [identity]: data };
+    setPoolEventRides(next);
+    try {
+      await window.storage.set("pool-event-rides", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  // "מי מביא מה" board - claiming/unclaiming an existing (catalog or
+  // member-added) item, plus adding new items not already on the list.
+  async function addPoolEventFoodItem(category, item, notes) {
+    if (!item.trim()) return;
+    const latest = await getFreshShared("pool-event-food", poolEventFood);
+    const next = [...latest, { id: Date.now().toString(), category: category.trim() || "שונות", item: item.trim(), notes: notes.trim(), broughtBy: [], addedBy: identity }];
+    setPoolEventFood(next);
+    try {
+      await window.storage.set("pool-event-food", JSON.stringify(next), true);
+      showToast(`"${item.trim()}" נוסף לרשימה`, "ok");
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  // Up to POOL_EVENT_FOOD_MAX_CLAIMS members can claim the same item -
+  // clicking again removes just your own name from it, never anyone else's.
+  async function togglePoolEventFoodClaim(id) {
+    const latest = await getFreshShared("pool-event-food", poolEventFood);
+    let blocked = false;
+    const next = latest.map((it) => {
+      if (it.id !== id) return it;
+      const claimants = Array.isArray(it.broughtBy) ? it.broughtBy : (it.broughtBy ? [it.broughtBy] : []);
+      if (claimants.includes(identity)) {
+        return { ...it, broughtBy: claimants.filter((n) => n !== identity) };
+      }
+      if (claimants.length >= POOL_EVENT_FOOD_MAX_CLAIMS) {
+        blocked = true;
+        return it;
+      }
+      return { ...it, broughtBy: [...claimants, identity] };
+    });
+    if (blocked) return showToast(`הפריט הזה כבר מלא (${POOL_EVENT_FOOD_MAX_CLAIMS}/${POOL_EVENT_FOOD_MAX_CLAIMS})`, "error");
+    setPoolEventFood(next);
+    try {
+      await window.storage.set("pool-event-food", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function removePoolEventFoodItem(id) {
+    const latest = await getFreshShared("pool-event-food", poolEventFood);
+    const next = latest.filter((it) => it.id !== id);
+    setPoolEventFood(next);
+    try {
+      await window.storage.set("pool-event-food", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  // Content-idea suggestions for the gathering (music, games, activities) -
+  // each person only ever sees their own suggestions in the festive tab
+  // itself (rendered client-side below); the full list, for approval, lives
+  // in the admin dashboard's "יום גיבוש" panel.
+  async function addPoolEventContentIdea(text) {
+    if (!text.trim()) return;
+    const latest = await getFreshShared("pool-event-content", poolEventContent);
+    const next = [{ id: Date.now().toString(), text: text.trim(), author: identity, ts: Date.now(), approved: null }, ...latest];
+    setPoolEventContent(next);
+    try {
+      await window.storage.set("pool-event-content", JSON.stringify(next), true);
+      showToast("הרעיון נשלח לצוות המארגן/ות", "ok");
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function removePoolEventContentIdea(id) {
+    const latest = await getFreshShared("pool-event-content", poolEventContent);
+    const next = latest.filter((c) => c.id !== id);
+    setPoolEventContent(next);
+    try {
+      await window.storage.set("pool-event-content", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  // Admin-only (checked client-side, same trust model as the rest of the
+  // admin dashboard): marks a suggestion approved/rejected for the day.
+  async function setPoolEventContentApproval(id, approved) {
+    const latest = await getFreshShared("pool-event-content", poolEventContent);
+    const next = latest.map((c) => (c.id === id ? { ...c, approved } : c));
+    setPoolEventContent(next);
+    try {
+      await window.storage.set("pool-event-content", JSON.stringify(next), true);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -4556,7 +4973,7 @@ ${sections}
   // else stays gated since it either shows/collects personal data
   // (contacts, teams, rides) or needs the profile to be meaningful (finances,
   // budget, equipment).
-  const PROFILE_GATE_EXEMPT_TABS = ["dashboard-personal", "shifts", "board"];
+  const PROFILE_GATE_EXEMPT_TABS = ["dashboard-personal", "shifts", "board", "pool-event"];
 
   // Keep anyone with missing profile fields on their personal dashboard
   // until they've filled everything in - except the exempt tabs above,
@@ -4751,6 +5168,16 @@ ${sections}
   const membersWithExtraAllocation = allMembers.filter((m) => allocationInfo[m.name]?.hasExtra === "yes");
   const membersWithoutAllocationInfo = allMembers.filter((m) => !allocationInfo[m.name]);
 
+  // "גלאו גלאו אפטר מי" (1.8.26) aggregates - hoisted out of the festive
+  // page itself so the admin dashboard's "יום גיבוש" panel can show the
+  // exact same live picture (attendance/rides/food/content) without
+  // recomputing it differently in two places.
+  const poolEventAttendingYes = allMembers.filter((m) => poolEventRides[m.name]?.attending === "yes");
+  const poolEventAttendingNo = allMembers.filter((m) => poolEventRides[m.name]?.attending === "no");
+  const poolEventNoAnswer = allMembers.filter((m) => !poolEventRides[m.name]?.attending);
+  const poolEventOfferingRides = allMembers.filter((m) => poolEventRides[m.name]?.hasCar === "yes" && poolEventRides[m.name]?.offerRide === "yes");
+  const poolEventLookingForRide = allMembers.filter((m) => poolEventRides[m.name]?.hasCar === "no" && poolEventRides[m.name]?.hasWay === "no");
+
   const myPrivateMessages = privateMessages
     .filter((m) => m.to === identity || m.from === identity)
     .sort((a, b) => b.ts - a.ts);
@@ -4882,13 +5309,18 @@ ${sections}
           }}
         />
         <div className="relative flex items-center gap-4 max-w-4xl mx-auto">
-          <SunsetMark size={64} />
-          <div className="flex-1">
-            <h1 style={{ fontFamily: FONT_HEADING }} className="text-3xl tracking-tight">
-              Afterglow
-            </h1>
-            <p className="text-sm" style={{ color: COLORS.textMuted }}>מערכת ניהול קמפ · מידברן 2026</p>
-          </div>
+          <button
+            onClick={() => { setTab("dashboard-personal"); setExpandedNavCategory(null); }}
+            className="flex items-center gap-4 flex-1 text-right"
+          >
+            <SunsetMark size={64} />
+            <div>
+              <h1 style={{ fontFamily: FONT_HEADING }} className="text-3xl tracking-tight">
+                Afterglow
+              </h1>
+              <p className="text-sm" style={{ color: COLORS.textMuted }}>מערכת ניהול קמפ · מידברן 2026</p>
+            </div>
+          </button>
           <div className="text-center px-2 py-1">
             <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.text, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>{daysUntil()}</div>
             <div className="text-xs font-bold" style={{ color: COLORS.text, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>ימים לפתיחת השערים</div>
@@ -4910,6 +5342,21 @@ ${sections}
           not just for a moment right after picking a tab. */}
       <div className="sticky top-0 z-30 pb-2" style={{ background: COLORS.bg, borderBottom: `1px solid ${COLORS.divider}` }}>
       <div className="max-w-4xl mx-auto px-6 pt-4">
+        <button
+          onClick={() => setTab("pool-event")}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-sm font-bold transition-colors mb-2"
+          style={{
+            background: `linear-gradient(90deg, ${POOL_EVENT_COLOR_DEEP}, ${POOL_EVENT_COLOR_TEAL}, ${POOL_EVENT_COLOR_DEEP})`,
+            color: "white",
+            border: `1px solid ${POOL_EVENT_COLOR_TEAL}`,
+            boxShadow: tab === "pool-event"
+              ? `0 0 0 2px ${POOL_EVENT_COLOR_TEAL}88, 0 4px 14px ${POOL_EVENT_COLOR_DEEP}66`
+              : `0 2px 8px ${POOL_EVENT_COLOR_DEEP}33`,
+          }}
+        >
+          <PartyPopper size={16} /> {POOL_EVENT_BUTTON_LABEL} <Sparkles size={16} />
+        </button>
+
         {roleDashboardTab && (
           <button
             onClick={() => setTab(roleDashboardTab.id)}
@@ -4966,6 +5413,224 @@ ${sections}
 
       {/* Content */}
       <div className="max-w-4xl mx-auto px-6 py-6">
+        {tab === "pool-event" && (
+          <div>
+            <div className="rounded-2xl overflow-hidden mb-4" style={{ border: `1px solid ${COLORS.divider}` }}>
+              <img src={poolEventImage} alt={POOL_EVENT_NAME} className="w-full block" style={{ maxHeight: 340, objectFit: "cover", objectPosition: "top" }} />
+            </div>
+            <div className="text-center mb-4">
+              <h2 className="text-2xl" style={{ fontFamily: FONT_HEADING, color: COLORS.accentDark }}>{POOL_EVENT_NAME}</h2>
+              <p className="text-sm font-bold mt-1" style={{ color: COLORS.text }}>{POOL_EVENT_DATE_LABEL} · {POOL_EVENT_WEEKDAY_LABEL} · {POOL_EVENT_TIME_LABEL}</p>
+            </div>
+
+            <div className="flex gap-1.5 mb-4 overflow-x-auto">
+              {[
+                { id: "info", label: "פרטי האירוע", icon: PartyPopper },
+                { id: "rides", label: "לוח טרמפים", icon: Car },
+                { id: "food", label: "מי מביא מה", icon: Utensils },
+                { id: "content", label: "רעיונות לתוכן", icon: Lightbulb },
+              ].map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setPoolEventSubTab(s.id)}
+                  className="flex-1 shrink-0 whitespace-nowrap flex items-center justify-center gap-1 px-2 py-2 rounded-xl text-[11px] font-bold"
+                  style={{
+                    background: poolEventSubTab === s.id ? COLORS.accent2 : COLORS.surface,
+                    color: poolEventSubTab === s.id ? COLORS.bg : COLORS.textMuted,
+                    border: `1px solid ${poolEventSubTab === s.id ? COLORS.accent2 : COLORS.divider}`,
+                  }}
+                >
+                  <s.icon size={13} /> {s.label}
+                </button>
+              ))}
+            </div>
+
+            {poolEventSubTab === "info" && (
+              <div className="rounded-2xl p-5 space-y-5 text-base" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                <p style={{ whiteSpace: "pre-line" }}>{POOL_EVENT_INTRO_TEXT}</p>
+
+                <div>
+                  <p className="font-bold" style={{ color: COLORS.accentDark }}>מתי?</p>
+                  <p>{POOL_EVENT_WEEKDAY_LABEL}, {POOL_EVENT_DATE_LABEL} ·</p>
+                  <p>מתחילים בשעה {POOL_EVENT_TIME_LABEL} ועד לאידע (?!)</p>
+                </div>
+
+                <div>
+                  <p className="font-bold" style={{ color: COLORS.accentDark }}>איפה?</p>
+                  <p>
+                    <a href={POOL_EVENT_WAZE_URL} target="_blank" rel="noreferrer" style={{ color: COLORS.accentDark, textDecoration: "underline" }}>
+                      {POOL_EVENT_ADDRESS}
+                    </a>
+                  </p>
+                </div>
+
+                <div>
+                  <p className="font-bold" style={{ color: COLORS.accentDark }}>לוח טרמפים:</p>
+                  <p>צריכים טרמפ או שיש לכם מקום ברכב?</p>
+                  <p>זה המקום לעדכן.</p>
+                </div>
+
+                <div>
+                  <p className="font-bold" style={{ color: COLORS.accentDark }}>מי מביא מה:</p>
+                  <p>נכנסים, בוחרים מה מביאים.</p>
+                  <p>כדי שיהיה מהכול ולא שבעה סלטי פסטה.</p>
+                </div>
+
+                <div>
+                  <p className="font-bold" style={{ color: COLORS.accentDark }}>מי שחפצה נפשו בתוכן:</p>
+                  <p>ותוסיף משפט.</p>
+                  <p>גם לכן יש מקום.</p>
+                </div>
+              </div>
+            )}
+
+            {poolEventSubTab === "rides" && (() => {
+              const offeringRidesPool = poolEventOfferingRides;
+              const lookingForRidePool = poolEventLookingForRide;
+              const RideRow = ({ name, subtitle }) => (
+                <div className="rounded-xl px-3 py-2 flex items-center justify-between gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                  <div className="min-w-0 text-xs">
+                    <div className="font-semibold text-sm">{name}</div>
+                    {subtitle && <div className="mt-0.5" style={{ color: COLORS.textMuted }}>{subtitle}</div>}
+                    {contactingPoolRideName === name && (
+                      <div className="mt-1" style={{ color: COLORS.accentDark }}>
+                        {memberPhones[name] ? `טלפון: ${memberPhones[name]}` : "אין מספר טלפון רשום - אפשר לפנות דרך לוח חברי הקמפ"}
+                      </div>
+                    )}
+                  </div>
+                  {name !== identity && (
+                    <button onClick={() => setContactingPoolRideName(contactingPoolRideName === name ? null : name)} className="text-xs font-bold shrink-0" style={{ color: COLORS.accentDark }}>
+                      יצירת קשר
+                    </button>
+                  )}
+                </div>
+              );
+              return (
+                <div>
+                  <PoolRideWizard name={identity} data={poolEventRides[identity]} onChange={setPoolEventRideData} />
+
+                  <div className="mt-4">
+                    <h3 className="text-xs font-bold mb-1.5" style={{ color: COLORS.textMuted }}>מציעים טרמפ ({offeringRidesPool.length})</h3>
+                    <div className="space-y-1.5">
+                      {offeringRidesPool.map((m) => {
+                        const d = poolEventRides[m.name];
+                        const parts = [
+                          d.city && `יוצא/ת מ${d.city}`,
+                          d.departureTime && `בשעה ${d.departureTime}`,
+                          d.seats && `${d.seats} מקומות פנויים`,
+                        ].filter(Boolean);
+                        return <RideRow key={m.name} name={m.name} subtitle={parts.join(" · ")} />;
+                      })}
+                      {offeringRidesPool.length === 0 && (
+                        <p className="text-xs text-center py-3" style={{ color: COLORS.textMuted }}>עדיין אין מי שמציע/ה טרמפ.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <h3 className="text-xs font-bold mb-1.5" style={{ color: COLORS.textMuted }}>מחפשים טרמפ ({lookingForRidePool.length})</h3>
+                    <div className="space-y-1.5">
+                      {lookingForRidePool.map((m) => {
+                        const d = poolEventRides[m.name];
+                        const parts = [
+                          d.city && `מ${d.city}`,
+                          d.departureTime && `סביב השעה ${d.departureTime}`,
+                        ].filter(Boolean);
+                        return <RideRow key={m.name} name={m.name} subtitle={parts.join(" · ")} />;
+                      })}
+                      {lookingForRidePool.length === 0 && (
+                        <p className="text-xs text-center py-3" style={{ color: COLORS.textMuted }}>עדיין אין מי שמחפש/ת טרמפ.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {poolEventSubTab === "food" && (() => {
+              const categories = [...new Set(poolEventFood.map((it) => it.category))];
+              return (
+                <div>
+                  <PoolEventFoodForm onAdd={addPoolEventFoodItem} />
+                  <div className="mt-3 space-y-4">
+                    {categories.map((cat) => (
+                      <div key={cat}>
+                        <h3 className="text-xs font-bold mb-1.5" style={{ color: COLORS.textMuted }}>{cat}</h3>
+                        <div className="space-y-1.5">
+                          {poolEventFood.filter((it) => it.category === cat).map((it) => {
+                            const claimants = Array.isArray(it.broughtBy) ? it.broughtBy : (it.broughtBy ? [it.broughtBy] : []);
+                            const iClaimed = claimants.includes(identity);
+                            const full = claimants.length >= POOL_EVENT_FOOD_MAX_CLAIMS && !iClaimed;
+                            return (
+                              <div key={it.id} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                                <div className="min-w-0 text-xs">
+                                  <div className="font-semibold text-sm">{it.item}</div>
+                                  {it.notes && <div style={{ color: COLORS.textMuted }}>{it.notes}</div>}
+                                  <div className="mt-0.5" style={{ color: claimants.length > 0 ? COLORS.accentDark : COLORS.textMuted }}>
+                                    {claimants.length > 0 ? `מביאים: ${claimants.join(", ")}` : "עדיין לא נתפס"} · {claimants.length}/{POOL_EVENT_FOOD_MAX_CLAIMS}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button
+                                    onClick={() => togglePoolEventFoodClaim(it.id)}
+                                    disabled={full}
+                                    className="px-3 py-1.5 rounded-full text-xs font-bold"
+                                    style={{
+                                      background: iClaimed ? COLORS.surface2 : COLORS.accent2,
+                                      color: iClaimed ? COLORS.textMuted : COLORS.bg,
+                                      opacity: full ? 0.5 : 1,
+                                    }}
+                                  >
+                                    {iClaimed ? "ביטול" : full ? "מלא" : claimants.length > 0 ? "גם אני מביא/ה" : "אני מביא/ה"}
+                                  </button>
+                                  {(it.addedBy === identity || isAdmin) && (
+                                    <button onClick={() => removePoolEventFoodItem(it.id)} style={{ color: COLORS.textMuted }}><Trash2 size={14} /></button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {poolEventSubTab === "content" && (() => {
+              const myIdeas = poolEventContent.filter((c) => c.author === identity);
+              const approvalLabel = (c) => c.approved === true ? "אושר ✓" : c.approved === false ? "לא נכנס הפעם" : "ממתין לאישור";
+              const approvalColor = (c) => c.approved === true ? COLORS.accentDark : c.approved === false ? COLORS.textMuted : COLORS.accent2Dark;
+              return (
+                <div>
+                  <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
+                    רעיון למוזיקה, משחק, טקס קטן או כל דבר אחר שירצה/תרצה להביא למפגש? אפשר להציע כאן.
+                  </p>
+                  <p className="text-xs mb-3" style={{ color: COLORS.accentDark }}>
+                    ההצעות מועברות לצוות המארגן/ות לאישור. את ההצעות של עצמך את/ה רואה כאן - של אחרים, לא. אפשר למחוק הצעה בכל שלב.
+                  </p>
+                  <PoolEventContentForm onAdd={addPoolEventContentIdea} />
+                  <div className="space-y-1.5 mt-3">
+                    {myIdeas.map((c) => (
+                      <div key={c.id} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                        <div className="min-w-0">
+                          <div>{c.text}</div>
+                          <div className="mt-0.5 font-semibold" style={{ color: approvalColor(c) }}>{approvalLabel(c)}</div>
+                        </div>
+                        <button onClick={() => removePoolEventContentIdea(c.id)} style={{ color: COLORS.textMuted }} className="shrink-0"><Trash2 size={14} /></button>
+                      </div>
+                    ))}
+                    {myIdeas.length === 0 && (
+                      <p className="text-xs text-center py-4" style={{ color: COLORS.textMuted }}>עדיין לא הצעת רעיון.</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
         {tab === "dashboard-admin" && isAdmin && (
           <div>
             <h2 className="text-sm font-bold mb-3" style={{ color: COLORS.accentDark }}>לוח בקרה למנהל</h2>
@@ -4978,6 +5643,7 @@ ${sections}
                 { id: "comms", label: "תקשורת", icon: MessageCircle },
                 ...(isOwner ? [{ id: "logs", label: "יומנים", icon: History }] : []),
                 { id: "emergency", label: "חירום", icon: HeartPulse },
+                { id: "gibush", label: "יום גיבוש", icon: PartyPopper },
               ].map((s) => (
                 <button
                   key={s.id}
@@ -5479,6 +6145,119 @@ ${sections}
             )}
               </>
             )}
+
+            {adminSubTab === "gibush" && (() => {
+              const foodCategories = [...new Set(poolEventFood.map((it) => it.category))];
+              const pendingContent = poolEventContent.filter((c) => c.approved === null || c.approved === undefined);
+              const decidedContent = poolEventContent.filter((c) => c.approved === true || c.approved === false);
+              return (
+                <div>
+                  <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>
+                    כל הנתונים של "{POOL_EVENT_NAME}" ({POOL_EVENT_DATE_LABEL}) במקום אחד.
+                  </p>
+
+                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>מי מגיע</h3>
+                  <div className="grid grid-cols-3 gap-3 mb-3">
+                    {[
+                      { label: "מגיעים", value: poolEventAttendingYes.length },
+                      { label: "לא מגיעים", value: poolEventAttendingNo.length },
+                      { label: "טרם ענו", value: poolEventNoAnswer.length },
+                    ].map((c) => (
+                      <div key={c.label} className="rounded-2xl p-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                        <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
+                        <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mb-6">
+                    {poolEventAttendingYes.map((m) => (
+                      <span key={m.name} className="text-xs px-2 py-0.5 rounded-full" style={{ background: COLORS.accent2Light, color: COLORS.accent2Dark }}>{m.name}</span>
+                    ))}
+                  </div>
+
+                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>טרמפים - מציעים ({poolEventOfferingRides.length})</h3>
+                  <div className="space-y-1.5 mb-4">
+                    {poolEventOfferingRides.map((m) => {
+                      const d = poolEventRides[m.name];
+                      const parts = [d.city && `מ${d.city}`, d.departureTime && `בשעה ${d.departureTime}`, d.seats && `${d.seats} מקומות`].filter(Boolean);
+                      return (
+                        <div key={m.name} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                          <span className="font-semibold">{m.name}</span>{parts.length > 0 && <span style={{ color: COLORS.textMuted }}> · {parts.join(" · ")}</span>}
+                        </div>
+                      );
+                    })}
+                    {poolEventOfferingRides.length === 0 && <p className="text-xs" style={{ color: COLORS.textMuted }}>אין עדיין מציעי טרמפ.</p>}
+                  </div>
+
+                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>טרמפים - צריכים ({poolEventLookingForRide.length})</h3>
+                  <div className="space-y-1.5 mb-6">
+                    {poolEventLookingForRide.map((m) => {
+                      const d = poolEventRides[m.name];
+                      const parts = [d.city && `מ${d.city}`, d.departureTime && `סביב השעה ${d.departureTime}`].filter(Boolean);
+                      return (
+                        <div key={m.name} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                          <span className="font-semibold">{m.name}</span>{parts.length > 0 && <span style={{ color: COLORS.textMuted }}> · {parts.join(" · ")}</span>}
+                        </div>
+                      );
+                    })}
+                    {poolEventLookingForRide.length === 0 && <p className="text-xs" style={{ color: COLORS.textMuted }}>אין עדיין מי שצריך/ה טרמפ.</p>}
+                  </div>
+
+                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>מי מביא מה</h3>
+                  <div className="space-y-3 mb-6">
+                    {foodCategories.map((cat) => (
+                      <div key={cat}>
+                        <div className="text-xs font-bold mb-1" style={{ color: COLORS.accentDark }}>{cat}</div>
+                        <div className="space-y-1">
+                          {poolEventFood.filter((it) => it.category === cat).map((it) => {
+                            const claimants = Array.isArray(it.broughtBy) ? it.broughtBy : (it.broughtBy ? [it.broughtBy] : []);
+                            return (
+                              <div key={it.id} className="text-xs px-2 py-1 rounded-lg flex items-center justify-between" style={{ background: COLORS.surface }}>
+                                <span>{it.item}</span>
+                                <span style={{ color: claimants.length > 0 ? COLORS.accentDark : COLORS.textMuted }}>
+                                  {claimants.length > 0 ? claimants.join(", ") : "לא נתפס"} ({claimants.length}/{POOL_EVENT_FOOD_MAX_CLAIMS})
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>תוכן לאישור ({pendingContent.length} ממתינים)</h3>
+                  <div className="space-y-1.5">
+                    {pendingContent.map((c) => (
+                      <div key={c.id} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                        <div className="min-w-0">
+                          <div className="font-semibold" style={{ color: COLORS.accentDark }}>{c.author}</div>
+                          <div className="mt-0.5">{c.text}</div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button onClick={() => setPoolEventContentApproval(c.id, true)} className="px-2.5 py-1 rounded-full font-bold" style={{ background: COLORS.accent2, color: COLORS.bg }}>אישור</button>
+                          <button onClick={() => setPoolEventContentApproval(c.id, false)} className="px-2.5 py-1 rounded-full font-bold" style={{ background: COLORS.input, color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}>דחייה</button>
+                        </div>
+                      </div>
+                    ))}
+                    {pendingContent.length === 0 && <p className="text-xs" style={{ color: COLORS.textMuted }}>אין הצעות ממתינות.</p>}
+                  </div>
+
+                  {decidedContent.length > 0 && (
+                    <div className="space-y-1.5 mt-3">
+                      {decidedContent.map((c) => (
+                        <div key={c.id} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-xs" style={{ background: COLORS.input, opacity: 0.75 }}>
+                          <div className="min-w-0">
+                            <div className="font-semibold" style={{ color: COLORS.textMuted }}>{c.author}</div>
+                            <div className="mt-0.5">{c.text}</div>
+                          </div>
+                          <span className="shrink-0 font-bold" style={{ color: c.approved ? COLORS.accentDark : COLORS.textMuted }}>{c.approved ? "אושר" : "נדחה"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 

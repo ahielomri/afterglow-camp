@@ -206,7 +206,10 @@ export async function listLastSeen() {
 // right after their action (exactly when it ran, at the very end of the
 // real action they cared about).
 export async function insertActivityLog(actor, action, details) {
-  const { error } = await supabase.from("activity_log").insert({ actor, action, details: details || "" });
+  // ts is NOT NULL with no DB-side default - has to be supplied here, or
+  // every insert fails outright (silently, since callers only log/ignore
+  // the error) and nothing ever lands in the table.
+  const { error } = await supabase.from("activity_log").insert({ actor, action, details: details || "", ts: Date.now() });
   if (error) throw error;
 }
 
