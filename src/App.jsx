@@ -5355,12 +5355,26 @@ ${sections}
                   <span className="flex items-center gap-1.5"><History size={14} /> היסטוריית שינויים</span>
                   <ChevronDown size={15} style={{ transform: showActivityLog ? "rotate(180deg)" : "none" }} />
                 </button>
-                {showActivityLog && (
+                {showActivityLog && (() => {
+                  // activityLog (the DB-backed table) only has real coverage
+                  // going forward from when its permissions got fixed - it
+                  // was silently 403ing for everyone before that, so most
+                  // members' history is missing from it. login-history
+                  // (a separate, older kv_store mechanism) was never
+                  // affected by that bug and already has real login events
+                  // for a much wider set of members, so it's merged in here
+                  // as "כניסה לאפליקציה" entries to give an honestly fuller
+                  // picture instead of just the DB table's narrow slice.
+                  const mergedLog = [
+                    ...activityLog,
+                    ...loginHistory.map((l) => ({ actor: l.name, action: "כניסה לאפליקציה", details: "", ts: l.ts })),
+                  ].sort((a, b) => b.ts - a.ts);
+                  return (
                   <div className="space-y-1 max-h-72 overflow-y-auto pr-1 mb-2">
-                    {activityLog.length === 0 ? (
+                    {mergedLog.length === 0 ? (
                       <p className="text-xs" style={{ color: COLORS.textMuted }}>אין עדיין פעולות רשומות.</p>
                     ) : (
-                      activityLog.map((a, i) => (
+                      mergedLog.map((a, i) => (
                         <div key={i} className="text-xs rounded-lg px-3 py-1.5" style={{ background: COLORS.surface }}>
                           <b style={{ color: COLORS.accentDark }}>{a.actor}</b> · {a.action}
                           {a.details ? ` · ${a.details}` : ""}
@@ -5369,7 +5383,8 @@ ${sections}
                       ))
                     )}
                   </div>
-                )}
+                  );
+                })()}
 
                 <button
                   onClick={() => setShowMemberActivity(!showMemberActivity)}
