@@ -5505,7 +5505,7 @@ ${sections}
           <div className="text-center px-2 py-1">
             <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.text, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>{daysUntilSetup()}</div>
             <div className="text-xs font-bold" style={{ color: COLORS.text, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>ימים לפתיחת ימים</div>
-            <div className="text-[10px] font-bold" style={{ color: COLORS.text, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>(הקמות)</div>
+            <div className="text-[8px] font-semibold" style={{ color: COLORS.text, opacity: 0.85, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>(הקמות)</div>
           </div>
         </div>
 
@@ -6897,7 +6897,7 @@ ${sections}
                 src={funBanner}
                 alt="Because Afterglowers just wanna have fun"
                 className="w-full rounded-2xl"
-                style={{ height: 120, objectFit: "cover" }}
+                style={{ height: 120, objectFit: "contain", background: COLORS.surface }}
               />
             </div>
           </div>
