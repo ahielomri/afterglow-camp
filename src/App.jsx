@@ -1451,6 +1451,45 @@ function PoolEventFoodForm({ onAdd }) {
   );
 }
 
+function PoolEventIdeaRow({ idea, approvalLabel, approvalColor, onEdit, onRemove }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(idea.text);
+  if (editing) {
+    return (
+      <div className="rounded-xl px-3 py-2 flex items-center gap-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          className="flex-1 px-2 py-1.5 rounded-lg text-xs outline-none min-w-0"
+          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+        />
+        <button
+          onClick={() => { onEdit(idea.id, text); setEditing(false); }}
+          className="px-2.5 py-1 rounded-full font-bold shrink-0"
+          style={{ background: COLORS.accent2, color: COLORS.bg }}
+        >
+          שמירה
+        </button>
+        <button onClick={() => { setText(idea.text); setEditing(false); }} className="shrink-0" style={{ color: COLORS.textMuted }}>
+          <X size={14} />
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <div className="min-w-0">
+        <div>{idea.text}</div>
+        <div className="mt-0.5 font-semibold" style={{ color: approvalColor(idea) }}>{approvalLabel(idea)}</div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <button onClick={() => setEditing(true)} style={{ color: COLORS.accentDark }}><Pencil size={14} /></button>
+        <button onClick={() => onRemove(idea.id)} style={{ color: COLORS.textMuted }}><Trash2 size={14} /></button>
+      </div>
+    </div>
+  );
+}
+
 function PoolEventContentForm({ onAdd }) {
   const [text, setText] = useState("");
   return (
@@ -3646,6 +3685,24 @@ export default function App() {
     }
   }
 
+  // Editing an idea always sends it back to "ממתין לאישור" - including one
+  // that was already approved, since the organizers approved the text as it
+  // was, not whatever it gets edited into. A rejected idea stays editable
+  // too, so someone can tweak it and try again instead of only being able
+  // to delete and re-add from scratch.
+  async function editPoolEventContentIdea(id, newText) {
+    if (!newText.trim()) return;
+    const latest = await getFreshShared("pool-event-content", poolEventContent);
+    const next = latest.map((c) => (c.id === id ? { ...c, text: newText.trim(), approved: null } : c));
+    setPoolEventContent(next);
+    try {
+      await window.storage.set("pool-event-content", JSON.stringify(next), true);
+      showToast("הרעיון עודכן ונשלח לאישור מחדש", "ok");
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
   // Admin-only (checked client-side, same trust model as the rest of the
   // admin dashboard): marks a suggestion approved/rejected for the day.
   async function setPoolEventContentApproval(id, approved) {
@@ -5608,18 +5665,19 @@ ${sections}
                     רעיון למוזיקה, משחק, טקס קטן או כל דבר אחר שירצה/תרצה להביא למפגש? אפשר להציע כאן.
                   </p>
                   <p className="text-xs mb-3" style={{ color: COLORS.accentDark }}>
-                    ההצעות מועברות לצוות המארגן/ות לאישור. את ההצעות של עצמך את/ה רואה כאן - של אחרים, לא. אפשר למחוק הצעה בכל שלב.
+                    ההצעות מועברות לצוות המארגן/ות לאישור. את ההצעות של עצמך את/ה רואה כאן - של אחרים, לא. אפשר למחוק הצעה בכל שלב, וגם לערוך - עריכה (גם של הצעה שכבר אושרה) שולחת אותה שוב לאישור.
                   </p>
                   <PoolEventContentForm onAdd={addPoolEventContentIdea} />
                   <div className="space-y-1.5 mt-3">
                     {myIdeas.map((c) => (
-                      <div key={c.id} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                        <div className="min-w-0">
-                          <div>{c.text}</div>
-                          <div className="mt-0.5 font-semibold" style={{ color: approvalColor(c) }}>{approvalLabel(c)}</div>
-                        </div>
-                        <button onClick={() => removePoolEventContentIdea(c.id)} style={{ color: COLORS.textMuted }} className="shrink-0"><Trash2 size={14} /></button>
-                      </div>
+                      <PoolEventIdeaRow
+                        key={c.id}
+                        idea={c}
+                        approvalLabel={approvalLabel}
+                        approvalColor={approvalColor}
+                        onEdit={editPoolEventContentIdea}
+                        onRemove={removePoolEventContentIdea}
+                      />
                     ))}
                     {myIdeas.length === 0 && (
                       <p className="text-xs text-center py-4" style={{ color: COLORS.textMuted }}>עדיין לא הצעת רעיון.</p>
