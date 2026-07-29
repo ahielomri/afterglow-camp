@@ -463,9 +463,8 @@ const POOL_EVENT_BUTTON_LABEL = `${POOL_EVENT_NAME} | ${POOL_EVENT_DATE_LABEL} |
 const POOL_EVENT_COLOR_DEEP = "#0d3b66";
 const POOL_EVENT_COLOR_TEAL = "#22a6c7";
 
-// Entry popup gate - nags people about attendance until the event itself
-// starts, and always re-asks these two identities regardless of their saved
-// answer (used to keep verifying the flow with them).
+// Entry popup gate - nags people about attendance, once each, until the
+// event itself starts.
 // Timeline:
 //  - now -> Friday 31.7 15:00: gate shows, "לא עכשיו" lets people skip it.
 //  - Friday 31.7 15:00 -> event start (1.8 15:00): gate still shows, but
@@ -476,7 +475,6 @@ const POOL_EVENT_COLOR_TEAL = "#22a6c7";
 const POOL_EVENT_GATE_SOFT_DEADLINE = new Date("2026-07-31T15:00:00").getTime();
 const POOL_EVENT_GATE_HARD_DEADLINE = new Date("2026-08-01T15:00:00").getTime();
 const POOL_EVENT_BUTTON_HIDE_TIME = new Date("2026-08-02T00:01:00").getTime();
-const POOL_EVENT_GATE_FORCE_ASK = ["עומרי אחיאל", "אורנה חזוט צורים"];
 
 // Verbatim copy supplied for the event's own info tab.
 const POOL_EVENT_INTRO_TEXT = `פותחים את העונה כמו שצריך: בריכה, אנשים טובים ואווירת Afterglow.
@@ -3639,10 +3637,14 @@ export default function App() {
   // hitch/trailer logistics to ask about for a local one-day gathering.
   async function setPoolEventRideData(data) {
     const latest = await getFreshShared("pool-event-rides", poolEventRides);
+    const prevAttending = latest[identity]?.attending;
     const next = { ...latest, [identity]: data };
     setPoolEventRides(next);
     try {
       await window.storage.set("pool-event-rides", JSON.stringify(next), true);
+      if (data.attending !== undefined && data.attending !== prevAttending) {
+        notifyOwner("pool_attendance", { name: identity, attending: data.attending });
+      }
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3658,6 +3660,7 @@ export default function App() {
     try {
       await window.storage.set("pool-event-food", JSON.stringify(next), true);
       showToast(`"${item.trim()}" נוסף לרשימה`, "ok");
+      notifyOwner("pool_food", { name: identity, item: item.trim(), action: "added" });
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3668,22 +3671,28 @@ export default function App() {
   async function togglePoolEventFoodClaim(id) {
     const latest = await getFreshShared("pool-event-food", poolEventFood);
     let blocked = false;
+    let claimedItemName = null;
+    let claimAction = null;
     const next = latest.map((it) => {
       if (it.id !== id) return it;
       const claimants = Array.isArray(it.broughtBy) ? it.broughtBy : (it.broughtBy ? [it.broughtBy] : []);
+      claimedItemName = it.item;
       if (claimants.includes(identity)) {
+        claimAction = "unclaimed";
         return { ...it, broughtBy: claimants.filter((n) => n !== identity) };
       }
       if (claimants.length >= POOL_EVENT_FOOD_MAX_CLAIMS) {
         blocked = true;
         return it;
       }
+      claimAction = "claimed";
       return { ...it, broughtBy: [...claimants, identity] };
     });
     if (blocked) return showToast(`הפריט הזה כבר מלא (${POOL_EVENT_FOOD_MAX_CLAIMS}/${POOL_EVENT_FOOD_MAX_CLAIMS})`, "error");
     setPoolEventFood(next);
     try {
       await window.storage.set("pool-event-food", JSON.stringify(next), true);
+      notifyOwner("pool_food", { name: identity, item: claimedItemName, action: claimAction });
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -5393,16 +5402,15 @@ ${sections}
           jumps straight to the event page; "לא מגיע/ה" saves and lets the
           person continue as normal. Either answer dismisses the gate for
           this session (it reappears next entry). Once someone has
-          answered, the gate never bothers them again (except the two
-          force-ask identities below, kept for verifying the flow).
+          answered, the gate never bothers them again - same for everyone,
+          no exceptions (it only needs to ask once per person).
           Timeline: skippable ("לא עכשיו") until Friday 31.7 15:00, then
           mandatory (no skip) until the event starts (1.8 15:00), then
           gone entirely. After answering, a short reaction message shows in
           the same popup before it closes (and, for "מגיע/ה", before
           jumping to the event page). */}
-      {profileComplete && !poolEventGateDismissed && Date.now() <= POOL_EVENT_GATE_HARD_DEADLINE && (
-        POOL_EVENT_GATE_FORCE_ASK.includes(identity) || poolEventRides[identity]?.attending === undefined
-      ) && (
+      {profileComplete && !poolEventGateDismissed && Date.now() <= POOL_EVENT_GATE_HARD_DEADLINE &&
+        poolEventRides[identity]?.attending === undefined && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: "rgba(20,15,10,0.6)" }}>
           <div className="w-full max-w-sm rounded-3xl overflow-hidden" style={{ background: COLORS.bg, border: `1px solid ${COLORS.divider}` }}>
             <img src={poolEventImage} alt={POOL_EVENT_NAME} className="w-full block" style={{ height: 140, objectFit: "cover", objectPosition: "top" }} />
