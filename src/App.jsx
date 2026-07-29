@@ -29,7 +29,6 @@ import {
   sendEventReminderPush,
   touchLastSeen,
   listLastSeen,
-  notifyOwner,
   getDietaryPreferenceCounts,
   insertActivityLog,
   listActivityLog,
@@ -3643,7 +3642,7 @@ export default function App() {
     try {
       await window.storage.set("pool-event-rides", JSON.stringify(next), true);
       if (data.attending !== undefined && data.attending !== prevAttending) {
-        notifyOwner("pool_attendance", { name: identity, attending: data.attending });
+        logActivity("אישור הגעה ליום גיבוש", data.attending === "yes" ? "מגיע/ה" : "לא מגיע/ה");
       }
     } catch {
       showToast("שמירה נכשלה", "error");
@@ -3660,7 +3659,7 @@ export default function App() {
     try {
       await window.storage.set("pool-event-food", JSON.stringify(next), true);
       showToast(`"${item.trim()}" נוסף לרשימה`, "ok");
-      notifyOwner("pool_food", { name: identity, item: item.trim(), action: "added" });
+      logActivity("הוספת פריט ליום גיבוש (מי מביא מה)", item.trim());
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3692,7 +3691,7 @@ export default function App() {
     setPoolEventFood(next);
     try {
       await window.storage.set("pool-event-food", JSON.stringify(next), true);
-      notifyOwner("pool_food", { name: identity, item: claimedItemName, action: claimAction });
+      logActivity(claimAction === "claimed" ? "לקיחת פריט ליום גיבוש" : "ביטול לקיחת פריט ליום גיבוש", claimedItemName);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -3892,14 +3891,6 @@ export default function App() {
         await window.storage.set("login-history", JSON.stringify(next), true);
       } catch {}
     }
-    // applyIdentity() only runs once per page load/app open (either a fresh
-    // password login or the PWA silently restoring an already-authenticated
-    // session via its refresh token) - not repeatedly during an open
-    // session - so this fires once per "X opened the app", which is what
-    // was actually asked for. Almost every real-world open of an installed
-    // PWA is the silent-restore path, not a password re-entry, so gating
-    // this on logHistory (like login-history is) meant it almost never fired.
-    notifyOwner("login");
   }
 
   async function handleLogin(name, password) {
@@ -4091,7 +4082,6 @@ export default function App() {
     if (targetMember) {
       logActivity("שיבוץ ידני", `${who} → ${shift.title} (${formatDate(shift.date)})`);
     } else {
-      logActivity("שיבוץ עצמי למשמרת", `${who} → ${shift.title} (${formatDate(shift.date)})`);
       // Total unfilled shifts left across the whole schedule (same formula
       // as unfilledShiftsCount in the admin overview) - not just spots left
       // in this one shift, which is what was there before.
@@ -4099,7 +4089,10 @@ export default function App() {
         (sum, s) => (s.id === TEARDOWN_ID || s.noLimit ? sum : sum + Math.max(s.spots - (nextAssignments[s.id] || []).length, 0)),
         0
       );
-      notifyOwner("shift_join", { shiftTitle: shift.title, shiftsRemaining });
+      logActivity(
+        "שיבוץ עצמי למשמרת",
+        `${who} → ${shift.title} (${formatDate(shift.date)}) · נותרו עוד ${shiftsRemaining} מקומות פנויים במשמרות בסה"כ`
+      );
     }
   }
 
