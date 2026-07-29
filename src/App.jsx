@@ -5535,8 +5535,7 @@ ${sections}
 
                 <div>
                   <p className="font-bold" style={{ color: COLORS.accentDark }}>מי שחפצה נפשו בתוכן:</p>
-                  <p>ותוסיף משפט.</p>
-                  <p>גם לכן יש מקום.</p>
+                  <p>גם לכן יש מקום ועוד איזה מקום :)</p>
                 </div>
               </div>
             )}
