@@ -1362,28 +1362,30 @@ function PoolRideWizard({ name, data, onChange }) {
                   />
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>מאיזה עיר יוצא/ת?</label>
-                  <input
-                    value={local.city}
-                    onChange={(e) => set({ city: e.target.value })}
-                    placeholder="עיר יציאה"
-                    className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-                    style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-                  />
+              {local.offerRide === "yes" && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>מאיזה עיר יוצא/ת?</label>
+                    <input
+                      value={local.city}
+                      onChange={(e) => set({ city: e.target.value })}
+                      placeholder="עיר יציאה"
+                      className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                      style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>שעת יציאה</label>
+                    <input
+                      type="time"
+                      value={local.departureTime}
+                      onChange={(e) => set({ departureTime: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                      style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>שעת יציאה</label>
-                  <input
-                    type="time"
-                    value={local.departureTime}
-                    onChange={(e) => set({ departureTime: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-                    style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-                  />
-                </div>
-              </div>
+              )}
             </>
           )}
 
