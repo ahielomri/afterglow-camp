@@ -1252,16 +1252,50 @@ function ShoppingRequestForm({ onAdd }) {
 // with-a-car? then the same regular offer/need follow-ups, without the
 // playa-specific arrival day/tow-hitch/trailer questions that don't apply
 // to a local one-day gathering.
-function PoolRideWizard({ name, data, onChange }) {
+// Standalone "מגיע/ה?" question, shown once above all the event's tabs so
+// it's answered before anything else (the ride/car question that used to
+// open PoolRideWizard is a separate, later question - see below) - and so
+// it applies to the whole event, not just the rides tab.
+function PoolAttendingGate({ name, data, onChange }) {
   const d = data || {};
   const hasSavedAnswer = d.attending !== undefined;
+  const [editing, setEditing] = useState(!hasSavedAnswer);
+
+  if (!editing) {
+    return (
+      <div className="rounded-2xl p-4 mb-4 flex items-center justify-between gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+        <div className="text-sm font-bold" style={{ color: COLORS.accentDark }}>
+          {d.attending === "yes" ? "✓ מגיע/ה למפגש" : "✓ לא מגיע/ה למפגש הפעם"}
+        </div>
+        <button onClick={() => setEditing(true)} className="px-3 py-1.5 rounded-full text-xs font-bold shrink-0" style={{ background: COLORS.accent2, color: COLORS.bg }}>
+          שינוי
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-2xl p-4 mb-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>{name} - מגיע/ה למפגש?</label>
+      <YesNoButtons
+        value={d.attending}
+        onChange={(v) => {
+          onChange(v === d.attending ? d : { ...d, attending: v, hasCar: undefined, offerRide: undefined, hasWay: undefined });
+          setEditing(false);
+        }}
+      />
+    </div>
+  );
+}
+
+function PoolRideWizard({ name, data, onChange }) {
+  const d = data || {};
+  const hasSavedAnswer = d.hasCar !== undefined;
   // Once a choice was saved, show a compact summary with an explicit
   // "עריכה" button instead of always re-showing the full form - makes it
   // obvious a saved answer can still be changed, rather than relying on
   // people to notice the same form is still live/editable underneath.
   const [editing, setEditing] = useState(!hasSavedAnswer);
   const [local, setLocal] = useState({
-    attending: d.attending,
     hasCar: d.hasCar,
     offerRide: d.offerRide,
     seats: d.seats || "",
@@ -1272,7 +1306,6 @@ function PoolRideWizard({ name, data, onChange }) {
   const set = (patch) => setLocal({ ...local, ...patch });
 
   function summaryText() {
-    if (d.attending === "no") return "לא מגיע/ה למפגש הפעם.";
     if (d.hasCar === "yes") {
       return d.offerRide === "yes"
         ? `מגיע/ה עם רכב · מציע/ה טרמפ${d.city ? ` מ${d.city}` : ""}${d.departureTime ? ` בשעה ${d.departureTime}` : ""}${d.seats ? ` · ${d.seats} מקומות` : ""}`
@@ -1309,28 +1342,21 @@ function PoolRideWizard({ name, data, onChange }) {
       <div className="text-sm font-bold" style={{ color: COLORS.accentDark }}>{name}</div>
 
       <div>
-        <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>מגיע/ה למפגש?</label>
-        <YesNoButtons value={local.attending} onChange={(v) => set({ attending: v, hasCar: undefined, offerRide: undefined, hasWay: undefined })} />
+        <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>מגיע/ה עם רכב?</label>
+        <YesNoButtons value={local.hasCar} onChange={(v) => set({ hasCar: v, offerRide: undefined, hasWay: undefined })} />
       </div>
 
-      {local.attending === "yes" && (
+      {local.hasCar === "yes" && (
         <>
           <div>
-            <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>מגיע/ה עם רכב?</label>
-            <YesNoButtons value={local.hasCar} onChange={(v) => set({ hasCar: v, offerRide: undefined, hasWay: undefined })} />
-          </div>
-
-          {local.hasCar === "yes" && (
-            <>
-              <div>
-                <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>מוכן/ה לקחת עוד אנשים איתך בדרך?</label>
-                <YesNoButtons value={local.offerRide} onChange={(v) => set({ offerRide: v })} />
-                {local.offerRide === "yes" && (
-                  <input
-                    type="number"
-                    value={local.seats}
-                    onChange={(e) => set({ seats: e.target.value })}
-                    placeholder="כמה מקומות פנויים?"
+            <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>מוכן/ה לקחת עוד אנשים איתך בדרך?</label>
+            <YesNoButtons value={local.offerRide} onChange={(v) => set({ offerRide: v })} />
+            {local.offerRide === "yes" && (
+              <input
+                type="number"
+                value={local.seats}
+                onChange={(e) => set({ seats: e.target.value })}
+                placeholder="כמה מקומות פנויים?"
                     className="w-full mt-2 px-3 py-2 rounded-xl text-sm outline-none"
                     style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
                   />
@@ -1392,8 +1418,6 @@ function PoolRideWizard({ name, data, onChange }) {
               )}
             </div>
           )}
-        </>
-      )}
 
       <div className="flex items-center gap-3 pt-1">
         <button
@@ -5480,6 +5504,8 @@ ${sections}
               <p className="text-sm font-bold mt-1" style={{ color: COLORS.text }}>{POOL_EVENT_DATE_LABEL} · {POOL_EVENT_WEEKDAY_LABEL} · {POOL_EVENT_TIME_LABEL}</p>
             </div>
 
+            <PoolAttendingGate name={identity} data={poolEventRides[identity]} onChange={setPoolEventRideData} />
+
             <div className="flex gap-1.5 mb-4 overflow-x-auto">
               {[
                 { id: "info", label: "פרטי האירוע", icon: PartyPopper },
@@ -5561,9 +5587,20 @@ ${sections}
                   )}
                 </div>
               );
+              const myAttending = poolEventRides[identity]?.attending;
               return (
                 <div>
-                  <PoolRideWizard name={identity} data={poolEventRides[identity]} onChange={setPoolEventRideData} />
+                  {myAttending === "yes" ? (
+                    <PoolRideWizard name={identity} data={poolEventRides[identity]} onChange={setPoolEventRideData} />
+                  ) : myAttending === "no" ? (
+                    <p className="text-xs text-center py-3 rounded-2xl" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, color: COLORS.textMuted }}>
+                      סימנת למעלה שלא מגיע/ה למפגש, אז אין צורך למלא פרטי הגעה. אפשר עדיין לראות למטה מי מציע/ה ומי מחפש/ת טרמפ.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-center py-3 rounded-2xl" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, color: COLORS.textMuted }}>
+                      קודם צריך לענות למעלה אם מגיע/ה למפגש, ואז תוכל/י למלא איך מגיע/ה.
+                    </p>
+                  )}
 
                   <div className="mt-4">
                     <h3 className="text-xs font-bold mb-1.5" style={{ color: COLORS.textMuted }}>מציעים טרמפ ({offeringRidesPool.length})</h3>
@@ -6226,11 +6263,26 @@ ${sections}
                       </div>
                     ))}
                   </div>
-                  <div className="flex flex-wrap gap-1.5 mb-6">
-                    {poolEventAttendingYes.map((m) => (
-                      <span key={m.name} className="text-xs px-2 py-0.5 rounded-full" style={{ background: COLORS.accent2Light, color: COLORS.accent2Dark }}>{m.name}</span>
-                    ))}
-                  </div>
+                  {poolEventAttendingYes.length > 0 && (
+                    <>
+                      <p className="text-[11px] mb-1" style={{ color: COLORS.textMuted }}>מגיעים:</p>
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {poolEventAttendingYes.map((m) => (
+                          <span key={m.name} className="text-xs px-2 py-0.5 rounded-full" style={{ background: COLORS.accent2Light, color: COLORS.accent2Dark }}>{m.name}</span>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  {poolEventAttendingNo.length > 0 && (
+                    <>
+                      <p className="text-[11px] mb-1" style={{ color: COLORS.textMuted }}>לא מגיעים:</p>
+                      <div className="flex flex-wrap gap-1.5 mb-6">
+                        {poolEventAttendingNo.map((m) => (
+                          <span key={m.name} className="text-xs px-2 py-0.5 rounded-full" style={{ background: COLORS.input, color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}>{m.name}</span>
+                        ))}
+                      </div>
+                    </>
+                  )}
 
                   <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>טרמפים - מציעים ({poolEventOfferingRides.length})</h3>
                   <div className="space-y-1.5 mb-4">
