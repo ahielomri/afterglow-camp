@@ -440,6 +440,13 @@ const EVENT_START = new Date(2026, 10, 2);
 function daysUntil() {
   return Math.ceil((EVENT_START - new Date()) / (1000 * 60 * 60 * 24));
 }
+// Separate from EVENT_START (the real gate-opening date, still used
+// elsewhere for the admin/team stat tiles) - the header badge counts down
+// to the earlier build/setup days instead.
+const SETUP_DAYS_START = new Date(2026, 9, 28);
+function daysUntilSetup() {
+  return Math.ceil((SETUP_DAYS_START - new Date()) / (1000 * 60 * 60 * 24));
+}
 
 // ---------------------------------------------------------------------------
 // "גלאו גלאו אפטר מי" - שבת 1.8.26: a one-off camp get-together (pool
@@ -5496,8 +5503,9 @@ ${sections}
             </div>
           </button>
           <div className="text-center px-2 py-1">
-            <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.text, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>{daysUntil()}</div>
-            <div className="text-xs font-bold" style={{ color: COLORS.text, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>ימים לפתיחת השערים</div>
+            <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.text, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>{daysUntilSetup()}</div>
+            <div className="text-xs font-bold" style={{ color: COLORS.text, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>ימים לפתיחת ימים</div>
+            <div className="text-[10px] font-bold" style={{ color: COLORS.text, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>(הקמות)</div>
           </div>
         </div>
 
@@ -6876,7 +6884,12 @@ ${sections}
             })()}
 
             <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
-              <img src={funBanner} alt="Because Afterglowers just wanna have fun" className="w-full rounded-2xl" />
+              <img
+                src={funBanner}
+                alt="Because Afterglowers just wanna have fun"
+                className="w-full rounded-2xl"
+                style={{ height: 120, objectFit: "cover" }}
+              />
             </div>
           </div>
         )}
