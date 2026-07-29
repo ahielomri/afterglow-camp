@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart, PartyPopper, Sparkles, Utensils, Lightbulb } from "lucide-react";
 import { pushSupported, pushPermission, enablePush, disablePush, isPushSubscribed, resetPush } from "./push.js";
-import heroDesert from "./assets/hero-desert.jpg";
+import heroDesert from "./assets/hero-sunset-logo-2.jpg";
+import funBanner from "./assets/fun-banner.jpg";
 import poolEventImage from "./assets/event-0108.jpg";
 import {
   uploadFile,
@@ -6873,6 +6874,10 @@ ${sections}
                 </div>
               );
             })()}
+
+            <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
+              <img src={funBanner} alt="Because Afterglowers just wanna have fun" className="w-full rounded-2xl" />
+            </div>
           </div>
         )}
 
