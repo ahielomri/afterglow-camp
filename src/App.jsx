@@ -6361,7 +6361,14 @@ ${sections}
                             <div className="font-semibold" style={{ color: COLORS.textMuted }}>{c.author}</div>
                             <div className="mt-0.5">{c.text}</div>
                           </div>
-                          <span className="shrink-0 font-bold" style={{ color: c.approved ? COLORS.accentDark : COLORS.textMuted }}>{c.approved ? "אושר" : "נדחה"}</span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="font-bold" style={{ color: c.approved ? COLORS.accentDark : COLORS.textMuted }}>{c.approved ? "אושר" : "נדחה"}</span>
+                            {c.approved ? (
+                              <button onClick={() => setPoolEventContentApproval(c.id, false)} className="px-2 py-1 rounded-full font-bold" style={{ background: COLORS.surface, color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}>ביטול אישור</button>
+                            ) : (
+                              <button onClick={() => setPoolEventContentApproval(c.id, true)} className="px-2 py-1 rounded-full font-bold" style={{ background: COLORS.accent2, color: COLORS.bg }}>אישור בכל זאת</button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
