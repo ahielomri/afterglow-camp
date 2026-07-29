@@ -5779,9 +5779,18 @@ ${sections}
                                 <div className="min-w-0 text-xs">
                                   <div className="font-semibold text-sm">{it.item}</div>
                                   {it.notes && <div style={{ color: COLORS.textMuted }}>{it.notes}</div>}
-                                  <div className="mt-0.5" style={{ color: claimants.length > 0 ? COLORS.accentDark : COLORS.textMuted }}>
-                                    {claimants.length > 0 ? `מביאים: ${claimants.join(", ")}` : "עדיין לא נתפס"} · {claimants.length}/{POOL_EVENT_FOOD_MAX_CLAIMS}
-                                  </div>
+                                  {claimants.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      {claimants.map((n) => (
+                                        <span key={n} className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: COLORS.surface2, color: COLORS.accentDark }}>
+                                          {n}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="mt-0.5" style={{ color: COLORS.textMuted }}>עדיין לא נתפס</div>
+                                  )}
+                                  <div className="mt-0.5" style={{ color: COLORS.textMuted }}>{claimants.length}/{POOL_EVENT_FOOD_MAX_CLAIMS}</div>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                   <button
