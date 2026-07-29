@@ -463,6 +463,21 @@ const POOL_EVENT_BUTTON_LABEL = `${POOL_EVENT_NAME} | ${POOL_EVENT_DATE_LABEL} |
 const POOL_EVENT_COLOR_DEEP = "#0d3b66";
 const POOL_EVENT_COLOR_TEAL = "#22a6c7";
 
+// Entry popup gate - nags people about attendance until the event itself
+// starts, and always re-asks these two identities regardless of their saved
+// answer (used to keep verifying the flow with them).
+// Timeline:
+//  - now -> Friday 31.7 15:00: gate shows, "לא עכשיו" lets people skip it.
+//  - Friday 31.7 15:00 -> event start (1.8 15:00): gate still shows, but
+//    with no skip option - must answer to continue.
+//  - after event start (1.8 15:00): gate never shows again for anyone.
+// Separately, the nav button itself stays visible (unrelated to the gate)
+// until the day after the event, then hides (without deleting the code).
+const POOL_EVENT_GATE_SOFT_DEADLINE = new Date("2026-07-31T15:00:00").getTime();
+const POOL_EVENT_GATE_HARD_DEADLINE = new Date("2026-08-01T15:00:00").getTime();
+const POOL_EVENT_BUTTON_HIDE_TIME = new Date("2026-08-02T00:01:00").getTime();
+const POOL_EVENT_GATE_FORCE_ASK = ["עומרי אחיאל", "אורנה חזוט צורים"];
+
 // Verbatim copy supplied for the event's own info tab.
 const POOL_EVENT_INTRO_TEXT = `פותחים את העונה כמו שצריך: בריכה, אנשים טובים ואווירת Afterglow.
 
@@ -3106,6 +3121,8 @@ export default function App() {
   const [poolEventContent, setPoolEventContent] = useState([]);
   const [poolEventSubTab, setPoolEventSubTab] = useState("info");
   const [contactingPoolRideName, setContactingPoolRideName] = useState(null);
+  const [poolEventGateDismissed, setPoolEventGateDismissed] = useState(false);
+  const [poolEventGateAnswer, setPoolEventGateAnswer] = useState(null);
   const loadSharedDataRef = useRef(null);
 
   useEffect(() => {
@@ -5371,6 +5388,78 @@ ${sections}
     <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 700, fontWeight: 700 }}>
       <style>{FONT_IMPORT}</style>
 
+      {/* Popup gate on entry - asks attendance for the pool event once, if
+          not already answered, before anything else. "מגיע/ה" saves and
+          jumps straight to the event page; "לא מגיע/ה" saves and lets the
+          person continue as normal. Either answer dismisses the gate for
+          this session (it reappears next entry). Once someone has
+          answered, the gate never bothers them again (except the two
+          force-ask identities below, kept for verifying the flow).
+          Timeline: skippable ("לא עכשיו") until Friday 31.7 15:00, then
+          mandatory (no skip) until the event starts (1.8 15:00), then
+          gone entirely. After answering, a short reaction message shows in
+          the same popup before it closes (and, for "מגיע/ה", before
+          jumping to the event page). */}
+      {profileComplete && !poolEventGateDismissed && Date.now() <= POOL_EVENT_GATE_HARD_DEADLINE && (
+        POOL_EVENT_GATE_FORCE_ASK.includes(identity) || poolEventRides[identity]?.attending === undefined
+      ) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: "rgba(20,15,10,0.6)" }}>
+          <div className="w-full max-w-sm rounded-3xl overflow-hidden" style={{ background: COLORS.bg, border: `1px solid ${COLORS.divider}` }}>
+            <img src={poolEventImage} alt={POOL_EVENT_NAME} className="w-full block" style={{ height: 140, objectFit: "cover", objectPosition: "top" }} />
+            <div className="p-5 text-center">
+              <div className="text-lg" style={{ fontFamily: FONT_HEADING, color: COLORS.accentDark }}>{POOL_EVENT_NAME}</div>
+              <p className="text-xs mt-1 mb-4" style={{ color: COLORS.textMuted }}>{POOL_EVENT_DATE_LABEL} · {POOL_EVENT_WEEKDAY_LABEL} · {POOL_EVENT_TIME_LABEL}</p>
+              {poolEventGateAnswer === null ? (
+                <>
+                  <p className="text-sm font-bold mb-3">מגיע/ה?</p>
+                  <div className="flex gap-3 justify-center mb-3">
+                    <button
+                      onClick={() => { setPoolEventRideData({ ...(poolEventRides[identity] || {}), attending: "yes" }); setPoolEventGateAnswer("yes"); }}
+                      className="flex-1 px-4 py-2.5 rounded-full text-sm font-bold"
+                      style={{ background: POOL_EVENT_COLOR_DEEP, color: "white" }}
+                    >
+                      מגיע/ה
+                    </button>
+                    <button
+                      onClick={() => { setPoolEventRideData({ ...(poolEventRides[identity] || {}), attending: "no" }); setPoolEventGateAnswer("no"); }}
+                      className="flex-1 px-4 py-2.5 rounded-full text-sm font-bold"
+                      style={{ background: COLORS.surface, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                    >
+                      לא מגיע/ה
+                    </button>
+                  </div>
+                  {Date.now() <= POOL_EVENT_GATE_SOFT_DEADLINE && (
+                    <>
+                      <button onClick={() => setPoolEventGateDismissed(true)} className="text-xs" style={{ color: COLORS.textMuted }}>
+                        עדיין לא החלטתי
+                      </button>
+                      <p className="text-[10px] mt-1" style={{ color: COLORS.textMuted }}>יקפוץ שוב בכניסה הבאה</p>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-bold mb-4">
+                    {poolEventGateAnswer === "yes" ? "איזה כיף שנתראה! 😊" : "אל דאגה. יהיה לנו עוד הרבה זמן ביחד :)"}
+                  </p>
+                  <button
+                    onClick={() => {
+                      setPoolEventGateDismissed(true);
+                      if (poolEventGateAnswer === "yes") setTab("pool-event");
+                      setPoolEventGateAnswer(null);
+                    }}
+                    className="px-6 py-2.5 rounded-full text-sm font-bold"
+                    style={{ background: POOL_EVENT_COLOR_DEEP, color: "white" }}
+                  >
+                    סגור
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="relative px-6 pt-8 pb-6 overflow-hidden" style={{ borderBottom: `1px solid ${COLORS.divider}` }}>
         <div
@@ -5425,20 +5514,39 @@ ${sections}
           not just for a moment right after picking a tab. */}
       <div className="sticky top-0 z-30 pb-2" style={{ background: COLORS.bg, borderBottom: `1px solid ${COLORS.divider}` }}>
       <div className="max-w-4xl mx-auto px-6 pt-4">
+        <style>{`
+          @keyframes poolEventPulse {
+            0%, 100% { box-shadow: 0 0 0 0px ${POOL_EVENT_COLOR_TEAL}55, 0 2px 8px ${POOL_EVENT_COLOR_DEEP}33; }
+            50% { box-shadow: 0 0 0 6px ${POOL_EVENT_COLOR_TEAL}00, 0 4px 16px ${POOL_EVENT_COLOR_DEEP}55; }
+          }
+        `}</style>
+        {/* Hidden (not deleted) starting the day after the event, per
+            request - the code stays in place for next year. */}
+        {Date.now() <= POOL_EVENT_BUTTON_HIDE_TIME && (
         <button
           onClick={() => setTab("pool-event")}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-sm font-bold transition-colors mb-2"
+          className="w-full flex flex-col items-center justify-center gap-0.5 px-4 py-3 rounded-2xl text-sm font-bold transition-colors mb-2 active:scale-[0.98]"
           style={{
             background: `linear-gradient(90deg, ${POOL_EVENT_COLOR_DEEP}, ${POOL_EVENT_COLOR_TEAL}, ${POOL_EVENT_COLOR_DEEP})`,
             color: "white",
             border: `1px solid ${POOL_EVENT_COLOR_TEAL}`,
+            animation: (tab === "pool-event" || poolEventRides[identity]?.attending !== undefined) ? "none" : "poolEventPulse 2.2s ease-in-out infinite",
             boxShadow: tab === "pool-event"
               ? `0 0 0 2px ${POOL_EVENT_COLOR_TEAL}88, 0 4px 14px ${POOL_EVENT_COLOR_DEEP}66`
-              : `0 2px 8px ${POOL_EVENT_COLOR_DEEP}33`,
+              : undefined,
           }}
         >
-          <PartyPopper size={16} /> {POOL_EVENT_BUTTON_LABEL} <Sparkles size={16} />
+          <span className="flex items-center gap-2 whitespace-nowrap">
+            <PartyPopper size={16} /> {POOL_EVENT_NAME} · {POOL_EVENT_DATE_LABEL} · {POOL_EVENT_TIME_LABEL} <Sparkles size={16} />
+          </span>
+          <span
+            className="flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full mt-0.5"
+            style={{ background: "rgba(255,255,255,0.22)", border: "1px solid rgba(255,255,255,0.4)" }}
+          >
+            לכל הפרטים לחצו כאן <ChevronDown size={12} style={{ transform: "rotate(90deg)" }} />
+          </span>
         </button>
+        )}
 
         {roleDashboardTab && (
           <button
