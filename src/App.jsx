@@ -6892,12 +6892,12 @@ ${sections}
               );
             })()}
 
-            <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
+            <div className="pt-3 mt-3 border-t" style={{ borderColor: COLORS.divider }}>
               <img
                 src={funBanner}
                 alt="Because Afterglowers just wanna have fun"
                 className="w-full rounded-2xl"
-                style={{ height: 120, objectFit: "contain", background: COLORS.surface }}
+                style={{ height: 90, objectFit: "cover" }}
               />
             </div>
           </div>
