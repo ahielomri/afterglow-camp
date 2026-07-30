@@ -5626,6 +5626,25 @@ ${sections}
 
             <PoolAttendingGate name={identity} data={poolEventRides[identity]} onChange={setPoolEventRideData} />
 
+            {poolEventAttendingYes.length > 0 && (
+              <div className="mb-4">
+                <div className="text-xs font-bold mb-2 text-center" style={{ color: POOL_EVENT_COLOR_DEEP }}>
+                  מי כבר בפנים 🎉 ({poolEventAttendingYes.length})
+                </div>
+                <div className="flex flex-wrap gap-1.5 justify-center">
+                  {poolEventAttendingYes.map((m) => (
+                    <span
+                      key={m.name}
+                      className="flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full"
+                      style={{ background: `${POOL_EVENT_COLOR_TEAL}22`, color: POOL_EVENT_COLOR_DEEP, border: `1px solid ${POOL_EVENT_COLOR_TEAL}55` }}
+                    >
+                      {m.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-1.5 mb-4 overflow-x-auto">
               {[
                 { id: "info", label: "פרטי האירוע", icon: PartyPopper },
