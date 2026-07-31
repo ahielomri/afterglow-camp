@@ -436,16 +436,9 @@ function formatDateShort(iso) {
   return `${d}.${m}`;
 }
 
-const EVENT_START = new Date(2026, 10, 2);
+const EVENT_START = new Date(2026, 9, 28);
 function daysUntil() {
   return Math.ceil((EVENT_START - new Date()) / (1000 * 60 * 60 * 24));
-}
-// Separate from EVENT_START (the real gate-opening date, still used
-// elsewhere for the admin/team stat tiles) - the header badge counts down
-// to the earlier build/setup days instead.
-const SETUP_DAYS_START = new Date(2026, 9, 28);
-function daysUntilSetup() {
-  return Math.ceil((SETUP_DAYS_START - new Date()) / (1000 * 60 * 60 * 24));
 }
 
 // ---------------------------------------------------------------------------
@@ -5585,7 +5578,7 @@ ${sections}
             </div>
           </button>
           <div className="text-center px-2 py-1">
-            <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.text, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>{daysUntilSetup()}</div>
+            <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.text, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>{daysUntil()}</div>
             <div className="text-xs font-bold" style={{ color: COLORS.text, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>ימים לפתיחת ימים</div>
             <div className="text-[8px] font-semibold" style={{ color: COLORS.text, opacity: 0.85, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>(הקמות)</div>
           </div>
