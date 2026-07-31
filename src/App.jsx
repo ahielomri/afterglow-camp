@@ -7122,17 +7122,17 @@ ${sections}
             </div>
 
             {shiftsView === "calendar" ? (
-              <div className="flex gap-4 overflow-x-auto pb-3 mb-2">
+              <div className="flex gap-2.5 overflow-x-auto pb-3 mb-2">
                 {[...new Set(visibleShifts.map((s) => s.date))].map((date) => {
                   const [dy, dm, dd] = date.split("-").map(Number);
                   const dow = WEEKDAYS_HE[new Date(dy, dm - 1, dd).getDay()];
                   return (
-                  <div key={date} className="shrink-0 w-60 rounded-3xl overflow-hidden" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, boxShadow: "0 3px 10px rgba(58,34,42,0.10)" }}>
-                    <div className="px-4 py-3 flex items-center justify-between" style={{ background: COLORS.accent }}>
+                  <div key={date} className="shrink-0 w-52 rounded-2xl overflow-hidden" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, boxShadow: "0 3px 10px rgba(58,34,42,0.10)" }}>
+                    <div className="px-3 py-2 flex items-center justify-between" style={{ background: COLORS.accent }}>
                       <span className="text-xs font-semibold" style={{ color: COLORS.accentLight }}>יום {dow}</span>
-                      <span className="text-lg font-black" style={{ fontFamily: FONT_NUM, color: COLORS.bg }}>{dd}.{dm}</span>
+                      <span className="text-base font-black" style={{ fontFamily: FONT_NUM, color: COLORS.bg }}>{dd}.{dm}</span>
                     </div>
-                    <div className="p-3 space-y-2.5">
+                    <div className="p-2 space-y-1.5">
                       {visibleShifts.filter((s) => s.date === date).sort((a, b) => a.start.localeCompare(b.start)).map((s) => {
                         const isTeardown = s.id === TEARDOWN_ID;
                         const names = (isTeardown ? allMembers.map((m) => m.name) : (assignments[s.id] || [])).filter((n) => !removedMembers.includes(n));
@@ -7145,29 +7145,29 @@ ${sections}
                         const isAtCapacity = !s.noLimit && names.length >= spots;
                         const full = isAtCapacity && !joined;
                         return (
-                          <div key={s.id} className="rounded-2xl p-3" style={{ background: isAtCapacity ? COLORS.fullBg : COLORS.input, borderRight: `3px solid ${joined ? COLORS.accent2 : isAtCapacity ? COLORS.textMuted : COLORS.accent}` }}>
+                          <div key={s.id} className="rounded-xl p-2" style={{ background: isAtCapacity ? COLORS.fullBg : COLORS.input, borderRight: `3px solid ${joined ? COLORS.accent2 : isAtCapacity ? COLORS.textMuted : COLORS.accent}` }}>
                             {!isTeardown && !s.noTime && (
-                              <div className="text-xs flex items-center gap-1" style={{ color: isAtCapacity ? COLORS.textMuted : COLORS.accentDark, fontFamily: FONT_NUM }}>
-                                <Clock size={11} /> {s.start}–{s.end}
+                              <div className="text-[10px] flex items-center gap-1" style={{ color: isAtCapacity ? COLORS.textMuted : COLORS.accentDark, fontFamily: FONT_NUM }}>
+                                <Clock size={9} /> {s.start}–{s.end}
                               </div>
                             )}
-                            <div className="text-sm font-bold mt-1">{s.title}</div>
+                            <div className="text-xs font-bold mt-0.5">{s.title}</div>
                             {isTeardown ? (
                               <TeardownTaskPicker selected={teardownTasks[identity] || []} onToggle={toggleTeardownTask} compact />
                             ) : (
-                              <div className="flex items-center justify-between mt-2">
-                                <div className="flex items-center gap-1.5">
+                              <div className="flex items-center justify-between mt-1.5">
+                                <div className="flex items-center gap-1">
                                   {s.noLimit ? (
-                                    <div className="shrink-0 flex items-center justify-center rounded-full text-[10px] font-bold" style={{ width: 22, height: 22, background: COLORS.accentLight, color: COLORS.accentDark }}>∞</div>
+                                    <div className="shrink-0 flex items-center justify-center rounded-full text-[9px] font-bold" style={{ width: 17, height: 17, background: COLORS.accentLight, color: COLORS.accentDark }}>∞</div>
                                   ) : (
-                                    <FillRing filled={names.length} total={spots} size={22} />
+                                    <FillRing filled={names.length} total={spots} size={17} />
                                   )}
-                                  <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: COLORS.accentLight, color: COLORS.accentDark, fontFamily: FONT_NUM }}>{s.noLimit ? "ללא הגבלה" : `${names.length}/${spots}`}</span>
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: COLORS.accentLight, color: COLORS.accentDark, fontFamily: FONT_NUM }}>{s.noLimit ? "ללא הגבלה" : `${names.length}/${spots}`}</span>
                                 </div>
                                 <button
                                   onClick={() => (joined ? leave(s) : join(s))}
                                   disabled={full}
-                                  className="text-xs px-3 py-1 rounded-full font-semibold"
+                                  className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
                                   style={{
                                     background: joined ? "transparent" : full ? COLORS.divider : COLORS.accent,
                                     border: joined ? `1px solid ${COLORS.accent}` : "none",
@@ -7179,18 +7179,18 @@ ${sections}
                                 </button>
                               </div>
                             )}
+                            {!isTeardown && names.length > 0 && (
+                              <div className="mt-1.5 pt-1.5 border-t flex flex-wrap gap-1" style={{ borderColor: COLORS.divider }}>
+                                {names.map((n) => (
+                                  <span key={n} className="text-[9px] pl-1 pr-1.5 py-0.5 rounded-full flex items-center gap-0.5" style={{ background: COLORS.surface2 }}>
+                                    {n}
+                                    {isAdmin && <button onClick={() => leave(s, n)} style={{ color: COLORS.textMuted }}><X size={8} /></button>}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                             {isAdmin && !isTeardown && (
-                              <div className="mt-2 pt-2 border-t" style={{ borderColor: COLORS.divider }}>
-                                {names.length > 0 && (
-                                  <div className="flex flex-wrap gap-1 mb-1.5">
-                                    {names.map((n) => (
-                                      <span key={n} className="text-[10px] pl-1 pr-1.5 py-0.5 rounded-full flex items-center gap-0.5" style={{ background: COLORS.surface2 }}>
-                                        {n}
-                                        <button onClick={() => leave(s, n)} style={{ color: COLORS.textMuted }}><X size={9} /></button>
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
+                              <div className="mt-1.5">
                                 <AdminAssignPicker members={allMembers} onAssign={(name) => join(s, name)} />
                               </div>
                             )}
@@ -7252,19 +7252,21 @@ ${sections}
                     )}
                   </div>
 
-                  {isAdmin && !isTeardown && (
+                  {!isTeardown && names.length > 0 && (
                     <div className="mt-3 pt-3 border-t" style={{ borderColor: COLORS.divider }}>
-                      <div className="text-xs mb-1.5" style={{ color: COLORS.textMuted }}>שיבוץ ידני (מנהל)</div>
-                      {names.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mb-2">
-                          {names.map((n) => (
-                            <span key={n} className="text-xs pl-1 pr-2 py-0.5 rounded-full flex items-center gap-1" style={{ background: COLORS.input }}>
-                              {n}
-                              <button onClick={() => leave(s, n)} style={{ color: COLORS.textMuted }}><X size={11} /></button>
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                      <div className="text-xs mb-1.5" style={{ color: COLORS.textMuted }}>מי במשמרת</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {names.map((n) => (
+                          <span key={n} className="text-xs pl-1 pr-2 py-0.5 rounded-full flex items-center gap-1" style={{ background: COLORS.input }}>
+                            {n}
+                            {isAdmin && <button onClick={() => leave(s, n)} style={{ color: COLORS.textMuted }}><X size={11} /></button>}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {isAdmin && !isTeardown && (
+                    <div className={names.length > 0 ? "mt-2" : "mt-3 pt-3 border-t"} style={names.length > 0 ? {} : { borderColor: COLORS.divider }}>
                       <AdminAssignPicker members={allMembers} onAssign={(name) => join(s, name)} />
                     </div>
                   )}
