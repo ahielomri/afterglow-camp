@@ -3128,14 +3128,55 @@ export default function App() {
   const [contactingPoolRideName, setContactingPoolRideName] = useState(null);
   const [poolEventGateDismissed, setPoolEventGateDismissed] = useState(false);
   const [poolEventGateAnswer, setPoolEventGateAnswer] = useState(null);
+  const [profileGateDismissed, setProfileGateDismissed] = useState(false);
   const loadSharedDataRef = useRef(null);
 
+  // Android's hardware/gesture back button (and iOS Safari's edge-swipe)
+  // both just fire the browser's native back navigation - with no history
+  // entries for our in-app tab changes, that immediately exits the PWA
+  // instead of stepping back through the app. Push a history entry every
+  // time the tab changes, and on "back" (popstate) restore the previous
+  // tab instead of leaving. isPopping distinguishes "we're reacting to a
+  // back-navigation" from "the user just picked a new tab", so we don't
+  // push a redundant new entry for a state that's already in history.
+  const isPopping = useRef(false);
+  const prevTabRef = useRef(tab);
   useEffect(() => {
-    async function safeGet(key, shared) {
+    window.history.replaceState({ tab }, "");
+    function onPopState(e) {
+      isPopping.current = true;
+      setTab(e.state?.tab || "dashboard-personal");
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (tab !== prevTabRef.current) {
+      if (!isPopping.current) {
+        window.history.pushState({ tab }, "");
+      }
+      isPopping.current = false;
+      prevTabRef.current = tab;
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    // A member's auth session can be mid-refresh for a brief moment right
+    // as the app opens (seen in the wild as a burst of 401s on some of the
+    // parallel requests below, while others in the same batch succeed) -
+    // one retry after a short pause is usually enough for the session to
+    // settle, instead of silently treating a transient auth hiccup as "no
+    // data" (e.g. someone's real payment history showing as empty).
+    async function safeGet(key, shared, attempt = 0) {
       try {
         const r = await window.storage.get(key, shared);
         return r && r.value ? r.value : null;
       } catch {
+        if (attempt === 0) {
+          await new Promise((res) => setTimeout(res, 900));
+          return safeGet(key, shared, 1);
+        }
         return null;
       }
     }
@@ -3183,10 +3224,14 @@ export default function App() {
         safeGet("pool-event-content", true),
       ]);
 
-      async function safeCall(fn, fallback) {
+      async function safeCall(fn, fallback, attempt = 0) {
         try {
           return await fn();
         } catch {
+          if (attempt === 0) {
+            await new Promise((res) => setTimeout(res, 900));
+            return safeCall(fn, fallback, 1);
+          }
           return fallback;
         }
       }
@@ -5381,7 +5426,7 @@ ${sections}
         style={{
           fontFamily: FONT_BODY,
           color: COLORS.text,
-          minHeight: 700,
+          minHeight: "100dvh",
           fontWeight: 700,
           backgroundImage: `linear-gradient(180deg, rgba(255,250,240,0.35) 0%, rgba(255,250,240,0.1) 30%, rgba(74,52,43,0.15) 100%), url(${heroDesert})`,
           backgroundSize: "cover",
@@ -5397,6 +5442,43 @@ ${sections}
   return (
     <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 700, fontWeight: 700 }}>
       <style>{FONT_IMPORT}</style>
+
+      {/* Popup gate on entry - nudges anyone with an incomplete profile
+          straight to "פרטים אישיים", every entry, until it's actually
+          complete (dismissible per-session, reappears next entry since
+          the underlying problem hasn't been fixed). */}
+      {!profileComplete && !profileGateDismissed && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: "rgba(20,15,10,0.6)" }}>
+          <div className="w-full max-w-sm rounded-3xl overflow-hidden" style={{ background: COLORS.bg, border: `1px solid ${COLORS.divider}` }}>
+            <div className="p-5 text-center">
+              <div className="text-lg" style={{ fontFamily: FONT_HEADING, color: COLORS.accentDark }}>עוד רגע לפני שממשיכים</div>
+              <p className="text-sm font-bold mt-2 mb-1">על מנת להמשיך לאפליקציה נא למלא את כל הפרטים:</p>
+              <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>{missingProfileFields.join(", ")}</p>
+              <div className="flex gap-3 justify-center mb-3">
+                <button
+                  onClick={() => {
+                    setProfileGateDismissed(true);
+                    setTab("dashboard-personal");
+                    setOpenPersonalSection("details");
+                    requestAnimationFrame(() => {
+                      requestAnimationFrame(() => {
+                        document.getElementById("personal-details-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      });
+                    });
+                  }}
+                  className="flex-1 px-4 py-2.5 rounded-full text-sm font-bold"
+                  style={{ background: COLORS.accent, color: COLORS.bg }}
+                >
+                  קח אותי לשם
+                </button>
+              </div>
+              <button onClick={() => setProfileGateDismissed(true)} className="text-xs" style={{ color: COLORS.textMuted }}>
+                אחר כך
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Popup gate on entry - asks attendance for the pool event once, if
           not already answered, before anything else. "מגיע/ה" saves and
