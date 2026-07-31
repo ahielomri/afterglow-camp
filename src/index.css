@@ -8,7 +8,7 @@ html.large-text {
 
 html, body, #root {
   height: 100%;
-  background: #fdf1f0;
+  background: #ede6da;
 }
 
 button {
@@ -23,14 +23,14 @@ button:active {
    rendered color so toggle chips/tabs (whose background depends on
    selection state, e.g. COLORS.surface or "transparent") stay flat -
    only actual primary/danger CTAs get elevated. */
-button[style*="rgb(224, 96, 122)"],
-button[style*="rgb(242, 147, 90)"],
-button[style*="rgb(196, 61, 61)"] {
+button[style*="rgb(156, 91, 66)"],
+button[style*="rgb(185, 131, 79)"],
+button[style*="rgb(168, 67, 58)"] {
   box-shadow: 0 4px 0 rgba(0, 0, 0, 0.22);
 }
-button[style*="rgb(224, 96, 122)"]:active,
-button[style*="rgb(242, 147, 90)"]:active,
-button[style*="rgb(196, 61, 61)"]:active {
+button[style*="rgb(156, 91, 66)"]:active,
+button[style*="rgb(185, 131, 79)"]:active,
+button[style*="rgb(168, 67, 58)"]:active {
   transform: translateY(4px);
   box-shadow: 0 0 0 rgba(0, 0, 0, 0.22);
 }

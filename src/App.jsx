@@ -61,22 +61,43 @@ import {
 //   danger: "#c43d3d",
 //   fullBg: "#e3d6c9",
 // };
+// Pink/coral palette, kept here as a backup in case we want it again:
+// const COLORS = {
+//   bg: "#fdf1f0",
+//   surface: "#f7dce0",
+//   surface2: "#f0c9d2",
+//   input: "#fff7f5",
+//   text: "#3a222a",
+//   textMuted: "rgba(58,34,42,0.65)",
+//   divider: "rgba(58,34,42,0.16)",
+//   accent: "#e0607a",
+//   accentDark: "#b8415c",
+//   accentLight: "#fbd8e0",
+//   accent2: "#f2935a",
+//   accent2Dark: "#c96b34",
+//   accent2Light: "#fce1c7",
+//   danger: "#c43d3d",
+//   fullBg: "#ddd6d1",
+// };
+// "Earth and Ash" palette (2b)
 const COLORS = {
-  bg: "#fdf1f0",
-  surface: "#f7dce0",
-  surface2: "#f0c9d2",
-  input: "#fff7f5",
-  text: "#3a222a",
-  textMuted: "rgba(58,34,42,0.65)",
-  divider: "rgba(58,34,42,0.16)",
-  accent: "#e0607a",
-  accentDark: "#b8415c",
-  accentLight: "#fbd8e0",
-  accent2: "#f2935a",
-  accent2Dark: "#c96b34",
-  accent2Light: "#fce1c7",
-  danger: "#c43d3d",
-  fullBg: "#ddd6d1",
+  bg: "#ede6da",
+  surface: "#dfd1bf",
+  surface2: "#e6dbc9",
+  input: "#f8f4ec",
+  text: "#2b2420",
+  textMuted: "rgba(43,36,32,0.65)",
+  divider: "#d6c2a9",
+  accent: "#9c5b42",
+  accentDark: "#6e3f2c",
+  accentLight: "#ecdccb",
+  accent2: "#b9834f",
+  accent2Dark: "#8a5f34",
+  accent2Light: "#ecd9bd",
+  danger: "#a8433a",
+  fullBg: "#d8cdbd",
+  moneyAccent: "#c97390",
+  heroLight: "#d9bba0",
 };
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;500;600;700;800&family=Frank+Ruhl+Libre:wght@500;700;900&family=Assistant:wght@400;500;600;700&display=swap');
@@ -5457,7 +5478,7 @@ ${sections}
           color: COLORS.text,
           minHeight: "100dvh",
           fontWeight: 700,
-          backgroundImage: `linear-gradient(180deg, rgba(255,250,240,0.35) 0%, rgba(255,250,240,0.1) 30%, rgba(74,52,43,0.15) 100%), url(${heroDesert})`,
+          backgroundImage: `linear-gradient(180deg, rgba(255,250,240,0.35) 0%, rgba(255,250,240,0.1) 30%, rgba(43,36,32,0.15) 100%), url(${heroDesert})`,
           backgroundSize: "cover",
           backgroundPosition: "center 65%",
         }}
@@ -5597,7 +5618,7 @@ ${sections}
           style={{
             position: "absolute",
             inset: 0,
-            background: `linear-gradient(180deg, ${COLORS.surface}40 0%, ${COLORS.surface}66 55%, ${COLORS.surface}b3 100%)`,
+            background: `linear-gradient(180deg, ${COLORS.heroLight}40 0%, ${COLORS.heroLight}66 55%, ${COLORS.heroLight}b3 100%)`,
           }}
         />
         <div className="relative flex items-center gap-4 max-w-4xl mx-auto">
@@ -6785,7 +6806,7 @@ ${sections}
                     return (
                       <>
                         <div className="text-sm">
-                          שילמת <b style={{ color: COLORS.accent2Dark }}>₪{myPaid.toLocaleString()}</b> מתוך ₪{myFee.toLocaleString()}
+                          שילמת <b style={{ color: COLORS.moneyAccent }}>₪{myPaid.toLocaleString()}</b> מתוך ₪{myFee.toLocaleString()}
                           {myRemaining > 0 && <span> · נותר <b style={{ color: COLORS.danger }}>₪{myRemaining.toLocaleString()}</b></span>}
                         </div>
                         {myList.length > 0 && (
@@ -7528,7 +7549,7 @@ ${sections}
                 { label: "הכנסות", value: budgetTotals.duesCollected, icon: Ticket, tint: COLORS.accent2Light },
                 { label: "התחייבויות", value: budgetTotals.committed, icon: Clock, tint: budgetTotals.committed > 0 ? COLORS.accentLight : COLORS.surface },
                 { label: "שולם בפועל", value: budgetTotals.paid, icon: Check, tint: COLORS.surface },
-                { label: "יתרה זמינה", value: budgetTotals.remaining, icon: CreditCard, tint: budgetTotals.remaining < 0 ? "#fbe4e2" : COLORS.accent2Light },
+                { label: "יתרה זמינה", value: budgetTotals.remaining, icon: CreditCard, tint: budgetTotals.remaining < 0 ? "#ecd6cf" : COLORS.accent2Light },
               ].map((c) => {
                 const danger = c.label === "יתרה זמינה" && c.value < 0;
                 const Icon = c.icon;
@@ -7590,7 +7611,7 @@ ${sections}
                       <span className="font-bold">{cat}</span>
                       <div className="flex items-center gap-4 text-xs flex-wrap">
                         <span>סכום לתשלום: <b style={{ color: toPay > 0 ? COLORS.danger : COLORS.accent2Dark }}>₪{toPay.toLocaleString()}</b></span>
-                        <span>סה"כ שולם: <b style={{ color: COLORS.accent2Dark }}>₪{paid.toLocaleString()}</b></span>
+                        <span>סה"כ שולם: <b style={{ color: COLORS.moneyAccent }}>₪{paid.toLocaleString()}</b></span>
                         {owedToMembers > 0 && (
                           <span>תשלום לחברי קמפ: <b style={{ color: COLORS.danger }}>₪{owedToMembers.toLocaleString()}</b></span>
                         )}
