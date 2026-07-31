@@ -5440,7 +5440,7 @@ ${sections}
   }
 
   return (
-    <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: 700, fontWeight: 700 }}>
+    <div dir="rtl" style={{ fontFamily: FONT_BODY, background: COLORS.bg, color: COLORS.text, minHeight: "100dvh", fontWeight: 700 }}>
       <style>{FONT_IMPORT}</style>
 
       {/* Popup gate on entry - nudges anyone with an incomplete profile
