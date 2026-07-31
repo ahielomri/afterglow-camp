@@ -1816,7 +1816,7 @@ function TeardownTaskPicker({ selected, onToggle, compact }) {
             <button
               key={task}
               onClick={() => onToggle(task)}
-              className={compact ? "px-1.5 py-0.5 rounded-md text-[12px] font-medium" : "px-2.5 py-1 rounded-full text-xs font-medium"}
+              className={compact ? "px-1.5 py-0.5 rounded-md text-[10px] font-medium" : "px-2.5 py-1 rounded-full text-xs font-medium"}
               style={{
                 background: active ? COLORS.accent2 : COLORS.surface2,
                 color: active ? COLORS.bg : COLORS.text,
@@ -1827,7 +1827,7 @@ function TeardownTaskPicker({ selected, onToggle, compact }) {
           );
         })}
       </div>
-      <div className={compact ? "text-[12px] mt-1" : "text-xs mt-1.5"} style={{ color: enough ? COLORS.accent2Dark : COLORS.danger }}>
+      <div className={compact ? "text-[10px] mt-1" : "text-xs mt-1.5"} style={{ color: enough ? COLORS.accent2Dark : COLORS.danger }}>
         {enough ? `✓ ${selected.length} משימות נבחרו` : `נבחרו ${selected.length}/2 - צריך לבחור לפחות 2 משימות`}
       </div>
     </div>
@@ -3122,6 +3122,11 @@ export default function App() {
   const [poolEventGateDismissed, setPoolEventGateDismissed] = useState(false);
   const [poolEventGateAnswer, setPoolEventGateAnswer] = useState(null);
   const [profileGateDismissed, setProfileGateDismissed] = useState(false);
+  const [largeText, setLargeText] = useState(() => localStorage.getItem("large-text") === "1");
+  useEffect(() => {
+    document.documentElement.classList.toggle("large-text", largeText);
+    localStorage.setItem("large-text", largeText ? "1" : "0");
+  }, [largeText]);
   const loadSharedDataRef = useRef(null);
 
   // Android's hardware/gesture back button (and iOS Safari's edge-swipe)
@@ -5383,6 +5388,7 @@ ${sections}
         className="btn-nav-3d flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors relative text-center"
         style={{
           flex: fullWidth ? "1 1 100%" : "1 1 calc(50% - 4px)",
+          minWidth: 0,
           background: active ? COLORS.accent : COLORS.bg,
           color: active ? COLORS.bg : COLORS.text,
           border: `1px solid ${active ? COLORS.accent : COLORS.divider}`,
@@ -5517,7 +5523,7 @@ ${sections}
                       <button onClick={() => setPoolEventGateDismissed(true)} className="text-xs" style={{ color: COLORS.textMuted }}>
                         עדיין לא החלטתי
                       </button>
-                      <p className="text-[12px] mt-1" style={{ color: COLORS.textMuted }}>יקפוץ שוב בכניסה הבאה</p>
+                      <p className="text-[10px] mt-1" style={{ color: COLORS.textMuted }}>יקפוץ שוב בכניסה הבאה</p>
                     </>
                   )}
                 </>
@@ -5572,15 +5578,14 @@ ${sections}
             <SunsetMark size={64} />
             <div>
               <h1 style={{ fontFamily: FONT_HEADING }} className="text-3xl tracking-tight">
-                Afterglow
+                Afterglow 2026
               </h1>
-              <p className="text-sm" style={{ color: COLORS.textMuted }}>מערכת ניהול קמפ · מידברן 2026</p>
             </div>
           </button>
           <div className="text-center px-2 py-1">
             <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.text, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>{daysUntil()}</div>
             <div className="text-xs font-bold" style={{ color: COLORS.text, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>ימים לפתיחת ימים</div>
-            <div className="text-[10px] font-semibold" style={{ color: COLORS.text, opacity: 0.85, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>(הקמות)</div>
+            <div className="text-[8px] font-semibold" style={{ color: COLORS.text, opacity: 0.85, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>(הקמות)</div>
           </div>
         </div>
 
@@ -5659,12 +5664,12 @@ ${sections}
               <button
                 key={cat.key}
                 onClick={() => setExpandedNavCategory(open ? null : cat.key)}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl text-sm font-bold transition-colors"
+                className="btn-nav-3d flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl text-sm font-bold transition-colors"
                 style={{
                   position: "relative",
-                  background: open || activeTabInCat ? COLORS.accentLight : COLORS.surface,
-                  color: open || activeTabInCat ? COLORS.accentDark : COLORS.textMuted,
-                  border: `1px solid ${open ? COLORS.accent : COLORS.divider}`,
+                  background: open || activeTabInCat ? COLORS.accent : COLORS.surface,
+                  color: open || activeTabInCat ? COLORS.bg : COLORS.textMuted,
+                  border: `1px solid ${open || activeTabInCat ? COLORS.accent : COLORS.divider}`,
                 }}
               >
                 <span className="truncate">{activeTabInCat ? `${cat.label} | ${activeTabInCat.label}` : cat.label}</span>
@@ -5730,7 +5735,7 @@ ${sections}
                 <button
                   key={s.id}
                   onClick={() => setPoolEventSubTab(s.id)}
-                  className="flex-1 shrink-0 whitespace-nowrap flex items-center justify-center gap-1 px-2 py-2 rounded-xl text-[13px] font-bold"
+                  className="flex-1 shrink-0 whitespace-nowrap flex items-center justify-center gap-1 px-2 py-2 rounded-xl text-[11px] font-bold"
                   style={{
                     background: poolEventSubTab === s.id ? COLORS.accent2 : COLORS.surface,
                     color: poolEventSubTab === s.id ? COLORS.bg : COLORS.textMuted,
@@ -5876,7 +5881,7 @@ ${sections}
                                   {claimants.length > 0 ? (
                                     <div className="flex flex-wrap gap-1 mt-1">
                                       {claimants.map((n) => (
-                                        <span key={n} className="text-[12px] px-2 py-0.5 rounded-full font-semibold" style={{ background: COLORS.surface2, color: COLORS.accentDark }}>
+                                        <span key={n} className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: COLORS.surface2, color: COLORS.accentDark }}>
                                           {n}
                                         </span>
                                       ))}
@@ -6488,7 +6493,7 @@ ${sections}
                   </div>
                   {poolEventAttendingYes.length > 0 && (
                     <>
-                      <p className="text-[13px] mb-1" style={{ color: COLORS.textMuted }}>מגיעים:</p>
+                      <p className="text-[11px] mb-1" style={{ color: COLORS.textMuted }}>מגיעים:</p>
                       <div className="flex flex-wrap gap-1.5 mb-3">
                         {poolEventAttendingYes.map((m) => (
                           <span key={m.name} className="text-xs px-2 py-0.5 rounded-full" style={{ background: COLORS.accent2Light, color: COLORS.accent2Dark }}>{m.name}</span>
@@ -6498,7 +6503,7 @@ ${sections}
                   )}
                   {poolEventAttendingNo.length > 0 && (
                     <>
-                      <p className="text-[13px] mb-1" style={{ color: COLORS.textMuted }}>לא מגיעים:</p>
+                      <p className="text-[11px] mb-1" style={{ color: COLORS.textMuted }}>לא מגיעים:</p>
                       <div className="flex flex-wrap gap-1.5 mb-6">
                         {poolEventAttendingNo.map((m) => (
                           <span key={m.name} className="text-xs px-2 py-0.5 rounded-full" style={{ background: COLORS.input, color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}>{m.name}</span>
@@ -6733,7 +6738,7 @@ ${sections}
                   style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, cursor: c.onClick ? "pointer" : "default" }}
                 >
                   <div className="text-xl sm:text-3xl font-black mt-1" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
-                  <div className="text-[12px] sm:text-xs mt-1 font-bold" style={{ color: COLORS.text }}>{c.label}</div>
+                  <div className="text-[10px] sm:text-xs mt-1 font-bold" style={{ color: COLORS.text }}>{c.label}</div>
                 </div>
               ))}
               {(campFee > 0 || feeOverrides[identity] !== undefined) && (
@@ -6820,7 +6825,7 @@ ${sections}
                         <div className="flex items-center justify-between">
                           <span><b style={{ color: COLORS.accentDark }}>{a.author}:</b> {a.text}</span>
                           {a.audience && a.audience !== "all" && (
-                            <span className="text-[12px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: COLORS.accent2Light, color: COLORS.accent2Dark }}>{a.audience}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: COLORS.accent2Light, color: COLORS.accent2Dark }}>{a.audience}</span>
                           )}
                         </div>
                       </div>
@@ -6854,6 +6859,23 @@ ${sections}
                   </button>
                   {detailsOpen && (
                     <div className="mt-3 space-y-4">
+                      <div className="flex items-center justify-between rounded-2xl p-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                        <span className="text-xs font-bold" style={{ color: COLORS.text }}>הגדלת טקסט באפליקציה</span>
+                        <button
+                          onClick={() => setLargeText((v) => !v)}
+                          className="rounded-full"
+                          style={{ width: 44, height: 26, background: largeText ? COLORS.accent : COLORS.divider, position: "relative", transition: "background 0.15s ease" }}
+                        >
+                          <span
+                            className="rounded-full"
+                            style={{
+                              position: "absolute", top: 3, insetInlineStart: largeText ? 21 : 3,
+                              width: 20, height: 20, background: "#fff", transition: "inset-inline-start 0.15s ease",
+                              boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                            }}
+                          />
+                        </button>
+                      </div>
                       <div>
                         <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
                           <Bell size={13} /> התראות
@@ -7082,7 +7104,7 @@ ${sections}
                               <div className="flex items-center justify-between mt-2">
                                 <div className="flex items-center gap-1.5">
                                   {s.noLimit ? (
-                                    <div className="shrink-0 flex items-center justify-center rounded-full text-[12px] font-bold" style={{ width: 22, height: 22, background: COLORS.accentLight, color: COLORS.accentDark }}>∞</div>
+                                    <div className="shrink-0 flex items-center justify-center rounded-full text-[10px] font-bold" style={{ width: 22, height: 22, background: COLORS.accentLight, color: COLORS.accentDark }}>∞</div>
                                   ) : (
                                     <FillRing filled={names.length} total={spots} size={22} />
                                   )}
@@ -7108,7 +7130,7 @@ ${sections}
                                 {names.length > 0 && (
                                   <div className="flex flex-wrap gap-1 mb-1.5">
                                     {names.map((n) => (
-                                      <span key={n} className="text-[12px] pl-1 pr-1.5 py-0.5 rounded-full flex items-center gap-0.5" style={{ background: COLORS.surface2 }}>
+                                      <span key={n} className="text-[10px] pl-1 pr-1.5 py-0.5 rounded-full flex items-center gap-0.5" style={{ background: COLORS.surface2 }}>
                                         {n}
                                         <button onClick={() => leave(s, n)} style={{ color: COLORS.textMuted }}><X size={9} /></button>
                                       </span>
@@ -7219,7 +7241,7 @@ ${sections}
                     </div>
                     <button
                       onClick={() => downloadMyCalendarIcs([s], [])}
-                      className="shrink-0 text-[13px] px-3 py-1.5 rounded-full font-semibold"
+                      className="shrink-0 text-[11px] px-3 py-1.5 rounded-full font-semibold"
                       style={{ background: COLORS.input, color: COLORS.textMuted }}
                     >
                       הוספה ליומן בטלפון
@@ -7237,7 +7259,7 @@ ${sections}
                     </div>
                     <button
                       onClick={() => downloadMyCalendarIcs([], [a])}
-                      className="shrink-0 text-[13px] px-3 py-1.5 rounded-full font-semibold"
+                      className="shrink-0 text-[11px] px-3 py-1.5 rounded-full font-semibold"
                       style={{ background: "rgba(255,255,255,0.6)", color: COLORS.accent2Dark }}
                     >
                       הוספה ליומן בטלפון
@@ -7388,7 +7410,7 @@ ${sections}
                         <span className="text-xs font-bold flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
                           {a.author}
                           {a.audience && a.audience !== "all" && (
-                            <span className="text-[12px] px-1.5 py-0.5 rounded-full font-normal" style={{ background: "rgba(255,255,255,0.5)" }}>{a.audience}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-normal" style={{ background: "rgba(255,255,255,0.5)" }}>{a.audience}</span>
                           )}
                         </span>
                         <div className="flex items-center gap-2">
@@ -7592,7 +7614,7 @@ ${sections}
                                         <button
                                           type="button"
                                           onClick={() => updateBudgetExpense(e.id, { refundPaid: !e.refundPaid })}
-                                          className="px-2 py-0.5 rounded-full text-[12px] font-semibold"
+                                          className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
                                           style={{ background: COLORS.input, color: COLORS.textMuted }}
                                         >
                                           {e.refundPaid ? "סמן כטרם הוחזר" : "סמן כהוחזר"}
@@ -7689,7 +7711,7 @@ ${sections}
                               {e.location && <span className="flex items-center gap-1"><MapPin size={11} /> {e.location}</span>}
                               {e.notes && <span>· {e.notes}</span>}
                             </div>
-                            <div className="text-[12px] mt-0.5" style={{ color: COLORS.textMuted }}>
+                            <div className="text-[10px] mt-0.5" style={{ color: COLORS.textMuted }}>
                               {e.updatedBy ? `עודכן ע"י ${e.updatedBy}` : e.addedBy ? `נוסף ע"י ${e.addedBy}` : ""}
                             </div>
                           </div>
@@ -7754,7 +7776,7 @@ ${sections}
               {canManageShopping && pickableCatalog.length > 0 && (
                 <div className="mb-4">
                   <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>קטלוג מוצרים - בחירה עם מחיר משוער</h3>
-                  <p className="text-[13px] mb-2" style={{ color: COLORS.textMuted }}>
+                  <p className="text-[11px] mb-2" style={{ color: COLORS.textMuted }}>
                     בוחרים מוצר וכמות - המחיר הכולל (כולל מע"מ) מחושב אוטומטית לפי מחיר משוער ליחידה. לוחצים "הוספה" כדי שהמוצר ייכנס ישר לרשימת הקניות המאושרת.
                   </p>
                   <CatalogItemPicker catalog={pickableCatalog} onAdd={addShoppingItem} />
@@ -7827,7 +7849,7 @@ ${sections}
                             {it.price ? <span>₪{Number(it.price).toLocaleString()}</span> : null}
                             {it.notes && <span>{it.price ? " · " : ""}{it.notes}</span>}
                           </div>
-                          <div className="text-[12px] mt-0.5" style={{ color: COLORS.textMuted }}>
+                          <div className="text-[10px] mt-0.5" style={{ color: COLORS.textMuted }}>
                             {it.updatedBy ? `עודכן ע"י ${it.updatedBy}` : it.addedBy ? `נוסף ע"י ${it.addedBy}` : ""}
                           </div>
                         </div>
@@ -8453,7 +8475,7 @@ ${sections}
                                         <button
                                           type="button"
                                           onClick={() => updateBudgetExpense(e.id, { refundPaid: !e.refundPaid })}
-                                          className="px-2 py-0.5 rounded-full text-[12px] font-semibold"
+                                          className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
                                           style={{ background: COLORS.input, color: COLORS.textMuted }}
                                         >
                                           {e.refundPaid ? "סמן כטרם הוחזר" : "סמן כהוחזר"}
