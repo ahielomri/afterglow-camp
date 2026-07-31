@@ -5660,6 +5660,9 @@ ${sections}
             const open = expandedNavCategory === cat.key;
             const activeTabInCat = cat.tabs.find((t) => t.id === tab);
             const showBadge = cat.key === "personal" && hasNewBoardItems;
+            // "open" (just expanded to browse) and "actually viewing a screen
+            // in this category" are different things - only the latter should
+            // read as "selected"; merely browsing gets a lighter highlight.
             return (
               <button
                 key={cat.key}
@@ -5667,9 +5670,9 @@ ${sections}
                 className="btn-nav-3d flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl text-sm font-bold transition-colors"
                 style={{
                   position: "relative",
-                  background: open || activeTabInCat ? COLORS.accent : COLORS.surface,
-                  color: open || activeTabInCat ? COLORS.bg : COLORS.textMuted,
-                  border: `1px solid ${open || activeTabInCat ? COLORS.accent : COLORS.divider}`,
+                  background: activeTabInCat ? COLORS.accent : open ? COLORS.accentLight : COLORS.surface,
+                  color: activeTabInCat ? COLORS.bg : open ? COLORS.accentDark : COLORS.textMuted,
+                  border: `1px solid ${activeTabInCat || open ? COLORS.accent : COLORS.divider}`,
                 }}
               >
                 <span className="truncate">{activeTabInCat ? `${cat.label} | ${activeTabInCat.label}` : cat.label}</span>
