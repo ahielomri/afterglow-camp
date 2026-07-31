@@ -625,9 +625,12 @@ function buildMyCalendarIcs(shifts, events) {
   events.forEach((a) => {
     lines.push("BEGIN:VEVENT", `UID:event-${a.id}@afterglow-camp`);
     if (a.eventTime) {
+      const [y, m, d] = a.eventDate.split("-").map(Number);
       const [hh, mm] = a.eventTime.split(":").map(Number);
-      const endTime = `${String((hh + 1) % 24).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
-      lines.push(`DTSTART:${icsDateTime(a.eventDate, a.eventTime)}`, `DTEND:${icsDateTime(a.eventDate, endTime)}`);
+      const end = new Date(y, m - 1, d, hh + 1, mm);
+      const endDateStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
+      const endTime = `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
+      lines.push(`DTSTART:${icsDateTime(a.eventDate, a.eventTime)}`, `DTEND:${icsDateTime(endDateStr, endTime)}`);
     } else {
       lines.push(`DTSTART;VALUE=DATE:${a.eventDate.replace(/-/g, "")}`);
     }
@@ -2164,7 +2167,7 @@ function AllocationWizard({ data, onChange }) {
     <div className="rounded-2xl p-4 space-y-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
       <div>
         <label className="text-xs block mb-1.5" style={{ color: COLORS.textMuted }}>יש לך הקצאה למידברן?</label>
-        <YesNoButtons value={local.hasAllocation} onChange={(v) => set({ hasAllocation: v })} />
+        <YesNoButtons value={local.hasAllocation} onChange={(v) => set({ hasAllocation: v, used: v === "yes" ? local.used : undefined })} />
       </div>
 
       {local.hasAllocation === "yes" && (
@@ -3419,13 +3422,14 @@ export default function App() {
     }
   }
 
-  function setCategoryBudget(cat, amount) {
-    persistCategoryBudgets({ ...categoryBudgets, [cat]: Number(amount) || 0 });
+  async function setCategoryBudget(cat, amount) {
+    const latest = await getFreshShared("category-budgets", categoryBudgets);
+    await persistCategoryBudgets({ ...latest, [cat]: Number(amount) || 0 });
     showToast(`תקציב ${cat} עודכן`, "ok");
     logActivity("עדכון תקציב מחלקה", `${cat}: ₪${Number(amount) || 0}`);
   }
 
-  function copyEngineToDepartmentBudget() {
+  async function copyEngineToDepartmentBudget() {
     const mapping = {
       "מים": engine.waterTotal,
       "שירותים ומקלחות": engine.sanitationTotal,
@@ -3435,9 +3439,10 @@ export default function App() {
       "עיצוב ותפאורה": engine.loungeItemsTotal,
       "ציוד": engine.campItemsTotal + engine.campContingency,
     };
-    const next = { ...categoryBudgets };
+    const latest = await getFreshShared("category-budgets", categoryBudgets);
+    const next = { ...latest };
     Object.entries(mapping).forEach(([cat, val]) => { next[cat] = Math.round(val) || 0; });
-    persistCategoryBudgets(next);
+    await persistCategoryBudgets(next);
     showToast("התקציב לפי מחלקות עודכן מהפרמטרים", "ok");
     logActivity("העתקת תקציב ממנוע לפי מחלקות", Object.keys(mapping).join(", "));
   }
@@ -3826,10 +3831,11 @@ export default function App() {
   async function addBudgetCategory(name) {
     const trimmed = (name || "").trim();
     if (!trimmed) return;
-    if (BUDGET_CATEGORIES.includes(trimmed) || extraBudgetCategories.includes(trimmed)) {
+    const latestCats = await getFreshShared("extra-budget-categories", extraBudgetCategories);
+    if (BUDGET_CATEGORIES.includes(trimmed) || latestCats.includes(trimmed)) {
       return showToast("הקטגוריה כבר קיימת", "error");
     }
-    const next = [...extraBudgetCategories, trimmed];
+    const next = [...latestCats, trimmed];
     setExtraBudgetCategories(next);
     try {
       await window.storage.set("extra-budget-categories", JSON.stringify(next), true);
@@ -3846,14 +3852,16 @@ export default function App() {
   async function renameBudgetCategory(oldName, newName) {
     const trimmed = (newName || "").trim();
     if (!trimmed || trimmed === oldName) return;
-    if (!extraBudgetCategories.includes(oldName)) return;
-    if (BUDGET_CATEGORIES.includes(trimmed) || extraBudgetCategories.includes(trimmed)) {
+    const latestCats = await getFreshShared("extra-budget-categories", extraBudgetCategories);
+    if (!latestCats.includes(oldName)) return;
+    if (BUDGET_CATEGORIES.includes(trimmed) || latestCats.includes(trimmed)) {
       return showToast("הקטגוריה כבר קיימת", "error");
     }
-    const nextCats = extraBudgetCategories.map((c) => (c === oldName ? trimmed : c));
+    const nextCats = latestCats.map((c) => (c === oldName ? trimmed : c));
     setExtraBudgetCategories(nextCats);
 
-    const nextBudgets = { ...categoryBudgets };
+    const latestBudgets = await getFreshShared("category-budgets", categoryBudgets);
+    const nextBudgets = { ...latestBudgets };
     if (oldName in nextBudgets) {
       nextBudgets[trimmed] = nextBudgets[oldName];
       delete nextBudgets[oldName];
@@ -3883,14 +3891,20 @@ export default function App() {
   }
 
   async function removeBudgetCategory(name) {
-    if (!extraBudgetCategories.includes(name)) return;
-    const hasItems = budgetItems.some((b) => b.category === name) || budgetExpenses.some((e) => e.allocation === name);
+    const latestCats = await getFreshShared("extra-budget-categories", extraBudgetCategories);
+    if (!latestCats.includes(name)) return;
+    const [latestItems, latestExpenses] = await Promise.all([
+      getFreshShared("budget-items", budgetItems),
+      getFreshShared("budget-expenses", budgetExpenses),
+    ]);
+    const hasItems = latestItems.some((b) => b.category === name) || latestExpenses.some((e) => e.allocation === name);
     if (hasItems) {
       return showToast("יש הוצאות משויכות לקטגוריה זו - יש להעביר או למחוק אותן קודם", "error");
     }
-    const nextCats = extraBudgetCategories.filter((c) => c !== name);
+    const nextCats = latestCats.filter((c) => c !== name);
     setExtraBudgetCategories(nextCats);
-    const nextBudgets = { ...categoryBudgets };
+    const latestBudgets = await getFreshShared("category-budgets", categoryBudgets);
+    const nextBudgets = { ...latestBudgets };
     delete nextBudgets[name];
     setCategoryBudgets(nextBudgets);
     try {
@@ -4272,7 +4286,14 @@ export default function App() {
     const latest = await getFreshShared("ride-matches", rideMatches);
     const current = latest[driverName] || [];
     if (current.includes(riderName)) return;
-    const next = { ...latest, [driverName]: [...current, riderName] };
+    // A rider can only be matched to one driver at a time - drop them from
+    // any other driver's list before adding them here, so they can't end up
+    // double-booked across two cars.
+    const next = { [driverName]: [...current, riderName] };
+    Object.keys(latest).forEach((d) => {
+      if (d === driverName) return;
+      next[d] = (latest[d] || []).filter((n) => n !== riderName);
+    });
     setRideMatches(next);
     try {
       await window.storage.set("ride-matches", JSON.stringify(next), true);
@@ -5271,7 +5292,11 @@ ${sections}
 
   const budgetTotals = useMemo(() => {
     const planned = Object.values(categoryBudgets).reduce((sum, v) => sum + (Number(v) || 0), 0);
-    let committed = budgetItems.reduce((sum, b) => sum + (Number(b.committed) || 0), 0);
+    // budgetItems.committed is a raw admin-entered total that stays nonzero
+    // even once fully paid, unlike expenseAmounts().committed below (which
+    // means "still owed" and drops to 0 once paid) - use the same "still
+    // owed" meaning here too so the merged total is one consistent number.
+    let committed = budgetItems.reduce((sum, b) => sum + Math.max((Number(b.committed) || 0) - (Number(b.paid) || 0), 0), 0);
     let paid = budgetItems.reduce((sum, b) => sum + (Number(b.paid) || 0), 0);
     budgetExpenses.forEach((e) => {
       const amounts = expenseAmounts(e);
@@ -8742,7 +8767,8 @@ ${sections}
                 <div className="space-y-2">
                   {offeringRides.map((driver) => {
                     const matched = rideMatches[driver.name] || [];
-                    const unmatchedSeekers = lookingForRide.filter((s) => !matched.includes(s.name));
+                    const allMatchedNames = new Set(Object.values(rideMatches).flat());
+                    const unmatchedSeekers = lookingForRide.filter((s) => !allMatchedNames.has(s.name));
                     const seats = rideInfo[driver.name]?.seats;
                     return (
                       <div key={driver.name} className="rounded-xl px-3 py-2" style={{ background: COLORS.input }}>
