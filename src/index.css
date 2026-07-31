@@ -2,7 +2,46 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  font-size: 18px;
+}
+
 html, body, #root {
   height: 100%;
   background: #fdf1f0;
+}
+
+button {
+  transition: transform 0.08s ease, filter 0.08s ease, box-shadow 0.08s ease;
+}
+button:active {
+  filter: brightness(0.9);
+}
+
+/* Real action buttons (filled with COLORS.accent / accent2 / danger) get a
+   solid 3D shadow "side" and sink into it on press. Matched by the exact
+   rendered color so toggle chips/tabs (whose background depends on
+   selection state, e.g. COLORS.surface or "transparent") stay flat -
+   only actual primary/danger CTAs get elevated. */
+button[style*="rgb(224, 96, 122)"],
+button[style*="rgb(242, 147, 90)"],
+button[style*="rgb(196, 61, 61)"] {
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.22);
+}
+button[style*="rgb(224, 96, 122)"]:active,
+button[style*="rgb(242, 147, 90)"]:active,
+button[style*="rgb(196, 61, 61)"]:active {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0.22);
+}
+
+/* Main navigation menu buttons - same 3D press treatment, applied
+   directly via class since active/inactive both need it (not just the
+   accent-filled active state). */
+.btn-nav-3d {
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.22);
+}
+.btn-nav-3d:active {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0.22);
 }
