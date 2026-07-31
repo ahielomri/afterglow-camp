@@ -1,5 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart, PartyPopper, Sparkles, Utensils, Lightbulb } from "lucide-react";
+import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown as ChevronDownThin, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart, PartyPopper, Sparkles, Utensils, Lightbulb } from "lucide-react";
+// Every ChevronDown in the app should read as bold/clickable, not just the
+// default thin stroke - default it here once instead of at each call site.
+function ChevronDown(props) {
+  return <ChevronDownThin strokeWidth={3} {...props} />;
+}
 import { pushSupported, pushPermission, enablePush, disablePush, isPushSubscribed, resetPush } from "./push.js";
 import heroDesert from "./assets/hero-sunset-logo-2.jpg";
 import funBanner from "./assets/fun-banner.jpg";
@@ -6780,6 +6785,23 @@ ${sections}
               )}
             </div>
 
+            <div className="flex items-center justify-between rounded-2xl p-3 mt-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+              <span className="text-xs font-bold" style={{ color: COLORS.text }}>הגדלת טקסט באפליקציה</span>
+              <button
+                onClick={() => setLargeText((v) => !v)}
+                className="rounded-full"
+                style={{ width: 44, height: 26, background: largeText ? COLORS.accent : COLORS.divider, position: "relative", transition: "background 0.15s ease" }}
+              >
+                <span
+                  className="rounded-full"
+                  style={{
+                    position: "absolute", top: 3, insetInlineStart: largeText ? 21 : 3,
+                    width: 20, height: 20, background: "#fff", transition: "inset-inline-start 0.15s ease",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                  }}
+                />
+              </button>
+            </div>
 
             <div className="pt-5 mt-5 border-t" style={{ borderColor: COLORS.divider }}>
               <button
@@ -6862,23 +6884,6 @@ ${sections}
                   </button>
                   {detailsOpen && (
                     <div className="mt-3 space-y-4">
-                      <div className="flex items-center justify-between rounded-2xl p-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                        <span className="text-xs font-bold" style={{ color: COLORS.text }}>הגדלת טקסט באפליקציה</span>
-                        <button
-                          onClick={() => setLargeText((v) => !v)}
-                          className="rounded-full"
-                          style={{ width: 44, height: 26, background: largeText ? COLORS.accent : COLORS.divider, position: "relative", transition: "background 0.15s ease" }}
-                        >
-                          <span
-                            className="rounded-full"
-                            style={{
-                              position: "absolute", top: 3, insetInlineStart: largeText ? 21 : 3,
-                              width: 20, height: 20, background: "#fff", transition: "inset-inline-start 0.15s ease",
-                              boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-                            }}
-                          />
-                        </button>
-                      </div>
                       <div>
                         <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
                           <Bell size={13} /> התראות
