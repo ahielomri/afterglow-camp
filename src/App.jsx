@@ -3108,6 +3108,7 @@ export default function App() {
   const [pushEnabledNames, setPushEnabledNames] = useState(null);
   const [showPushStatusList, setShowPushStatusList] = useState(false);
   const [showReminderForm, setShowReminderForm] = useState(false);
+  const [showNotificationHistory, setShowNotificationHistory] = useState(false);
   const [reminderTitle, setReminderTitle] = useState("");
   const [reminderMessage, setReminderMessage] = useState("");
   const [sendingReminder, setSendingReminder] = useState(false);
@@ -6372,6 +6373,39 @@ ${sections}
                 </button>
               </div>
             )}
+
+            {isOwner && (() => {
+              const NOTIFICATION_ACTIONS = ["שליחת תזכורת התראה", "התראת דחיפה נשלחה"];
+              const notificationHistory = activityLog
+                .filter((a) => NOTIFICATION_ACTIONS.includes(a.action))
+                .sort((a, b) => b.ts - a.ts);
+              return (
+                <>
+                  <button
+                    onClick={() => setShowNotificationHistory(!showNotificationHistory)}
+                    className="w-full flex items-center justify-between mb-2 text-sm font-bold"
+                    style={{ color: COLORS.textMuted }}
+                  >
+                    <span className="flex items-center gap-1.5"><History size={14} /> היסטוריית התראות (רק אצלך) ({notificationHistory.length})</span>
+                    <ChevronDown size={15} style={{ transform: showNotificationHistory ? "rotate(180deg)" : "none" }} />
+                  </button>
+                  {showNotificationHistory && (
+                    <div className="space-y-1 max-h-72 overflow-y-auto pr-1 mb-2">
+                      {notificationHistory.length === 0 ? (
+                        <p className="text-xs" style={{ color: COLORS.textMuted }}>אין עדיין התראות רשומות.</p>
+                      ) : (
+                        notificationHistory.map((a, i) => (
+                          <div key={i} className="text-xs rounded-lg px-3 py-1.5" style={{ background: COLORS.surface }}>
+                            {a.details}
+                            <span style={{ color: COLORS.textMuted }}> · {new Date(a.ts).toLocaleString("he-IL")}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
               </>
             )}
 
