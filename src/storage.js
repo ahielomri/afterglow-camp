@@ -135,7 +135,7 @@ export async function uploadEventPhoto(file, uploaderName) {
 export async function listEventPhotos() {
   const { data, error } = await supabase
     .from("event_photos")
-    .select("id, path, uploader_name, ts")
+    .select("id, path, uploader_name, ts, tags")
     .order("ts", { ascending: false });
   if (error) throw error;
   return (data || []).map((r) => ({
@@ -143,6 +143,7 @@ export async function listEventPhotos() {
     path: r.path,
     uploader: r.uploader_name,
     ts: Number(r.ts),
+    tags: r.tags || [],
     url: supabase.storage.from("event-photos").getPublicUrl(r.path).data.publicUrl,
   }));
 }
@@ -151,6 +152,38 @@ export async function deleteEventPhoto(id, path) {
   const { error: dbError } = await supabase.from("event_photos").delete().eq("id", id);
   if (dbError) throw dbError;
   await supabase.storage.from("event-photos").remove([path]);
+}
+
+// Re-reads the current tags before writing (instead of trusting whatever
+// tags the caller last had in local state) so two people tagging the same
+// photo around the same moment don't silently overwrite each other's tag -
+// same "fetch fresh, then merge" shape used for the kv_store lists.
+export async function addEventPhotoTag(id, name) {
+  const { data: current, error: readError } = await supabase
+    .from("event_photos")
+    .select("tags")
+    .eq("id", id)
+    .single();
+  if (readError) throw readError;
+  const tags = current.tags || [];
+  if (tags.includes(name)) return tags;
+  const next = [...tags, name];
+  const { error } = await supabase.from("event_photos").update({ tags: next }).eq("id", id);
+  if (error) throw error;
+  return next;
+}
+
+export async function removeEventPhotoTag(id, name) {
+  const { data: current, error: readError } = await supabase
+    .from("event_photos")
+    .select("tags")
+    .eq("id", id)
+    .single();
+  if (readError) throw readError;
+  const next = (current.tags || []).filter((t) => t !== name);
+  const { error } = await supabase.from("event_photos").update({ tags: next }).eq("id", id);
+  if (error) throw error;
+  return next;
 }
 
 // ---------------------------------------------------------------------------

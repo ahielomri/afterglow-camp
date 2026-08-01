@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown as ChevronDownThin, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart, Utensils, Lightbulb, Camera, ImagePlus, Download, Sparkles } from "lucide-react";
+import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown as ChevronDownThin, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart, Utensils, Lightbulb, Camera, ImagePlus, Download, Sparkles, Tag } from "lucide-react";
 // Every ChevronDown in the app should read as bold/clickable, not just the
 // default thin stroke - default it here once instead of at each call site.
 function ChevronDown(props) {
@@ -41,6 +41,8 @@ import {
   uploadEventPhoto,
   listEventPhotos,
   deleteEventPhoto,
+  addEventPhotoTag,
+  removeEventPhotoTag,
 } from "./storage.js";
 
 // ---------------------------------------------------------------------------
@@ -2407,6 +2409,30 @@ function AdminAssignPicker({ members, onAssign }) {
   );
 }
 
+function TagPicker({ members, onTag }) {
+  const [val, setVal] = useState("");
+  return (
+    <div className="flex items-center gap-1 mt-1">
+      <select
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        className="flex-1 min-w-0 text-[10px] px-1.5 py-1 rounded-lg outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      >
+        <option value="">מי בתמונה?</option>
+        {members.map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
+      </select>
+      <button
+        onClick={() => { if (val) { onTag(val); setVal(""); } }}
+        className="text-[10px] px-2 py-1 rounded-full font-semibold shrink-0"
+        style={{ background: COLORS.accent, color: COLORS.bg }}
+      >
+        תיוג
+      </button>
+    </div>
+  );
+}
+
 function NumField({ label, value, onChange, placeholder, suffix }) {
   return (
     <div>
@@ -2770,6 +2796,7 @@ export default function App() {
   const [eventPhotos, setEventPhotos] = useState(null);
   const [eventPhotosUploading, setEventPhotosUploading] = useState(false);
   const [eventPhotosZipping, setEventPhotosZipping] = useState(false);
+  const [taggingPhotoId, setTaggingPhotoId] = useState(null);
   const [showNotificationHistory, setShowNotificationHistory] = useState(false);
   const [reminderTitle, setReminderTitle] = useState("");
   const [reminderMessage, setReminderMessage] = useState("");
@@ -3703,6 +3730,27 @@ export default function App() {
       showToast("הורדת כל התמונות נכשלה - אפשר לנסות שוב", "error");
     } finally {
       setEventPhotosZipping(false);
+    }
+  }
+
+  // Tagging pushes a personal notification to whoever gets newly tagged
+  // (via a DB webhook on event_photos that diffs old/new tags server-side -
+  // see notify-photo-tag) - this just needs to save the updated array.
+  async function addPhotoTag(photo, name) {
+    try {
+      const tags = await addEventPhotoTag(photo.id, name);
+      setEventPhotos((prev) => (prev || []).map((p) => (p.id === photo.id ? { ...p, tags } : p)));
+    } catch {
+      showToast("התיוג נכשל", "error");
+    }
+  }
+
+  async function removePhotoTag(photo, name) {
+    try {
+      const tags = await removeEventPhotoTag(photo.id, name);
+      setEventPhotos((prev) => (prev || []).map((p) => (p.id === photo.id ? { ...p, tags } : p)));
+    } catch {
+      showToast("הסרת התיוג נכשלה", "error");
     }
   }
 
@@ -6810,24 +6858,57 @@ ${sections}
                     <h4 className="text-xs font-bold mb-1.5" style={{ color: COLORS.accentDark }}>הועלה ע"י {g.uploader}</h4>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {g.photos.map((p) => (
-                        <div key={p.id} className="relative rounded-xl overflow-hidden" style={{ border: `1px solid ${COLORS.divider}`, aspectRatio: "1 / 1" }}>
-                          <button onClick={() => downloadEventPhoto(p)} className="w-full h-full block" title="הורדה">
-                            <img src={p.url} alt={`תמונה מ-${p.uploader}`} className="w-full h-full object-cover" loading="lazy" />
-                            <span
-                              className="absolute bottom-1 right-1 rounded-full p-1 flex items-center justify-center"
-                              style={{ background: "rgba(0,0,0,0.55)", color: "white" }}
-                            >
-                              <Download size={12} />
-                            </span>
-                          </button>
-                          {(p.uploader === identity || isAdmin) && (
-                            <button
-                              onClick={() => removeEventPhoto(p)}
-                              className="absolute top-1 left-1 rounded-full p-1"
-                              style={{ background: "rgba(0,0,0,0.55)", color: "white" }}
-                            >
-                              <Trash2 size={12} />
+                        <div key={p.id}>
+                          <div className="relative rounded-xl overflow-hidden" style={{ border: `1px solid ${COLORS.divider}`, aspectRatio: "1 / 1" }}>
+                            <button onClick={() => downloadEventPhoto(p)} className="w-full h-full block" title="הורדה">
+                              <img src={p.url} alt={`תמונה מ-${p.uploader}`} className="w-full h-full object-cover" loading="lazy" />
+                              <span
+                                className="absolute bottom-1 right-1 rounded-full p-1 flex items-center justify-center"
+                                style={{ background: "rgba(0,0,0,0.55)", color: "white" }}
+                              >
+                                <Download size={12} />
+                              </span>
                             </button>
+                            <button
+                              onClick={() => setTaggingPhotoId(taggingPhotoId === p.id ? null : p.id)}
+                              className="absolute top-1 right-1 rounded-full p-1"
+                              style={{ background: "rgba(0,0,0,0.55)", color: "white" }}
+                              title="תיוג"
+                            >
+                              <Tag size={12} />
+                            </button>
+                            {(p.uploader === identity || isAdmin) && (
+                              <button
+                                onClick={() => removeEventPhoto(p)}
+                                className="absolute top-1 left-1 rounded-full p-1"
+                                style={{ background: "rgba(0,0,0,0.55)", color: "white" }}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
+                          </div>
+
+                          {p.tags && p.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {p.tags.map((name) => (
+                                <button
+                                  key={name}
+                                  onClick={() => removePhotoTag(p, name)}
+                                  className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full flex items-center gap-0.5"
+                                  style={{ background: COLORS.accentLight, color: COLORS.accentDark }}
+                                  title="הסרת תיוג"
+                                >
+                                  {name} <X size={8} />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {taggingPhotoId === p.id && (
+                            <TagPicker
+                              members={allMembers.filter((m) => !(p.tags || []).includes(m.name))}
+                              onTag={(name) => { addPhotoTag(p, name); setTaggingPhotoId(null); }}
+                            />
                           )}
                         </div>
                       ))}
