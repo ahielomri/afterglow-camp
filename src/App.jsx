@@ -5189,9 +5189,12 @@ ${sections}
 
   // Pull fresh activity/login/last-seen data every time the owner opens the
   // "יומנים" tab, so it reflects what's happened since the page was loaded
-  // instead of a stale snapshot from then.
+  // instead of a stale snapshot from then. Also refresh on "תקשורת" since
+  // that tab shows the owner-only notification history, which reads from
+  // the same activityLog state - otherwise it stays stuck at the empty
+  // initial [] until the owner happens to visit "יומנים" first.
   useEffect(() => {
-    if (adminSubTab === "logs" && isOwner) {
+    if ((adminSubTab === "logs" || adminSubTab === "comms") && isOwner) {
       refreshLogs();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
