@@ -5674,7 +5674,7 @@ ${sections}
             animation: (tab === "pool-event" || poolEventRides[identity]?.attending !== undefined) ? "none" : "poolEventPulse 2.2s ease-in-out infinite",
             boxShadow: tab === "pool-event"
               ? `0 0 0 2px ${POOL_EVENT_COLOR_TEAL}88, 0 4px 14px ${POOL_EVENT_COLOR_DEEP}66`
-              : undefined,
+              : `0 0 0 3px ${POOL_EVENT_COLOR_TEAL}33, 0 2px 10px ${POOL_EVENT_COLOR_DEEP}40`,
           }}
         >
           <span className="flex items-center gap-2 whitespace-nowrap">
