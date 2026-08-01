@@ -40,6 +40,7 @@ import {
   listActivityLog,
   uploadEventPhoto,
   listEventPhotos,
+  fetchOriginalPhotoBlob,
   deleteEventPhoto,
   addEventPhotoTag,
   removeEventPhotoTag,
@@ -3740,8 +3741,22 @@ export default function App() {
   // files specifically) isn't supported, e.g. desktop browsers.
   async function downloadEventPhoto(photo) {
     try {
-      const res = await fetch(photo.url);
-      const blob = await res.blob();
+      // Prefer the original, full-resolution backup from Drive over the
+      // resized copy the gallery displays - fall back to the resized copy
+      // if there's no backup for this photo (older upload, or the Drive
+      // backup failed) or the fetch back from Drive itself fails.
+      let blob;
+      if (photo.driveFileId) {
+        try {
+          blob = await fetchOriginalPhotoBlob(photo.driveFileId);
+        } catch {
+          blob = null;
+        }
+      }
+      if (!blob) {
+        const res = await fetch(photo.url);
+        blob = await res.blob();
+      }
       const ext = (photo.path.split(".").pop() || "jpg").toLowerCase();
       const filename = `afterglow-${photo.uploader}-${photo.ts}.${ext}`;
       const file = new File([blob], filename, { type: blob.type || "image/jpeg" });

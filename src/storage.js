@@ -138,7 +138,9 @@ async function resizeImageFile(file, maxDim = 1600, quality = 0.82) {
 // organizer's Google Drive (via the backup-photo-to-drive Edge Function),
 // before the compressed copy goes to the app. Never throws - a slow or
 // failed Drive backup should never stop someone from sharing a photo, so
-// this is raced against a timeout and any error is swallowed.
+// this is raced against a timeout and any error is swallowed. Returns the
+// Drive file id on success (so downloads can fetch the original later) or
+// null if the backup didn't happen.
 async function backupOriginalToDrive(file, uploaderName) {
   try {
     const form = new FormData();
@@ -154,7 +156,7 @@ async function backupOriginalToDrive(file, uploaderName) {
     // Most members never sign in (no Supabase Auth session), so the SDK has no
     // session token to attach - it needs an explicit Authorization header here or
     // this verify_jwt-protected function never receives the request at all.
-    const { error } = await Promise.race([
+    const { data, error } = await Promise.race([
       supabase.functions.invoke("backup-photo-to-drive", {
         body: form,
         headers: { Authorization: `Bearer ${supabaseAnonKey}` },
@@ -162,8 +164,10 @@ async function backupOriginalToDrive(file, uploaderName) {
       timeout,
     ]);
     if (error) throw error;
+    return data?.ok ? data.fileId : null;
   } catch (err) {
     console.error("Drive backup failed (non-blocking)", err);
+    return null;
   }
 }
 
@@ -175,7 +179,7 @@ async function backupOriginalToDrive(file, uploaderName) {
 // only the auto-set `owner` (auth uid) column, so the DB row is what
 // carries the human-readable attribution.
 export async function uploadEventPhoto(file, uploaderName) {
-  await backupOriginalToDrive(file, uploaderName);
+  const driveFileId = await backupOriginalToDrive(file, uploaderName);
   const resized = await resizeImageFile(file);
   const ext = (resized.name.split(".").pop() || "jpg").toLowerCase();
   const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
@@ -190,19 +194,19 @@ export async function uploadEventPhoto(file, uploaderName) {
   const ts = Date.now();
   const { error: insertError } = await supabase
     .from("event_photos")
-    .insert({ path, uploader_name: uploaderName, ts });
+    .insert({ path, uploader_name: uploaderName, ts, drive_file_id: driveFileId });
   if (insertError) {
     await supabase.storage.from("event-photos").remove([path]);
     throw insertError;
   }
   const { data } = supabase.storage.from("event-photos").getPublicUrl(path);
-  return { url: data.publicUrl, path, uploader: uploaderName, ts };
+  return { url: data.publicUrl, path, uploader: uploaderName, ts, driveFileId };
 }
 
 export async function listEventPhotos() {
   const { data, error } = await supabase
     .from("event_photos")
-    .select("id, path, uploader_name, ts, tags")
+    .select("id, path, uploader_name, ts, tags, drive_file_id")
     .order("ts", { ascending: false });
   if (error) throw error;
   return (data || []).map((r) => ({
@@ -211,8 +215,23 @@ export async function listEventPhotos() {
     uploader: r.uploader_name,
     ts: Number(r.ts),
     tags: r.tags || [],
+    driveFileId: r.drive_file_id || null,
     url: supabase.storage.from("event-photos").getPublicUrl(r.path).data.publicUrl,
   }));
+}
+
+// Fetches the original, full-resolution version of a photo back from the
+// organizer's Google Drive (via the get-drive-photo Edge Function) - used
+// by the download button so people get the real photo, not the resized
+// copy the gallery displays. Throws on failure; callers should fall back
+// to the compressed Storage copy (photo.url) rather than block a download.
+export async function fetchOriginalPhotoBlob(driveFileId) {
+  const url = `${supabaseUrl}/functions/v1/get-drive-photo?fileId=${encodeURIComponent(driveFileId)}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${supabaseAnonKey}`, apikey: supabaseAnonKey },
+  });
+  if (!res.ok) throw new Error(`get-drive-photo failed: ${res.status}`);
+  return res.blob();
 }
 
 export async function deleteEventPhoto(id, path) {
