@@ -45,6 +45,9 @@ import {
   removeEventPhotoTag,
   listUnseenPhotoTags,
   markPhotoTagsSeen,
+  listPhotoComments,
+  addPhotoComment,
+  deletePhotoComment,
 } from "./storage.js";
 
 // ---------------------------------------------------------------------------
@@ -2792,6 +2795,8 @@ export default function App() {
   const [eventPhotosZipping, setEventPhotosZipping] = useState(false);
   const [eventPhotoPreview, setEventPhotoPreview] = useState(null);
   const [pendingTagPos, setPendingTagPos] = useState(null);
+  const [previewComments, setPreviewComments] = useState(null);
+  const [newCommentText, setNewCommentText] = useState("");
   const [unseenPhotoTags, setUnseenPhotoTags] = useState([]);
   const [showNotificationHistory, setShowNotificationHistory] = useState(false);
   const [reminderTitle, setReminderTitle] = useState("");
@@ -3542,6 +3547,38 @@ export default function App() {
     setUnseenPhotoTags([]);
     markPhotoTagsSeen(ids, identity).catch(() => {});
     if (goToGallery) setTab("gallery");
+  }
+
+  // Comments load lazily, only for whichever photo is currently open in
+  // the preview - not fetched at all for the rest of the gallery.
+  useEffect(() => {
+    if (!eventPhotoPreview) {
+      setPreviewComments(null);
+      return;
+    }
+    setPreviewComments(null);
+    listPhotoComments(eventPhotoPreview.id).then(setPreviewComments).catch(() => setPreviewComments([]));
+  }, [eventPhotoPreview?.id]);
+
+  async function submitPhotoComment() {
+    const text = newCommentText.trim();
+    if (!text || !eventPhotoPreview) return;
+    setNewCommentText("");
+    try {
+      const comment = await addPhotoComment(eventPhotoPreview.id, identity, text);
+      setPreviewComments((prev) => [...(prev || []), comment]);
+    } catch {
+      showToast("שליחת התגובה נכשלה", "error");
+    }
+  }
+
+  async function removePhotoComment(id) {
+    try {
+      await deletePhotoComment(id);
+      setPreviewComments((prev) => (prev || []).filter((c) => c.id !== id));
+    } catch {
+      showToast("מחיקת התגובה נכשלה", "error");
+    }
   }
 
   async function handleEnablePush() {
@@ -7011,6 +7048,48 @@ ${sections}
                   >
                     <Download size={15} /> הורדה
                   </button>
+
+                  <div className="w-full max-w-sm mt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.15)", paddingTop: 10 }}>
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-white mb-2">
+                      <MessageCircle size={13} /> תגובות{previewComments ? ` (${previewComments.length})` : ""}
+                    </div>
+                    <div className="space-y-2 max-h-40 overflow-y-auto pr-1 mb-2">
+                      {previewComments === null ? (
+                        <p className="text-xs text-white opacity-60">טוען תגובות...</p>
+                      ) : previewComments.length === 0 ? (
+                        <p className="text-xs text-white opacity-60">אין עדיין תגובות - תהיה/י הראשון/ה.</p>
+                      ) : (
+                        previewComments.map((c) => (
+                          <div key={c.id} className="flex items-start justify-between gap-2 text-xs rounded-xl px-2.5 py-1.5" style={{ background: "rgba(255,255,255,0.08)" }}>
+                            <div className="min-w-0">
+                              <b style={{ color: COLORS.accentLight }}>{c.author}</b>
+                              <span className="text-white"> {c.text}</span>
+                            </div>
+                            {(c.author === identity || isAdmin) && (
+                              <button onClick={() => removePhotoComment(c.id)} className="shrink-0 text-white opacity-60"><X size={11} /></button>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    <div className="flex gap-1.5">
+                      <input
+                        value={newCommentText}
+                        onChange={(e) => setNewCommentText(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") submitPhotoComment(); }}
+                        placeholder="הוספת תגובה..."
+                        className="flex-1 min-w-0 px-3 py-1.5 rounded-full text-xs outline-none"
+                        style={{ background: "rgba(255,255,255,0.12)", color: "white", border: "1px solid rgba(255,255,255,0.25)" }}
+                      />
+                      <button
+                        onClick={submitPhotoComment}
+                        className="text-xs px-3 py-1.5 rounded-full font-bold shrink-0"
+                        style={{ background: COLORS.accent, color: COLORS.bg }}
+                      >
+                        שלח
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

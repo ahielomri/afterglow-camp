@@ -102,6 +102,56 @@ export async function uploadFile(file, folder = "receipts") {
   return data.publicUrl;
 }
 
+// Phone camera photos routinely land at 3-10MB and several thousand pixels
+// wide - fine for one photo, but the gallery grid was loading dozens of
+// those at full size just to show them in a small tile, which is what was
+// making the app bog down. Downscaling to a reasonable display size before
+// upload (not after - reprocessing everyone's existing photos isn't worth
+// it) fixes that for every photo from here on, without capping how many
+// photos or which sources someone can upload - only the stored resolution.
+// createImageBitmap can fail to decode some formats (older HEIC support in
+// non-Safari browsers) - fall back to the original file rather than
+// blocking the upload over it.
+async function resizeImageFile(file, maxDim = 1600, quality = 0.82) {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1) {
+      bitmap.close?.();
+      return file;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+    if (!blob) return file;
+    return new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
+}
+
+// Best-effort backup of the original, full-resolution file to the camp
+// organizer's Google Drive (via the backup-photo-to-drive Edge Function),
+// before the compressed copy goes to the app. Never throws - a slow or
+// failed Drive backup should never stop someone from sharing a photo, so
+// this is raced against a timeout and any error is swallowed.
+async function backupOriginalToDrive(file, uploaderName) {
+  try {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+    form.append("filename", `${Date.now()}-${uploaderName}.${ext}`);
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("drive_backup_timeout")), 25000));
+    await Promise.race([supabase.functions.invoke("backup-photo-to-drive", { body: form }), timeout]);
+  } catch (err) {
+    console.error("Drive backup failed (non-blocking)", err);
+  }
+}
+
 // "מזכרת קטנה מאירוע גדול" - shared event photo gallery. Same
 // upload-with-timeout shape as uploadFile (see the comment above it for
 // why the timeout race matters on mobile), plus a companion event_photos
@@ -110,13 +160,15 @@ export async function uploadFile(file, folder = "receipts") {
 // only the auto-set `owner` (auth uid) column, so the DB row is what
 // carries the human-readable attribution.
 export async function uploadEventPhoto(file, uploaderName) {
-  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+  await backupOriginalToDrive(file, uploaderName);
+  const resized = await resizeImageFile(file);
+  const ext = (resized.name.split(".").pop() || "jpg").toLowerCase();
   const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
   const timeout = new Promise((_, reject) =>
     setTimeout(() => reject(new Error("upload_timeout")), 30000)
   );
   const { error: uploadError } = await Promise.race([
-    supabase.storage.from("event-photos").upload(path, file, { cacheControl: "3600", upsert: false }),
+    supabase.storage.from("event-photos").upload(path, resized, { cacheControl: "3600", upsert: false }),
     timeout,
   ]);
   if (uploadError) throw uploadError;
@@ -211,6 +263,35 @@ export async function markPhotoTagsSeen(photoIds, myName) {
   const { error } = await supabase
     .from("event_photo_tag_seen")
     .upsert(photoIds.map((id) => ({ photo_id: id, member_name: myName })), { onConflict: "photo_id,member_name" });
+  if (error) throw error;
+}
+
+// Comments load per-photo, on demand (when the preview opens), rather than
+// all up front with the photo list - most photos never get opened in a
+// given session, so there's no reason to fetch every comment on every one.
+export async function listPhotoComments(photoId) {
+  const { data, error } = await supabase
+    .from("event_photo_comments")
+    .select("id, author_name, text, ts")
+    .eq("photo_id", photoId)
+    .order("ts", { ascending: true });
+  if (error) throw error;
+  return (data || []).map((r) => ({ id: r.id, author: r.author_name, text: r.text, ts: Number(r.ts) }));
+}
+
+export async function addPhotoComment(photoId, authorName, text) {
+  const ts = Date.now();
+  const { data, error } = await supabase
+    .from("event_photo_comments")
+    .insert({ photo_id: photoId, author_name: authorName, text, ts })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return { id: data.id, author: authorName, text, ts };
+}
+
+export async function deletePhotoComment(id) {
+  const { error } = await supabase.from("event_photo_comments").delete().eq("id", id);
   if (error) throw error;
 }
 
