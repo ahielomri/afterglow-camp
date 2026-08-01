@@ -5649,15 +5649,16 @@ ${sections}
           <button
             onClick={() => { setTab("dashboard-personal"); setExpandedNavCategory(null); }}
             className="flex items-center gap-4 flex-1 text-right"
+            style={{ minWidth: 0 }}
           >
             <SunsetMark size={64} />
-            <div>
+            <div style={{ minWidth: 0 }}>
               <h1 style={{ fontFamily: FONT_HEADING }} className="text-3xl tracking-tight">
                 Afterglow 2026
               </h1>
             </div>
           </button>
-          <div className="text-center px-2 py-1">
+          <div className="text-center px-2 py-1" style={{ flexShrink: 0 }}>
             <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.text, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>{daysUntil()}</div>
             <div className="text-xs font-bold" style={{ color: COLORS.text, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>ימים לפתיחת ימים</div>
             <div className="text-[8px] font-semibold" style={{ color: COLORS.text, opacity: 0.85, textShadow: "0 1px 6px rgba(255,255,255,0.7)" }}>(הקמות)</div>
@@ -5701,8 +5702,10 @@ ${sections}
               : `0 0 0 3px ${POOL_EVENT_COLOR_TEAL}33, 0 2px 10px ${POOL_EVENT_COLOR_DEEP}40`,
           }}
         >
-          <span className="flex items-center gap-2 whitespace-nowrap">
-            <PartyPopper size={16} /> {POOL_EVENT_NAME} · {POOL_EVENT_DATE_LABEL} · {POOL_EVENT_TIME_LABEL} <Sparkles size={16} />
+          <span className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
+            <PartyPopper size={16} />
+            <span style={{ minWidth: 0 }}>{POOL_EVENT_NAME} · {POOL_EVENT_DATE_LABEL} · {POOL_EVENT_TIME_LABEL}</span>
+            <Sparkles size={16} />
           </span>
           <span
             className="flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full mt-0.5"
