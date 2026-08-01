@@ -102,6 +102,57 @@ export async function uploadFile(file, folder = "receipts") {
   return data.publicUrl;
 }
 
+// "מזכרת קטנה מאירוע גדול" - shared event photo gallery. Same
+// upload-with-timeout shape as uploadFile (see the comment above it for
+// why the timeout race matters on mobile), plus a companion event_photos
+// row so every photo can show who posted it and be deleted by its owner
+// or an admin - the storage bucket itself has no per-uploader-name RLS,
+// only the auto-set `owner` (auth uid) column, so the DB row is what
+// carries the human-readable attribution.
+export async function uploadEventPhoto(file, uploaderName) {
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+  const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("upload_timeout")), 30000)
+  );
+  const { error: uploadError } = await Promise.race([
+    supabase.storage.from("event-photos").upload(path, file, { cacheControl: "3600", upsert: false }),
+    timeout,
+  ]);
+  if (uploadError) throw uploadError;
+  const ts = Date.now();
+  const { error: insertError } = await supabase
+    .from("event_photos")
+    .insert({ path, uploader_name: uploaderName, ts });
+  if (insertError) {
+    await supabase.storage.from("event-photos").remove([path]);
+    throw insertError;
+  }
+  const { data } = supabase.storage.from("event-photos").getPublicUrl(path);
+  return { url: data.publicUrl, path, uploader: uploaderName, ts };
+}
+
+export async function listEventPhotos() {
+  const { data, error } = await supabase
+    .from("event_photos")
+    .select("id, path, uploader_name, ts")
+    .order("ts", { ascending: false });
+  if (error) throw error;
+  return (data || []).map((r) => ({
+    id: r.id,
+    path: r.path,
+    uploader: r.uploader_name,
+    ts: Number(r.ts),
+    url: supabase.storage.from("event-photos").getPublicUrl(r.path).data.publicUrl,
+  }));
+}
+
+export async function deleteEventPhoto(id, path) {
+  const { error: dbError } = await supabase.from("event_photos").delete().eq("id", id);
+  if (dbError) throw dbError;
+  await supabase.storage.from("event-photos").remove([path]);
+}
+
 // ---------------------------------------------------------------------------
 // Real auth (added by the security migration)
 //
