@@ -143,8 +143,13 @@ async function backupOriginalToDrive(file, uploaderName) {
   try {
     const form = new FormData();
     form.append("file", file, file.name);
-    const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-    form.append("filename", `${Date.now()}-${uploaderName}.${ext}`);
+    // Camera/share-sheet uploads often arrive with a generic name (no real
+    // extension) - fall back to jpg rather than embedding garbage after the
+    // last dot of something like "File - 2026-08-01T22:18:43.508Z".
+    const rawExt = file.name.split(".").pop() || "";
+    const ext = /^[a-z0-9]{2,4}$/i.test(rawExt) ? rawExt.toLowerCase() : "jpg";
+    const stamp = new Date().toISOString().slice(0, 19).replace("T", " ").replace(/:/g, "-");
+    form.append("filename", `${stamp} - ${uploaderName}.${ext}`);
     const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("drive_backup_timeout")), 25000));
     // Most members never sign in (no Supabase Auth session), so the SDK has no
     // session token to attach - it needs an explicit Authorization header here or
