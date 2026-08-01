@@ -3682,24 +3682,34 @@ export default function App() {
     }
   }
 
-  // Fetching as a blob first (instead of just setting the anchor's href to
-  // the storage URL) is what actually makes "download" work here - the
-  // `download` attribute is silently ignored on cross-origin links in most
-  // mobile browsers, which would otherwise just open the image in a new tab.
+  // iOS Safari doesn't save `<a download>` blobs straight to Photos - it
+  // shows a generic "downloaded file" sheet instead, requiring a couple of
+  // extra taps to actually get the image into the camera roll. Sharing the
+  // file via the native Web Share sheet gives iPhone users the real
+  // one-tap "שמירת תמונה" option they expect, so try that first and only
+  // fall back to the manual blob-link download where Web Share (or sharing
+  // files specifically) isn't supported, e.g. desktop browsers.
   async function downloadEventPhoto(photo) {
     try {
       const res = await fetch(photo.url);
       const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
       const ext = (photo.path.split(".").pop() || "jpg").toLowerCase();
+      const filename = `afterglow-${photo.uploader}-${photo.ts}.${ext}`;
+      const file = new File([blob], filename, { type: blob.type || "image/jpeg" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file] });
+        return;
+      }
+      const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = blobUrl;
-      a.download = `afterglow-${photo.uploader}-${photo.ts}.${ext}`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(blobUrl);
-    } catch {
+    } catch (err) {
+      if (err?.name === "AbortError") return;
       showToast("הורדת התמונה נכשלה", "error");
     }
   }
@@ -3718,16 +3728,24 @@ export default function App() {
         })
       );
       const zipBlob = await zip.generateAsync({ type: "blob" });
+      const zipFilename = "afterglow-מזכרת-קטנה-מאירוע-גדול.zip";
+      const zipFile = new File([zipBlob], zipFilename, { type: "application/zip" });
+      if (navigator.canShare && navigator.canShare({ files: [zipFile] })) {
+        await navigator.share({ files: [zipFile] });
+        return;
+      }
       const blobUrl = URL.createObjectURL(zipBlob);
       const a = document.createElement("a");
       a.href = blobUrl;
-      a.download = "afterglow-מזכרת-קטנה-מאירוע-גדול.zip";
+      a.download = zipFilename;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(blobUrl);
-    } catch {
-      showToast("הורדת כל התמונות נכשלה - אפשר לנסות שוב", "error");
+    } catch (err) {
+      if (err?.name !== "AbortError") {
+        showToast("הורדת כל התמונות נכשלה - אפשר לנסות שוב", "error");
+      }
     } finally {
       setEventPhotosZipping(false);
     }
