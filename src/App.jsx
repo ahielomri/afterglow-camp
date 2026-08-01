@@ -100,15 +100,15 @@ const COLORS = {
   heroLight: "#d9bba0",
 };
 
-const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;500;600;700;800&family=Frank+Ruhl+Libre:wght@500;700;900&family=Assistant:wght@400;500;600;700&display=swap');
+const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Caprasimo&family=Rubik:wght@400;500;600;700;800&family=Frank+Ruhl+Libre:wght@500;700;900&display=swap');
 * { font-weight: 600; }
 .text-xs, .text-sm, .text-base, .text-lg { font-weight: 700 !important; }
 input, select, textarea, button, label { font-weight: 700 !important; }
 p, span, div { font-weight: 600; }
 `;
 const FONT_HEADING = `"Caprasimo", "Frank Ruhl Libre", serif`;
-const FONT_BODY = `"Figtree", "Assistant", sans-serif`;
-const FONT_NUM = `"Figtree", "Assistant", sans-serif`;
+const FONT_BODY = `"Rubik", sans-serif`;
+const FONT_NUM = `"Rubik", sans-serif`;
 
 // ---------------------------------------------------------------------------
 // Static reference data (mirrors the Wix CMS collections already built)
