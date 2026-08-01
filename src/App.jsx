@@ -5146,7 +5146,6 @@ ${sections}
     { id: "shifts", label: "שיבוץ עצמי", icon: CalendarDays },
     { id: "my-shifts", label: "המשמרות שלי", icon: Check },
     { id: "board", label: "לוח מודעות", icon: Megaphone },
-    { id: "gallery", label: "מזכרת קטנה מאירוע גדול", icon: Camera },
   ];
   const navCampTabs = [
     { id: "budget", label: "הוצאות", icon: Wallet },
