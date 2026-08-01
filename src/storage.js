@@ -146,7 +146,17 @@ async function backupOriginalToDrive(file, uploaderName) {
     const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
     form.append("filename", `${Date.now()}-${uploaderName}.${ext}`);
     const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("drive_backup_timeout")), 25000));
-    await Promise.race([supabase.functions.invoke("backup-photo-to-drive", { body: form }), timeout]);
+    // Most members never sign in (no Supabase Auth session), so the SDK has no
+    // session token to attach - it needs an explicit Authorization header here or
+    // this verify_jwt-protected function never receives the request at all.
+    const { error } = await Promise.race([
+      supabase.functions.invoke("backup-photo-to-drive", {
+        body: form,
+        headers: { Authorization: `Bearer ${supabaseAnonKey}` },
+      }),
+      timeout,
+    ]);
+    if (error) throw error;
   } catch (err) {
     console.error("Drive backup failed (non-blocking)", err);
   }
