@@ -3099,6 +3099,7 @@ export default function App() {
   const [loginHistory, setLoginHistory] = useState([]);
   const [showActivityLog, setShowActivityLog] = useState(false);
   const [showMemberActivity, setShowMemberActivity] = useState(false);
+  const [showProfileCompletion, setShowProfileCompletion] = useState(false);
   const [lastSeenMap, setLastSeenMap] = useState(null);
   const [logsRefreshing, setLogsRefreshing] = useState(false);
   const [extraMembers, setExtraMembers] = useState([]);
@@ -5143,6 +5144,25 @@ ${sections}
   }, [identity, memberPhones, memberEmails, emergencyInfo, rideInfo, allocationInfo, pushStatus, pushDecisionMade]);
   const profileComplete = missingProfileFields.length === 0;
 
+  // Owner-only view (in "יומנים") of who has filled in their personal
+  // details and who hasn't - same fields as missingProfileFields above,
+  // minus the push-notification decision, since that's a per-device
+  // setting with no shared record of other members' choice.
+  const membersProfileStatus = useMemo(() => {
+    return allMembers.map((m) => {
+      const missing = [];
+      if (!memberPhones[m.name]?.trim()) missing.push("טלפון");
+      if (!memberEmails[m.name]?.trim()) missing.push("אימייל");
+      const emg = emergencyInfo[m.name] || {};
+      if (!emg.contactName?.trim() || !emg.contactPhone?.trim()) missing.push("פרטי חירום");
+      const ride = rideInfo[m.name] || {};
+      if (ride.hasCar !== "yes" && ride.hasCar !== "no") missing.push("התניידות");
+      const alloc = allocationInfo[m.name] || {};
+      if (alloc.hasAllocation !== "yes" && alloc.hasAllocation !== "no") missing.push("הקצאה");
+      return { name: m.name, missing };
+    });
+  }, [allMembers, memberPhones, memberEmails, emergencyInfo, rideInfo, allocationInfo]);
+
   // One-time "welcome" intro for first-time visitors - dismissed state
   // lives per-device in localStorage (not shared), so it never reappears
   // on this device once closed, but a fresh device/browser shows it again.
@@ -6506,6 +6526,31 @@ ${sections}
                           );
                         })
                     )}
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setShowProfileCompletion(!showProfileCompletion)}
+                  className="w-full flex items-center justify-between mt-4 mb-2 text-sm font-bold"
+                  style={{ color: COLORS.textMuted }}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Check size={14} /> מילוי פרטים אישיים - {membersProfileStatus.filter((m) => m.missing.length > 0).length} עם פרטים חסרים
+                  </span>
+                  <ChevronDown size={15} style={{ transform: showProfileCompletion ? "rotate(180deg)" : "none" }} />
+                </button>
+                {showProfileCompletion && (
+                  <div className="space-y-1 max-h-96 overflow-y-auto pr-1">
+                    {[...membersProfileStatus]
+                      .sort((a, b) => b.missing.length - a.missing.length || a.name.localeCompare(b.name, "he"))
+                      .map((m) => (
+                        <div key={m.name} className="text-xs rounded-lg px-3 py-1.5 flex items-center justify-between gap-2" style={{ background: COLORS.surface }}>
+                          <b>{m.name}</b>
+                          <span style={{ color: m.missing.length === 0 ? COLORS.accent2Dark : COLORS.danger }}>
+                            {m.missing.length === 0 ? "מילא/ה הכל ✓" : `חסר: ${m.missing.join(", ")}`}
+                          </span>
+                        </div>
+                      ))}
                   </div>
                 )}
               </>
