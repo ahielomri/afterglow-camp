@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown as ChevronDownThin, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart, Utensils, Lightbulb, Camera, ImagePlus } from "lucide-react";
+import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown as ChevronDownThin, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart, Utensils, Lightbulb, Camera, ImagePlus, Download, Sparkles } from "lucide-react";
 // Every ChevronDown in the app should read as bold/clickable, not just the
 // default thin stroke - default it here once instead of at each call site.
 function ChevronDown(props) {
   return <ChevronDownThin strokeWidth={3} {...props} />;
 }
+import JSZip from "jszip";
 import { pushSupported, pushPermission, enablePush, disablePush, isPushSubscribed, resetPush } from "./push.js";
 import heroDesert from "./assets/hero-sunset-logo-2.jpg";
 import funBanner from "./assets/fun-banner.jpg";
@@ -2768,7 +2769,7 @@ export default function App() {
   const [showReminderForm, setShowReminderForm] = useState(false);
   const [eventPhotos, setEventPhotos] = useState(null);
   const [eventPhotosUploading, setEventPhotosUploading] = useState(false);
-  const [eventPhotoLightbox, setEventPhotoLightbox] = useState(null);
+  const [eventPhotosZipping, setEventPhotosZipping] = useState(false);
   const [showNotificationHistory, setShowNotificationHistory] = useState(false);
   const [reminderTitle, setReminderTitle] = useState("");
   const [reminderMessage, setReminderMessage] = useState("");
@@ -3651,6 +3652,57 @@ export default function App() {
       setEventPhotos((prev) => (prev || []).filter((p) => p.id !== photo.id));
     } catch {
       showToast("מחיקת התמונה נכשלה", "error");
+    }
+  }
+
+  // Fetching as a blob first (instead of just setting the anchor's href to
+  // the storage URL) is what actually makes "download" work here - the
+  // `download` attribute is silently ignored on cross-origin links in most
+  // mobile browsers, which would otherwise just open the image in a new tab.
+  async function downloadEventPhoto(photo) {
+    try {
+      const res = await fetch(photo.url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const ext = (photo.path.split(".").pop() || "jpg").toLowerCase();
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `afterglow-${photo.uploader}-${photo.ts}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      showToast("הורדת התמונה נכשלה", "error");
+    }
+  }
+
+  async function downloadAllEventPhotos() {
+    if (!eventPhotos || eventPhotos.length === 0) return;
+    setEventPhotosZipping(true);
+    try {
+      const zip = new JSZip();
+      await Promise.all(
+        eventPhotos.map(async (photo) => {
+          const res = await fetch(photo.url);
+          const blob = await res.blob();
+          const ext = (photo.path.split(".").pop() || "jpg").toLowerCase();
+          zip.file(`${photo.uploader}-${photo.ts}.${ext}`, blob);
+        })
+      );
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const blobUrl = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = "afterglow-מזכרת-קטנה-מאירוע-גדול.zip";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      showToast("הורדת כל התמונות נכשלה - אפשר לנסות שוב", "error");
+    } finally {
+      setEventPhotosZipping(false);
     }
   }
 
@@ -5178,7 +5230,7 @@ ${sections}
           <span className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
             <Camera size={16} />
             <span style={{ minWidth: 0 }}>מזכרת קטנה מאירוע גדול</span>
-            <Camera size={16} />
+            <Sparkles size={16} />
           </span>
           <span
             className="flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full mt-0.5"
@@ -6714,25 +6766,38 @@ ${sections}
               כל תמונה שמעלים כאן נשארת לכולם - זו הדרך שלנו לזכור ביחד את יום הגיבוש.
             </p>
 
-            <label
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-sm font-bold mb-6 cursor-pointer"
-              style={{ background: COLORS.accent, color: COLORS.bg, opacity: eventPhotosUploading ? 0.6 : 1 }}
-            >
-              <ImagePlus size={16} />
-              {eventPhotosUploading ? "מעלה..." : "העלאת תמונות"}
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                disabled={eventPhotosUploading}
-                className="hidden"
-                onChange={(e) => {
-                  const files = Array.from(e.target.files || []);
-                  e.target.value = "";
-                  if (files.length > 0) uploadEventPhotos(files);
-                }}
-              />
-            </label>
+            <div className="flex gap-2 mb-6">
+              <label
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-sm font-bold cursor-pointer"
+                style={{ background: COLORS.accent, color: COLORS.bg, opacity: eventPhotosUploading ? 0.6 : 1 }}
+              >
+                <ImagePlus size={16} />
+                {eventPhotosUploading ? "מעלה..." : "העלאת תמונות"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  disabled={eventPhotosUploading}
+                  className="hidden"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    e.target.value = "";
+                    if (files.length > 0) uploadEventPhotos(files);
+                  }}
+                />
+              </label>
+              {eventPhotos && eventPhotos.length > 0 && (
+                <button
+                  onClick={downloadAllEventPhotos}
+                  disabled={eventPhotosZipping}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-sm font-bold"
+                  style={{ background: COLORS.surface, color: COLORS.text, border: `1px solid ${COLORS.divider}`, opacity: eventPhotosZipping ? 0.6 : 1 }}
+                >
+                  <Download size={16} />
+                  {eventPhotosZipping ? "מוריד..." : "הורדת הכל"}
+                </button>
+              )}
+            </div>
 
             {eventPhotos === null ? (
               <p className="text-xs text-center py-10" style={{ color: COLORS.textMuted }}>טוען תמונות...</p>
@@ -6746,8 +6811,14 @@ ${sections}
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {g.photos.map((p) => (
                         <div key={p.id} className="relative rounded-xl overflow-hidden" style={{ border: `1px solid ${COLORS.divider}`, aspectRatio: "1 / 1" }}>
-                          <button onClick={() => setEventPhotoLightbox(p)} className="w-full h-full block">
+                          <button onClick={() => downloadEventPhoto(p)} className="w-full h-full block" title="הורדה">
                             <img src={p.url} alt={`תמונה מ-${p.uploader}`} className="w-full h-full object-cover" loading="lazy" />
+                            <span
+                              className="absolute bottom-1 right-1 rounded-full p-1 flex items-center justify-center"
+                              style={{ background: "rgba(0,0,0,0.55)", color: "white" }}
+                            >
+                              <Download size={12} />
+                            </span>
                           </button>
                           {(p.uploader === identity || isAdmin) && (
                             <button
@@ -6763,28 +6834,6 @@ ${sections}
                     </div>
                   </div>
                 ))}
-              </div>
-            )}
-
-            {eventPhotoLightbox && (
-              <div
-                className="fixed inset-0 z-50 flex items-center justify-center p-4"
-                style={{ background: "rgba(0,0,0,0.85)" }}
-                onClick={() => setEventPhotoLightbox(null)}
-              >
-                <button
-                  onClick={() => setEventPhotoLightbox(null)}
-                  className="absolute top-4 left-4 rounded-full p-2"
-                  style={{ background: "rgba(255,255,255,0.15)", color: "white" }}
-                >
-                  <X size={18} />
-                </button>
-                <div className="max-w-full max-h-full flex flex-col items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                  <img src={eventPhotoLightbox.url} alt={`תמונה מ-${eventPhotoLightbox.uploader}`} className="max-w-full max-h-[80vh] rounded-xl object-contain" />
-                  <span className="text-xs font-semibold text-white">
-                    הועלה ע"י {eventPhotoLightbox.uploader} · {new Date(eventPhotoLightbox.ts).toLocaleString("he-IL")}
-                  </span>
-                </div>
               </div>
             )}
           </div>
