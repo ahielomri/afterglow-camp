@@ -186,6 +186,31 @@ export async function removeEventPhotoTag(id, name) {
   return next;
 }
 
+// Photos the caller is tagged in that they haven't been shown the
+// "תויגת בתמונה" popup for yet - used as the in-app fallback for members
+// without push notifications enabled (push-enabled members get a real
+// push instead, from the notify-photo-tag webhook).
+export async function listUnseenPhotoTags(myName) {
+  const [{ data: tagged, error: taggedError }, { data: seen, error: seenError }] = await Promise.all([
+    supabase.from("event_photos").select("id, uploader_name").contains("tags", [myName]),
+    supabase.from("event_photo_tag_seen").select("photo_id").eq("member_name", myName),
+  ]);
+  if (taggedError) throw taggedError;
+  if (seenError) throw seenError;
+  const seenIds = new Set((seen || []).map((r) => r.photo_id));
+  return (tagged || [])
+    .filter((r) => !seenIds.has(r.id))
+    .map((r) => ({ id: r.id, uploader: r.uploader_name }));
+}
+
+export async function markPhotoTagsSeen(photoIds, myName) {
+  if (photoIds.length === 0) return;
+  const { error } = await supabase
+    .from("event_photo_tag_seen")
+    .upsert(photoIds.map((id) => ({ photo_id: id, member_name: myName })), { onConflict: "photo_id,member_name" });
+  if (error) throw error;
+}
+
 // ---------------------------------------------------------------------------
 // Real auth (added by the security migration)
 //

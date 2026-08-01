@@ -43,6 +43,8 @@ import {
   deleteEventPhoto,
   addEventPhotoTag,
   removeEventPhotoTag,
+  listUnseenPhotoTags,
+  markPhotoTagsSeen,
 } from "./storage.js";
 
 // ---------------------------------------------------------------------------
@@ -2797,6 +2799,8 @@ export default function App() {
   const [eventPhotosUploading, setEventPhotosUploading] = useState(false);
   const [eventPhotosZipping, setEventPhotosZipping] = useState(false);
   const [taggingPhotoId, setTaggingPhotoId] = useState(null);
+  const [eventPhotoPreview, setEventPhotoPreview] = useState(null);
+  const [unseenPhotoTags, setUnseenPhotoTags] = useState([]);
   const [showNotificationHistory, setShowNotificationHistory] = useState(false);
   const [reminderTitle, setReminderTitle] = useState("");
   const [reminderMessage, setReminderMessage] = useState("");
@@ -3531,6 +3535,22 @@ export default function App() {
     setPushStatus(pushPermission());
     isPushSubscribed().then(setPushSubscribed);
   }, [identity]);
+
+  // Members with push notifications on already got a real push when someone
+  // tagged them (see the notify-photo-tag webhook) - this is only the
+  // fallback for everyone else: a one-time in-app popup the next time they
+  // open the app, so a tag never just silently goes unnoticed.
+  useEffect(() => {
+    if (!identity || pushStatus === "granted") return;
+    listUnseenPhotoTags(identity).then(setUnseenPhotoTags).catch(() => {});
+  }, [identity, pushStatus]);
+
+  function dismissTagAlert(goToGallery) {
+    const ids = unseenPhotoTags.map((t) => t.id);
+    setUnseenPhotoTags([]);
+    markPhotoTagsSeen(ids, identity).catch(() => {});
+    if (goToGallery) setTab("gallery");
+  }
 
   async function handleEnablePush() {
     try {
@@ -5216,6 +5236,34 @@ ${sections}
         </div>
       )}
 
+      {profileComplete && unseenPhotoTags.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: "rgba(20,15,10,0.6)" }}>
+          <div className="w-full max-w-sm rounded-3xl overflow-hidden" style={{ background: COLORS.bg, border: `1px solid ${COLORS.divider}` }}>
+            <div className="p-5 text-center">
+              <Camera size={28} style={{ color: COLORS.accentDark, margin: "0 auto 8px" }} />
+              <div className="text-lg" style={{ fontFamily: FONT_HEADING, color: COLORS.accentDark }}>תויגת בתמונה 📸</div>
+              <p className="text-sm mt-2 mb-4">
+                {unseenPhotoTags.length === 1
+                  ? `${unseenPhotoTags[0].uploader} תייג/ה אותך בתמונה במזכרת קטנה מאירוע גדול`
+                  : `תויגת ב-${unseenPhotoTags.length} תמונות במזכרת קטנה מאירוע גדול`}
+              </p>
+              <div className="flex gap-3 justify-center mb-3">
+                <button
+                  onClick={() => dismissTagAlert(true)}
+                  className="flex-1 px-4 py-2.5 rounded-full text-sm font-bold"
+                  style={{ background: COLORS.accent, color: COLORS.bg }}
+                >
+                  קח אותי לשם
+                </button>
+              </div>
+              <button onClick={() => dismissTagAlert(false)} className="text-xs" style={{ color: COLORS.textMuted }}>
+                אחר כך
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="relative px-6 pt-8 pb-6 overflow-hidden" style={{ borderBottom: `1px solid ${COLORS.divider}` }}>
         <div
@@ -6878,14 +6926,8 @@ ${sections}
                       {g.photos.map((p) => (
                         <div key={p.id}>
                           <div className="relative rounded-xl overflow-hidden" style={{ border: `1px solid ${COLORS.divider}`, aspectRatio: "1 / 1" }}>
-                            <button onClick={() => downloadEventPhoto(p)} className="w-full h-full block" title="הורדה">
+                            <button onClick={() => setEventPhotoPreview(p)} className="w-full h-full block" title="תצוגה מקדימה">
                               <img src={p.url} alt={`תמונה מ-${p.uploader}`} className="w-full h-full object-cover" loading="lazy" />
-                              <span
-                                className="absolute bottom-1 right-1 rounded-full p-1 flex items-center justify-center"
-                                style={{ background: "rgba(0,0,0,0.55)", color: "white" }}
-                              >
-                                <Download size={12} />
-                              </span>
                             </button>
                             <button
                               onClick={() => setTaggingPhotoId(taggingPhotoId === p.id ? null : p.id)}
@@ -6933,6 +6975,35 @@ ${sections}
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {eventPhotoPreview && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                style={{ background: "rgba(0,0,0,0.85)" }}
+                onClick={() => setEventPhotoPreview(null)}
+              >
+                <button
+                  onClick={() => setEventPhotoPreview(null)}
+                  className="absolute top-4 left-4 rounded-full p-2"
+                  style={{ background: "rgba(255,255,255,0.15)", color: "white" }}
+                >
+                  <X size={18} />
+                </button>
+                <div className="max-w-full max-h-full flex flex-col items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                  <img src={eventPhotoPreview.url} alt={`תמונה מ-${eventPhotoPreview.uploader}`} className="max-w-full max-h-[75vh] rounded-xl object-contain" />
+                  <span className="text-xs font-semibold text-white">
+                    הועלה ע"י {eventPhotoPreview.uploader} · {new Date(eventPhotoPreview.ts).toLocaleString("he-IL")}
+                  </span>
+                  <button
+                    onClick={() => downloadEventPhoto(eventPhotoPreview)}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold"
+                    style={{ background: COLORS.accent, color: COLORS.bg }}
+                  >
+                    <Download size={15} /> הורדה
+                  </button>
+                </div>
               </div>
             )}
           </div>
