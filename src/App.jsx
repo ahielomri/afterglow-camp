@@ -2411,26 +2411,18 @@ function AdminAssignPicker({ members, onAssign }) {
   );
 }
 
+// Same search-or-browse picker used at login and for private messages -
+// typing filters the list, an empty query shows everyone, and tapping a
+// name tags immediately (no separate "add" step to fumble with on mobile).
 function TagPicker({ members, onTag }) {
-  const [val, setVal] = useState("");
   return (
-    <div className="flex items-center gap-1 mt-1">
-      <select
-        value={val}
-        onChange={(e) => setVal(e.target.value)}
-        className="flex-1 min-w-0 text-[10px] px-1.5 py-1 rounded-lg outline-none"
-        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-      >
-        <option value="">מי בתמונה?</option>
-        {members.map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
-      </select>
-      <button
-        onClick={() => { if (val) { onTag(val); setVal(""); } }}
-        className="text-[10px] px-2 py-1 rounded-full font-semibold shrink-0"
-        style={{ background: COLORS.accent, color: COLORS.bg }}
-      >
-        תיוג
-      </button>
+    <div className="mt-1">
+      <MemberSearchPicker
+        members={members}
+        value=""
+        onSelect={(name) => { if (name) onTag(name); }}
+        placeholder="מי בתמונה? חיפוש או בחירה..."
+      />
     </div>
   );
 }
@@ -2798,8 +2790,8 @@ export default function App() {
   const [eventPhotos, setEventPhotos] = useState(null);
   const [eventPhotosUploading, setEventPhotosUploading] = useState(false);
   const [eventPhotosZipping, setEventPhotosZipping] = useState(false);
-  const [taggingPhotoId, setTaggingPhotoId] = useState(null);
   const [eventPhotoPreview, setEventPhotoPreview] = useState(null);
+  const [pendingTagPos, setPendingTagPos] = useState(null);
   const [unseenPhotoTags, setUnseenPhotoTags] = useState([]);
   const [showNotificationHistory, setShowNotificationHistory] = useState(false);
   const [reminderTitle, setReminderTitle] = useState("");
@@ -3773,11 +3765,14 @@ export default function App() {
 
   // Tagging pushes a personal notification to whoever gets newly tagged
   // (via a DB webhook on event_photos that diffs old/new tags server-side -
-  // see notify-photo-tag) - this just needs to save the updated array.
-  async function addPhotoTag(photo, name) {
+  // see notify-photo-tag) - this just needs to save the updated array. x/y
+  // are 0-100 percentages of the image, i.e. where the person was tapped -
+  // set via the preview's "tap the photo to tag" flow.
+  async function addPhotoTag(photo, name, x, y) {
     try {
-      const tags = await addEventPhotoTag(photo.id, name);
+      const tags = await addEventPhotoTag(photo.id, name, x, y);
       setEventPhotos((prev) => (prev || []).map((p) => (p.id === photo.id ? { ...p, tags } : p)));
+      setEventPhotoPreview((prev) => (prev && prev.id === photo.id ? { ...prev, tags } : prev));
     } catch {
       showToast("התיוג נכשל", "error");
     }
@@ -3787,6 +3782,7 @@ export default function App() {
     try {
       const tags = await removeEventPhotoTag(photo.id, name);
       setEventPhotos((prev) => (prev || []).map((p) => (p.id === photo.id ? { ...p, tags } : p)));
+      setEventPhotoPreview((prev) => (prev && prev.id === photo.id ? { ...prev, tags } : prev));
     } catch {
       showToast("הסרת התיוג נכשלה", "error");
     }
@@ -6924,51 +6920,26 @@ ${sections}
                     <h4 className="text-xs font-bold mb-1.5" style={{ color: COLORS.accentDark }}>הועלה ע"י {g.uploader}</h4>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {g.photos.map((p) => (
-                        <div key={p.id}>
-                          <div className="relative rounded-xl overflow-hidden" style={{ border: `1px solid ${COLORS.divider}`, aspectRatio: "1 / 1" }}>
-                            <button onClick={() => setEventPhotoPreview(p)} className="w-full h-full block" title="תצוגה מקדימה">
-                              <img src={p.url} alt={`תמונה מ-${p.uploader}`} className="w-full h-full object-cover" loading="lazy" />
-                            </button>
-                            <button
-                              onClick={() => setTaggingPhotoId(taggingPhotoId === p.id ? null : p.id)}
-                              className="absolute top-1 right-1 rounded-full p-1"
-                              style={{ background: "rgba(0,0,0,0.55)", color: "white" }}
-                              title="תיוג"
-                            >
-                              <Tag size={12} />
-                            </button>
-                            {(p.uploader === identity || isAdmin) && (
-                              <button
-                                onClick={() => removeEventPhoto(p)}
-                                className="absolute top-1 left-1 rounded-full p-1"
-                                style={{ background: "rgba(0,0,0,0.55)", color: "white" }}
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            )}
-                          </div>
-
+                        <div key={p.id} className="relative rounded-xl overflow-hidden" style={{ border: `1px solid ${COLORS.divider}`, aspectRatio: "1 / 1" }}>
+                          <button onClick={() => setEventPhotoPreview(p)} className="w-full h-full block" title="תצוגה מקדימה">
+                            <img src={p.url} alt={`תמונה מ-${p.uploader}`} className="w-full h-full object-cover" loading="lazy" />
+                          </button>
                           {p.tags && p.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {p.tags.map((name) => (
-                                <button
-                                  key={name}
-                                  onClick={() => removePhotoTag(p, name)}
-                                  className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full flex items-center gap-0.5"
-                                  style={{ background: COLORS.accentLight, color: COLORS.accentDark }}
-                                  title="הסרת תיוג"
-                                >
-                                  {name} <X size={8} />
-                                </button>
-                              ))}
-                            </div>
+                            <span
+                              className="absolute bottom-1 right-1 rounded-full p-1 flex items-center gap-0.5 text-[9px] font-bold px-1.5"
+                              style={{ background: "rgba(0,0,0,0.55)", color: "white" }}
+                            >
+                              <Tag size={10} /> {p.tags.length}
+                            </span>
                           )}
-
-                          {taggingPhotoId === p.id && (
-                            <TagPicker
-                              members={allMembers.filter((m) => !(p.tags || []).includes(m.name))}
-                              onTag={(name) => { addPhotoTag(p, name); setTaggingPhotoId(null); }}
-                            />
+                          {(p.uploader === identity || isAdmin) && (
+                            <button
+                              onClick={() => removeEventPhoto(p)}
+                              className="absolute top-1 left-1 rounded-full p-1"
+                              style={{ background: "rgba(0,0,0,0.55)", color: "white" }}
+                            >
+                              <Trash2 size={12} />
+                            </button>
                           )}
                         </div>
                       ))}
@@ -6982,18 +6953,55 @@ ${sections}
               <div
                 className="fixed inset-0 z-50 flex items-center justify-center p-4"
                 style={{ background: "rgba(0,0,0,0.85)" }}
-                onClick={() => setEventPhotoPreview(null)}
+                onClick={() => { setEventPhotoPreview(null); setPendingTagPos(null); }}
               >
                 <button
-                  onClick={() => setEventPhotoPreview(null)}
+                  onClick={() => { setEventPhotoPreview(null); setPendingTagPos(null); }}
                   className="absolute top-4 left-4 rounded-full p-2"
                   style={{ background: "rgba(255,255,255,0.15)", color: "white" }}
                 >
                   <X size={18} />
                 </button>
-                <div className="max-w-full max-h-full flex flex-col items-center gap-3" onClick={(e) => e.stopPropagation()}>
-                  <img src={eventPhotoPreview.url} alt={`תמונה מ-${eventPhotoPreview.uploader}`} className="max-w-full max-h-[75vh] rounded-xl object-contain" />
-                  <span className="text-xs font-semibold text-white">
+                <div className="max-w-full max-h-full flex flex-col items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <p className="text-[11px] text-white opacity-80">הקש/י על התמונה כדי לתייג מישהו</p>
+                  <div className="relative">
+                    <img
+                      src={eventPhotoPreview.url}
+                      alt={`תמונה מ-${eventPhotoPreview.uploader}`}
+                      className="max-w-full max-h-[65vh] rounded-xl object-contain block"
+                      onClick={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setPendingTagPos({
+                          x: Math.round(((e.clientX - rect.left) / rect.width) * 100),
+                          y: Math.round(((e.clientY - rect.top) / rect.height) * 100),
+                        });
+                      }}
+                    />
+                    {(eventPhotoPreview.tags || []).map((t) => (
+                      <button
+                        key={t.name}
+                        onClick={(e) => { e.stopPropagation(); removePhotoTag(eventPhotoPreview, t.name); }}
+                        className="absolute flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold whitespace-nowrap"
+                        style={{ left: `${t.x}%`, top: `${t.y}%`, transform: "translate(-50%, -50%)", background: "rgba(0,0,0,0.65)", color: "white", border: "1.5px solid white" }}
+                        title="הסרת תיוג"
+                      >
+                        <span className="rounded-full" style={{ width: 6, height: 6, background: "white" }} />
+                        {t.name}
+                      </button>
+                    ))}
+                  </div>
+
+                  {pendingTagPos && (
+                    <div className="w-full max-w-xs" onClick={(e) => e.stopPropagation()}>
+                      <p className="text-xs text-white text-center mb-1">מי זה?</p>
+                      <TagPicker
+                        members={allMembers.filter((m) => !(eventPhotoPreview.tags || []).some((t) => t.name === m.name))}
+                        onTag={(name) => { addPhotoTag(eventPhotoPreview, name, pendingTagPos.x, pendingTagPos.y); setPendingTagPos(null); }}
+                      />
+                    </div>
+                  )}
+
+                  <span className="text-xs font-semibold text-white mt-1">
                     הועלה ע"י {eventPhotoPreview.uploader} · {new Date(eventPhotoPreview.ts).toLocaleString("he-IL")}
                   </span>
                   <button

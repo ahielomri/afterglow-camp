@@ -157,8 +157,11 @@ export async function deleteEventPhoto(id, path) {
 // Re-reads the current tags before writing (instead of trusting whatever
 // tags the caller last had in local state) so two people tagging the same
 // photo around the same moment don't silently overwrite each other's tag -
-// same "fetch fresh, then merge" shape used for the kv_store lists.
-export async function addEventPhotoTag(id, name) {
+// same "fetch fresh, then merge" shape used for the kv_store lists. Each
+// tag is {name, x, y} - x/y are 0-100 percentages of the image's width/
+// height, i.e. where on the photo that person actually is, not just a
+// name in a list.
+export async function addEventPhotoTag(id, name, x, y) {
   const { data: current, error: readError } = await supabase
     .from("event_photos")
     .select("tags")
@@ -166,8 +169,8 @@ export async function addEventPhotoTag(id, name) {
     .single();
   if (readError) throw readError;
   const tags = current.tags || [];
-  if (tags.includes(name)) return tags;
-  const next = [...tags, name];
+  if (tags.some((t) => t.name === name)) return tags;
+  const next = [...tags, { name, x, y }];
   const { error } = await supabase.from("event_photos").update({ tags: next }).eq("id", id);
   if (error) throw error;
   return next;
@@ -180,7 +183,7 @@ export async function removeEventPhotoTag(id, name) {
     .eq("id", id)
     .single();
   if (readError) throw readError;
-  const next = (current.tags || []).filter((t) => t !== name);
+  const next = (current.tags || []).filter((t) => t.name !== name);
   const { error } = await supabase.from("event_photos").update({ tags: next }).eq("id", id);
   if (error) throw error;
   return next;
@@ -192,7 +195,7 @@ export async function removeEventPhotoTag(id, name) {
 // push instead, from the notify-photo-tag webhook).
 export async function listUnseenPhotoTags(myName) {
   const [{ data: tagged, error: taggedError }, { data: seen, error: seenError }] = await Promise.all([
-    supabase.from("event_photos").select("id, uploader_name").contains("tags", [myName]),
+    supabase.from("event_photos").select("id, uploader_name").contains("tags", [{ name: myName }]),
     supabase.from("event_photo_tag_seen").select("photo_id").eq("member_name", myName),
   ]);
   if (taggedError) throw taggedError;
