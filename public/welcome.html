@@ -80,34 +80,49 @@ body {
 }
 
 /* ---------- header ---------- */
-.masthead {
+.hero-banner {
+  position: relative;
+  margin: -56px -16px 18px;
+  height: 220px;
+  background-image: url('hero-sunset.jpg');
+  background-size: cover;
+  background-position: center 55%;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 4px;
-  border-bottom: 2px solid var(--accent);
-  margin-bottom: 4px;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
 }
-.masthead .sun {
-  width: 46px;
-  height: 46px;
-  border-radius: 999px;
-  background: radial-gradient(circle at 35% 30%, var(--accent2), var(--accent-dark) 75%);
-  flex-shrink: 0;
+@media (min-width: 640px) {
+  .hero-banner { margin: -10mm -16mm 18px; height: 260px; }
 }
-.masthead .titles { flex: 1; padding-inline-start: 14px; }
-.masthead h1 {
+.hero-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(20,15,10,0.05) 0%, rgba(20,15,10,0.3) 55%, rgba(20,15,10,0.68) 100%);
+}
+.hero-banner .titles {
+  position: relative;
+  text-align: center;
+  padding-bottom: 18px;
+}
+.masthead {
+  display: none;
+}
+.hero-banner h1 {
   font-family: 'Caprasimo', 'Frank Ruhl Libre', serif;
   font-weight: 400;
-  font-size: 34px;
+  font-size: 40px;
   margin: 0;
-  color: var(--accent-dark);
+  color: #fdf5ea;
   letter-spacing: 0.01em;
+  text-shadow: 0 3px 16px rgba(0,0,0,0.4);
 }
-.masthead .tag {
-  font-size: 14.5px;
-  color: var(--text-muted);
-  margin-top: 1px;
+.hero-banner .tag {
+  font-size: 15px;
+  color: #f0dfc9;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  margin-top: 2px;
 }
 .intro .greeting-line {
   display: block;
@@ -312,8 +327,7 @@ body {
 <div class="page">
   <button class="save-button" id="save-btn" onclick="saveAsImage()">⬇ שמירה כתמונה</button>
 
-  <div class="masthead">
-    <div class="sun"></div>
+  <div class="hero-banner">
     <div class="titles">
       <h1>Afterglow 2026</h1>
       <div class="tag">האפליקציה של הקמפ</div>
