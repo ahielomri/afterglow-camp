@@ -2850,6 +2850,11 @@ export default function App() {
   const [openPersonalSection, setOpenPersonalSection] = useState(null);
   const [showPollForm, setShowPollForm] = useState(false);
   const [expandedMember, setExpandedMember] = useState(null);
+  const [openPaymentMenu, setOpenPaymentMenu] = useState(null);
+  const [editingPaymentId, setEditingPaymentId] = useState(null);
+  const [editPaymentAmount, setEditPaymentAmount] = useState("");
+  const [editPaymentDate, setEditPaymentDate] = useState("");
+  const [editPaymentMethod, setEditPaymentMethod] = useState("paybox");
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("dashboard-personal");
   const [adminSubTab, setAdminSubTab] = useState("overview");
@@ -3993,6 +3998,20 @@ export default function App() {
     try {
       await window.storage.set("member-payments", JSON.stringify(next), true);
       logActivity("מחיקת תשלום", name);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function editPayment(name, id, amount, date, method) {
+    if (!amount) return;
+    const latest = await getFreshShared("member-payments", memberPayments);
+    const list = Array.isArray(latest[name]) ? latest[name] : [];
+    const next = { ...latest, [name]: list.map((p) => (p.id === id ? { ...p, amount: Number(amount), date, method: method || null } : p)) };
+    setMemberPayments(next);
+    try {
+      await window.storage.set("member-payments", JSON.stringify(next), true);
+      logActivity("עריכת תשלום", `${name}: ₪${amount}${method ? ` (${duesMethodLabel(method)})` : ""}`);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -7774,25 +7793,115 @@ ${sections}
                         )}
                         {list.length > 0 && (
                           <div className="space-y-1">
-                            {list.map((p) => (
-                              <div key={p.id} className="flex items-center justify-between text-xs rounded-lg px-2.5 py-1.5" style={{ background: COLORS.input }}>
-                                <span>
-                                  <div>
-                                    ₪{Number(p.amount).toLocaleString()} · {p.date || "ללא תאריך"}
-                                    {p.method && ` · ${duesMethodLabel(p.method)}`}
+                            {list.map((p) => {
+                              const menuKey = `${m.name}:${p.id}`;
+                              const isEditing = editingPaymentId === menuKey;
+                              return (
+                                <div key={p.id} className="rounded-lg px-2.5 py-1.5 text-xs" style={{ background: COLORS.input }}>
+                                  <div className="flex items-center justify-between">
+                                    <span>
+                                      <div>
+                                        ₪{Number(p.amount).toLocaleString()} · {p.date || "ללא תאריך"}
+                                        {p.method && ` · ${duesMethodLabel(p.method)}`}
+                                      </div>
+                                      {p.recordedBy && (
+                                        <div className="mt-0.5" style={{ color: COLORS.textMuted }}>
+                                          {"נרשם ע\"י "}{p.recordedBy}
+                                          {p.recordedAt ? ` · ${new Date(p.recordedAt).toLocaleString("he-IL")}` : ""}
+                                        </div>
+                                      )}
+                                    </span>
+                                    <div className="relative">
+                                      <button
+                                        onClick={() => setOpenPaymentMenu(openPaymentMenu === menuKey ? null : menuKey)}
+                                        className="p-1 rounded-lg"
+                                        style={{ color: COLORS.textMuted }}
+                                        title="פעולות"
+                                      >
+                                        <MoreVertical size={14} />
+                                      </button>
+                                      {openPaymentMenu === menuKey && (
+                                        <div
+                                          className="absolute left-0 top-full mt-1 z-20 rounded-lg py-1 min-w-[110px] shadow-lg"
+                                          style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}
+                                        >
+                                          <button
+                                            onClick={() => {
+                                              setEditingPaymentId(menuKey);
+                                              setEditPaymentAmount(String(p.amount));
+                                              setEditPaymentDate(p.date || "");
+                                              setEditPaymentMethod(p.method || "paybox");
+                                              setOpenPaymentMenu(null);
+                                            }}
+                                            className="w-full text-right px-3 py-1.5 flex items-center gap-1.5"
+                                            style={{ color: COLORS.textMuted }}
+                                          >
+                                            <Pencil size={12} /> עריכה
+                                          </button>
+                                          <button
+                                            onClick={() => { setOpenPaymentMenu(null); removePayment(m.name, p.id); }}
+                                            className="w-full text-right px-3 py-1.5 flex items-center gap-1.5"
+                                            style={{ color: COLORS.danger }}
+                                          >
+                                            <Trash2 size={12} /> מחיקה
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
-                                  {p.recordedBy && (
-                                    <div className="mt-0.5" style={{ color: COLORS.textMuted }}>
-                                      {"נרשם ע\"י "}{p.recordedBy}
-                                      {p.recordedAt ? ` · ${new Date(p.recordedAt).toLocaleString("he-IL")}` : ""}
+                                  {isEditing && (
+                                    <div className="mt-2 pt-2 border-t flex items-center gap-1.5 flex-wrap" style={{ borderColor: COLORS.divider }}>
+                                      <input
+                                        type="number"
+                                        value={editPaymentAmount}
+                                        onChange={(e) => setEditPaymentAmount(e.target.value)}
+                                        className="w-20 px-2 py-1 rounded-lg outline-none"
+                                        style={{ background: COLORS.surface, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                                      />
+                                      <input
+                                        type="date"
+                                        value={editPaymentDate}
+                                        onChange={(e) => setEditPaymentDate(e.target.value)}
+                                        className="px-2 py-1 rounded-lg outline-none"
+                                        style={{ background: COLORS.surface, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                                      />
+                                      <div className="flex items-center gap-1">
+                                        {DUES_PAYMENT_METHODS.map((opt) => (
+                                          <button
+                                            key={opt.value}
+                                            onClick={() => setEditPaymentMethod(opt.value)}
+                                            className="px-2 py-1 rounded-full"
+                                            style={{
+                                              background: editPaymentMethod === opt.value ? COLORS.accent : COLORS.surface,
+                                              color: editPaymentMethod === opt.value ? COLORS.bg : COLORS.textMuted,
+                                              border: `1px solid ${editPaymentMethod === opt.value ? COLORS.accent : COLORS.divider}`,
+                                            }}
+                                          >
+                                            {opt.label}
+                                          </button>
+                                        ))}
+                                      </div>
+                                      <button
+                                        onClick={() => {
+                                          editPayment(m.name, p.id, editPaymentAmount, editPaymentDate, editPaymentMethod);
+                                          setEditingPaymentId(null);
+                                        }}
+                                        className="px-3 py-1 rounded-full font-semibold"
+                                        style={{ background: COLORS.accent, color: COLORS.bg }}
+                                      >
+                                        שמירה
+                                      </button>
+                                      <button
+                                        onClick={() => setEditingPaymentId(null)}
+                                        style={{ color: COLORS.textMuted }}
+                                      >
+                                        ביטול
+                                      </button>
                                     </div>
                                   )}
-                                </span>
-                                <button onClick={() => removePayment(m.name, p.id)} style={{ color: COLORS.textMuted }}>
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
-                            ))}
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                         <AddPaymentForm onAdd={(amount, date, method) => addPayment(m.name, amount, date, method)} />
