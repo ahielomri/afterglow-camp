@@ -521,6 +521,16 @@ function paymentMethodLabel(value) {
   return PAYMENT_METHODS.find((m) => m.value === value)?.label || value || "";
 }
 
+// Separate from PAYMENT_METHODS (that's for camp expenses going out) -
+// dues payments coming in from members only ever arrive by Paybox or cash.
+const DUES_PAYMENT_METHODS = [
+  { value: "paybox", label: "פייבוקס" },
+  { value: "cash", label: "מזומן" },
+];
+function duesMethodLabel(value) {
+  return DUES_PAYMENT_METHODS.find((m) => m.value === value)?.label || value || "";
+}
+
 function csvEscape(value) {
   const s = String(value ?? "");
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -1532,6 +1542,7 @@ function TeardownTaskPicker({ selected, onToggle, compact }) {
 function AddPaymentForm({ onAdd }) {
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState("");
+  const [method, setMethod] = useState("paybox");
   return (
     <div className="flex gap-2 items-center flex-wrap">
       <input
@@ -1545,8 +1556,20 @@ function AddPaymentForm({ onAdd }) {
         className="px-2 py-1.5 rounded-xl text-sm outline-none"
         style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
       />
+      <div className="flex rounded-full p-0.5" style={{ background: COLORS.input, border: `1px solid ${COLORS.divider}` }}>
+        {DUES_PAYMENT_METHODS.map((m) => (
+          <button
+            key={m.value}
+            onClick={() => setMethod(m.value)}
+            className="px-2.5 py-1 rounded-full text-xs font-semibold"
+            style={{ background: method === m.value ? COLORS.accent : "transparent", color: method === m.value ? COLORS.bg : COLORS.textMuted }}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
       <button
-        onClick={() => { onAdd(amount, date); setAmount(""); setDate(""); }}
+        onClick={() => { onAdd(amount, date, method); setAmount(""); setDate(""); }}
         className="px-3 py-1.5 rounded-full text-xs font-semibold"
         style={{ background: COLORS.accent, color: COLORS.bg }}
       >
@@ -3938,15 +3961,15 @@ export default function App() {
     }
   }
 
-  async function addPayment(name, amount, date) {
+  async function addPayment(name, amount, date, method) {
     if (!amount) return;
     const latest = await getFreshShared("member-payments", memberPayments);
     const list = Array.isArray(latest[name]) ? latest[name] : [];
-    const next = { ...latest, [name]: [...list, { id: Date.now().toString(), amount: Number(amount), date, recordedBy: identity, recordedAt: Date.now() }] };
+    const next = { ...latest, [name]: [...list, { id: Date.now().toString(), amount: Number(amount), date, method: method || null, recordedBy: identity, recordedAt: Date.now() }] };
     setMemberPayments(next);
     try {
       await window.storage.set("member-payments", JSON.stringify(next), true);
-      logActivity("רישום תשלום", `${name}: ₪${amount}`);
+      logActivity("רישום תשלום", `${name}: ₪${amount}${method ? ` (${duesMethodLabel(method)})` : ""}`);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -6189,6 +6212,7 @@ ${sections}
                             {myList.map((p) => (
                               <div key={p.id} className="text-xs rounded-lg px-2.5 py-1.5" style={{ background: COLORS.input, color: COLORS.textMuted }}>
                                 ₪{Number(p.amount).toLocaleString()} · {p.date || "ללא תאריך"}
+                                {p.method && ` · ${duesMethodLabel(p.method)}`}
                                 {p.recordedBy && (
                                   <>
                                     {" · נרשם ע\"י "}{p.recordedBy}
@@ -7638,6 +7662,7 @@ ${sections}
                               <div key={p.id} className="flex items-center justify-between text-xs rounded-lg px-2.5 py-1.5" style={{ background: COLORS.input }}>
                                 <span>
                                   ₪{Number(p.amount).toLocaleString()} · {p.date || "ללא תאריך"}
+                                  {p.method && <span> · {duesMethodLabel(p.method)}</span>}
                                   {p.recordedBy && (
                                     <span style={{ color: COLORS.textMuted }}>
                                       {" · נרשם ע\"י "}{p.recordedBy}
@@ -7652,7 +7677,7 @@ ${sections}
                             ))}
                           </div>
                         )}
-                        <AddPaymentForm onAdd={(amount, date) => addPayment(m.name, amount, date)} />
+                        <AddPaymentForm onAdd={(amount, date, method) => addPayment(m.name, amount, date, method)} />
                       </div>
                     )}
                   </div>
