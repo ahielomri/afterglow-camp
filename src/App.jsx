@@ -3425,12 +3425,15 @@ export default function App() {
   }
 
   function membersToCsv() {
-    const headers = ["שם", "טלפון", "מייל", "רכש כרטיס לאירוע"];
+    // ת.ז left blank on purpose - the app only ever stores a one-way hash
+    // of it (never the number itself), so there's nothing real to put here.
+    // Column kept anyway so the sheet's layout matches what was asked for.
+    const headers = ["טלפון", "ת.ז", "שם", "מייל", "נקנה כרטיס"];
     const rows = [headers.join(",")];
     allMembers.forEach((m) => {
       const used = allocationInfo[m.name]?.used;
       const ticket = used === "yes" ? "כן" : used === "no" ? "לא" : "";
-      rows.push([m.name, memberPhones[m.name] || "", memberEmails[m.name] || "", ticket].map(csvEscape).join(","));
+      rows.push([memberPhones[m.name] || "", "", m.name, memberEmails[m.name] || "", ticket].map(csvEscape).join(","));
     });
     return "﻿" + rows.join("\r\n");
   }
@@ -6035,7 +6038,7 @@ ${sections}
                   className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold mt-3"
                   style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, color: COLORS.textMuted }}
                 >
-                  <Download size={13} /> ייצוא רשימת חברי קמפ (שם, טלפון, מייל, כרטיס)
+                  <Download size={13} /> ייצוא רשימת חברי קמפ (טלפון, ת.ז, שם, מייל, כרטיס)
                 </button>
 
             <button
