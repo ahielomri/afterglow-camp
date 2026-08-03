@@ -534,6 +534,10 @@ function duesMethodLabel(value) {
   return DUES_PAYMENT_METHODS.find((m) => m.value === value)?.label || value || "";
 }
 
+// Threshold requested for the dues list's color coding, independent of each
+// member's actual camp-fee amount (which may be overridden per person).
+const DUES_PAID_THRESHOLD = 800;
+
 function csvEscape(value) {
   const s = String(value ?? "");
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -7758,17 +7762,17 @@ ${sections}
                 const paid = list.reduce((s, p) => s + (Number(p.amount) || 0), 0);
                 const effectiveFee = feeOverrides[m.name] !== undefined ? Number(feeOverrides[m.name]) : campFee;
                 const remaining = effectiveFee - paid;
-                const settled = effectiveFee > 0 && paid >= effectiveFee;
+                const aboveThreshold = paid > DUES_PAID_THRESHOLD;
                 const open = expandedMember === m.name;
                 return (
-                  <div key={m.name} className="rounded-xl overflow-hidden" style={{ background: COLORS.surface, borderRight: `3px solid ${settled ? COLORS.accent2 : "transparent"}` }}>
+                  <div key={m.name} className="rounded-xl overflow-hidden" style={{ background: COLORS.surface, borderRight: `3px solid ${aboveThreshold ? COLORS.accent2 : COLORS.danger}` }}>
                     <button
                       onClick={() => setExpandedMember(open ? null : m.name)}
                       className="w-full flex items-center justify-between px-3 py-2.5 text-sm"
                     >
                       <span>{m.name}{feeOverrides[m.name] !== undefined && <span className="text-xs" style={{ color: COLORS.accentDark }}> (מותאם אישית)</span>}</span>
                       <div className="flex items-center gap-3 text-xs">
-                        <span style={{ color: COLORS.textMuted }}>שולם ₪{paid.toLocaleString()}</span>
+                        <span style={{ color: aboveThreshold ? COLORS.accent2Dark : COLORS.danger }}>שולם ₪{paid.toLocaleString()}</span>
                         <span style={{ color: remaining > 0 ? COLORS.danger : COLORS.accent2Dark }}>יתרה ₪{remaining.toLocaleString()}</span>
                         <ChevronDown size={14} style={{ transform: open ? "rotate(180deg)" : "none" }} />
                       </div>
