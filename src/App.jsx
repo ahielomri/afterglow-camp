@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown as ChevronDownThin, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart, Utensils, Lightbulb, Camera, ImagePlus, Download, Sparkles, Tag } from "lucide-react";
+import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown as ChevronDownThin, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart, Utensils, Lightbulb, Camera, ImagePlus, Download, Sparkles, Tag, MoreVertical, Crown } from "lucide-react";
 // Every ChevronDown in the app should read as bold/clickable, not just the
 // default thin stroke - default it here once instead of at each call site.
 function ChevronDown(props) {
@@ -49,6 +49,9 @@ import {
   listPhotoComments,
   addPhotoComment,
   deletePhotoComment,
+  archiveRemovedMember,
+  listRemovedMembers,
+  restoreRemovedMember,
 } from "./storage.js";
 
 // ---------------------------------------------------------------------------
@@ -530,6 +533,10 @@ const DUES_PAYMENT_METHODS = [
 function duesMethodLabel(value) {
   return DUES_PAYMENT_METHODS.find((m) => m.value === value)?.label || value || "";
 }
+
+// Threshold requested for the dues list's color coding, independent of each
+// member's actual camp-fee amount (which may be overridden per person).
+const DUES_PAID_THRESHOLD = 800;
 
 function csvEscape(value) {
   const s = String(value ?? "");
@@ -2809,6 +2816,11 @@ export default function App() {
   const [logsRefreshing, setLogsRefreshing] = useState(false);
   const [extraMembers, setExtraMembers] = useState([]);
   const [removedMembers, setRemovedMembers] = useState([]);
+  // The removed_members table (removed_at + a full data snapshot) - separate
+  // from the `removedMembers` kv list above, which only ever held bare
+  // names and has no sense of "when". Loaded for admins so the "הוסרו
+  // מהקמפ" list can show a real countdown and offer the snapshot for download.
+  const [removedMembersArchive, setRemovedMembersArchive] = useState([]);
   const [dbRoles, setDbRoles] = useState({});
   const [idOnFileNames, setIdOnFileNames] = useState(null);
   const [pushEnabledNames, setPushEnabledNames] = useState(null);
@@ -2829,6 +2841,8 @@ export default function App() {
   const [editingMemberId, setEditingMemberId] = useState(null);
   const [editIdValue, setEditIdValue] = useState("");
   const [editNameValue, setEditNameValue] = useState("");
+  const [openMemberMenu, setOpenMemberMenu] = useState(null);
+  const [teamLeadPickerFor, setTeamLeadPickerFor] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
   const [emergencyInfo, setEmergencyInfo] = useState({});
   const [polls, setPolls] = useState([]);
@@ -4298,14 +4312,46 @@ export default function App() {
     logActivity("הוספת חבר קמפ", name);
   }
 
+  // Snapshot of everything the app knows about a member, taken at the
+  // moment they're removed - this is what "הוסרו מהקמפ" lets an admin
+  // download, and it's the only trace of them left once the 7-day grace
+  // window ends and purge-removed-members erases the real data.
+  function buildMemberSnapshot(name) {
+    const myShiftTitles = SHIFTS.filter((s) => (assignments[s.id] || []).includes(name)).map((s) => s.title);
+    const leadOfTeams = Object.keys(teamLeads).filter((t) => (teamLeads[t] || []).includes(name));
+    return {
+      role: dbRoles[name] || "member",
+      phone: memberPhones[name] || null,
+      email: memberEmails[name] || null,
+      emergencyInfo: emergencyInfo[name] || null,
+      rideInfo: rideInfo[name] || null,
+      allocationInfo: allocationInfo[name] || null,
+      payments: memberPayments[name] || [],
+      feeOverride: feeOverrides[name] ?? null,
+      idOnFile: idOnFileNames?.includes(name) || false,
+      pushEnabled: pushEnabledNames?.includes(name) || false,
+      whatsappConsent: !!whatsappConsent[name],
+      teardownTasks: teardownTasks[name] || [],
+      shiftTitles: myShiftTitles,
+      leadOfTeams,
+      manualTeamMemberships: Object.keys(manualTeamMembers).filter((t) => (manualTeamMembers[t] || []).includes(name)),
+    };
+  }
+
   async function removeMember(name) {
     const latest = await getFreshShared("removed-members", removedMembers);
     const next = [...latest, name];
     setRemovedMembers(next);
     try {
       await window.storage.set("removed-members", JSON.stringify(next), true);
-      showToast(`${name} הוסר/ה מהקמפ`, "ok");
+      try {
+        await archiveRemovedMember(name, identity, buildMemberSnapshot(name));
+      } catch (err) {
+        showToast(`${name} הוסר/ה, אך שמירת הגיבוי נכשלה: ${err?.message || "שגיאה לא ידועה"}`, "error");
+      }
+      showToast(`${name} הוסר/ה מהקמפ - הנתונים יישמרו 7 ימים ואז יימחקו לצמיתות`, "ok");
       logActivity("הסרת חבר קמפ", name);
+      refreshRemovedMembersArchive();
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -4317,11 +4363,36 @@ export default function App() {
     setRemovedMembers(next);
     try {
       await window.storage.set("removed-members", JSON.stringify(next), true);
+      try {
+        await restoreRemovedMember(name);
+      } catch (err) {
+        console.error("removing archive row failed (non-blocking)", err);
+      }
       showToast(`${name} שוחזר/ה`, "ok");
       logActivity("שחזור חבר קמפ", name);
+      refreshRemovedMembersArchive();
     } catch {
       showToast("שמירה נכשלה", "error");
     }
+  }
+
+  async function refreshRemovedMembersArchive() {
+    try {
+      setRemovedMembersArchive(await listRemovedMembers());
+    } catch {}
+  }
+
+  function downloadRemovedMemberFile(row) {
+    const payload = { name: row.name, removedAt: row.removed_at, removedBy: row.removed_by, ...row.snapshot };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${row.name}-גיבוי-הסרה.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
   // Owner-only: set/replace the verified ID for a member who's already on
@@ -5580,7 +5651,7 @@ ${sections}
                 <AddMemberForm onAdd={addMember} />
 
             <button
-              onClick={() => setShowMemberList(!showMemberList)}
+              onClick={() => { setShowMemberList(!showMemberList); if (!showMemberList) refreshRemovedMembersArchive(); }}
               className="w-full flex items-center justify-between mt-4 mb-2 text-sm font-bold"
               style={{ color: COLORS.textMuted }}
             >
@@ -5607,49 +5678,98 @@ ${sections}
                           {m.role === "member" && Object.values(teamLeads).some((leads) => leads.includes(m.name)) && <span className="text-xs" style={{ color: COLORS.accent2Dark }}> (מנהל צוות)</span>}
                           {m.idOnFile && <span className="text-xs" style={{ color: COLORS.textMuted }}> · ת.ז מאומתת</span>}
                         </span>
-                        <div className="flex items-center gap-1">
-                          {isOwner && (
-                            <button
-                              onClick={() => {
-                                setEditingMemberId(editingMemberId === m.name ? null : m.name);
-                                setEditIdValue("");
-                                setEditNameValue("");
-                              }}
-                              className="text-xs px-2 py-1 rounded-lg flex items-center gap-1"
-                              style={{ color: COLORS.textMuted }}
-                              title="עריכה"
-                            >
-                              <Pencil size={12} /> עריכה
-                            </button>
-                          )}
-                          {isOwner && m.role !== "owner" && (
-                            <button
-                              onClick={() => setMemberRole(m.name, m.role === "admin" ? "member" : "admin")}
-                              className="text-xs px-2 py-1 rounded-lg flex items-center gap-1"
-                              style={{ color: COLORS.accentDark }}
-                              title={m.role === "admin" ? "הסר ממנהלים" : "הפוך למנהל"}
-                            >
-                              {m.role === "admin" ? <ShieldOff size={12} /> : <ShieldCheck size={12} />}
-                              {m.role === "admin" ? "הסרת ניהול" : "הפוך למנהל"}
-                            </button>
-                          )}
-                          {isOwner && m.role !== "owner" && (
-                            <button
-                              onClick={() => { if (window.confirm(`לאפס את הגישה של ${m.name}? הם יצטרכו לעבור "כניסה ראשונה" מחדש עם תעודת הזהות שלהם.`)) resetMemberAccess(m.name); }}
-                              className="text-xs px-2 py-1 rounded-lg flex items-center gap-1"
-                              style={{ color: COLORS.textMuted }}
-                              title="איפוס גישה"
-                            >
-                              <LockKeyhole size={12} /> איפוס גישה
-                            </button>
-                          )}
+                        <div className="relative">
                           <button
-                            onClick={() => { if (window.confirm(`להסיר את ${m.name} מהקמפ?`)) removeMember(m.name); }}
-                            className="text-xs px-2 py-1 rounded-lg"
-                            style={{ color: COLORS.danger }}
+                            onClick={() => {
+                              const next = openMemberMenu === m.name ? null : m.name;
+                              setOpenMemberMenu(next);
+                              if (next === null) setTeamLeadPickerFor(null);
+                            }}
+                            className="p-1 rounded-lg"
+                            style={{ color: COLORS.textMuted }}
+                            title="פעולות"
                           >
-                            הסרה
+                            <MoreVertical size={16} />
                           </button>
+                          {openMemberMenu === m.name && (
+                            <div
+                              className="absolute left-0 top-full mt-1 z-20 rounded-lg py-1 min-w-[180px] shadow-lg"
+                              style={{ background: COLORS.input, border: `1px solid ${COLORS.divider}` }}
+                            >
+                              {isOwner && (
+                                <button
+                                  onClick={() => {
+                                    setEditingMemberId(editingMemberId === m.name ? null : m.name);
+                                    setEditIdValue("");
+                                    setEditNameValue("");
+                                    setOpenMemberMenu(null);
+                                  }}
+                                  className="w-full text-right px-3 py-2 text-xs flex items-center gap-1.5"
+                                  style={{ color: COLORS.textMuted }}
+                                >
+                                  <Pencil size={12} /> עריכה
+                                </button>
+                              )}
+                              {isOwner && m.role !== "owner" && (
+                                <button
+                                  onClick={() => { if (window.confirm(`לאפס את הגישה של ${m.name}? הם יצטרכו לעבור "כניסה ראשונה" מחדש עם תעודת הזהות שלהם.`)) { resetMemberAccess(m.name); setOpenMemberMenu(null); } }}
+                                  className="w-full text-right px-3 py-2 text-xs flex items-center gap-1.5"
+                                  style={{ color: COLORS.textMuted }}
+                                >
+                                  <LockKeyhole size={12} /> איפוס גישה
+                                </button>
+                              )}
+                              {isOwner && m.role !== "owner" && (
+                                <button
+                                  onClick={() => setTeamLeadPickerFor(teamLeadPickerFor === m.name ? null : m.name)}
+                                  className="w-full text-right px-3 py-2 text-xs flex items-center gap-1.5"
+                                  style={{ color: COLORS.accent2Dark }}
+                                >
+                                  <Crown size={12} /> הפוך למנהל צוות
+                                </button>
+                              )}
+                              {teamLeadPickerFor === m.name && (
+                                <div className="px-3 pb-2" onClick={(e) => e.stopPropagation()}>
+                                  <select
+                                    defaultValue=""
+                                    onChange={(e) => {
+                                      const team = e.target.value;
+                                      if (!team) return;
+                                      const current = teamLeads[team] || [];
+                                      const slot = !current[0] ? 0 : (!current[1] ? 1 : 0);
+                                      setTeamLead(team, m.name, slot);
+                                      setTeamLeadPickerFor(null);
+                                      setOpenMemberMenu(null);
+                                    }}
+                                    className="w-full px-2 py-1 rounded-lg text-xs outline-none"
+                                    style={{ background: COLORS.surface, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                                  >
+                                    <option value="">בחר/י צוות...</option>
+                                    {TEAMS.map((t) => (
+                                      <option key={t.name} value={t.name}>{t.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
+                              {isOwner && m.role !== "owner" && (
+                                <button
+                                  onClick={() => { setMemberRole(m.name, m.role === "admin" ? "member" : "admin"); setOpenMemberMenu(null); }}
+                                  className="w-full text-right px-3 py-2 text-xs flex items-center gap-1.5"
+                                  style={{ color: COLORS.accentDark }}
+                                >
+                                  {m.role === "admin" ? <ShieldOff size={12} /> : <ShieldCheck size={12} />}
+                                  {m.role === "admin" ? "הסרת ניהול (מוביל מחנה)" : "הפוך למוביל מחנה"}
+                                </button>
+                              )}
+                              <button
+                                onClick={() => { setOpenMemberMenu(null); if (window.confirm(`להסיר את ${m.name} מהקמפ? הנתונים יישמרו 7 ימים ואז יימחקו לצמיתות.`)) removeMember(m.name); }}
+                                className="w-full text-right px-3 py-2 text-xs flex items-center gap-1.5 border-t"
+                                style={{ color: COLORS.danger, borderColor: COLORS.divider }}
+                              >
+                                <Trash2 size={12} /> הסרה מהמחנה
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                       {editingMemberId === m.name && (
@@ -5703,18 +5823,49 @@ ${sections}
                 </div>
                 {removedMembers.length > 0 && (
                   <div className="mt-3">
-                    <div className="text-xs mb-1" style={{ color: COLORS.textMuted }}>הוסרו מהקמפ:</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {removedMembers.map((name) => (
-                        <button
-                          key={name}
-                          onClick={() => restoreMember(name)}
-                          className="text-xs px-2.5 py-1 rounded-full"
-                          style={{ background: COLORS.input, color: COLORS.textMuted }}
-                        >
-                          {name} · שחזור
-                        </button>
-                      ))}
+                    <div className="text-xs mb-1.5" style={{ color: COLORS.textMuted }}>
+                      הוסרו מהקמפ - הנתונים נשמרים 7 ימים מרגע ההסרה ואז נמחקים לצמיתות:
+                    </div>
+                    <div className="space-y-1.5">
+                      {removedMembers.map((name) => {
+                        const row = removedMembersArchive.find((r) => r.name === name);
+                        const daysLeft = row
+                          ? Math.max(0, 7 - Math.floor((Date.now() - new Date(row.removed_at).getTime()) / 86400000))
+                          : null;
+                        return (
+                          <div
+                            key={name}
+                            className="flex items-center justify-between rounded-lg px-3 py-1.5 text-xs"
+                            style={{ background: COLORS.input, color: COLORS.textMuted }}
+                          >
+                            <span>
+                              {name}
+                              {daysLeft !== null && (
+                                <span> · {daysLeft > 0 ? `${daysLeft} ימים עד מחיקה סופית` : "נמחק/ת בקרוב"}</span>
+                              )}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {row && (
+                                <button
+                                  onClick={() => downloadRemovedMemberFile(row)}
+                                  className="flex items-center gap-1 px-2 py-1 rounded-lg"
+                                  style={{ color: COLORS.accentDark }}
+                                  title="הורדת קובץ גיבוי"
+                                >
+                                  <Download size={12} /> הורדת קובץ
+                                </button>
+                              )}
+                              <button
+                                onClick={() => restoreMember(name)}
+                                className="px-2 py-1 rounded-lg"
+                                style={{ color: COLORS.accentDark }}
+                              >
+                                שחזור
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -7611,17 +7762,17 @@ ${sections}
                 const paid = list.reduce((s, p) => s + (Number(p.amount) || 0), 0);
                 const effectiveFee = feeOverrides[m.name] !== undefined ? Number(feeOverrides[m.name]) : campFee;
                 const remaining = effectiveFee - paid;
-                const settled = effectiveFee > 0 && paid >= effectiveFee;
+                const aboveThreshold = paid > DUES_PAID_THRESHOLD;
                 const open = expandedMember === m.name;
                 return (
-                  <div key={m.name} className="rounded-xl overflow-hidden" style={{ background: COLORS.surface, borderRight: `3px solid ${settled ? COLORS.accent2 : "transparent"}` }}>
+                  <div key={m.name} className="rounded-xl overflow-hidden" style={{ background: COLORS.surface, borderRight: `3px solid ${aboveThreshold ? COLORS.accent2 : COLORS.danger}` }}>
                     <button
                       onClick={() => setExpandedMember(open ? null : m.name)}
                       className="w-full flex items-center justify-between px-3 py-2.5 text-sm"
                     >
                       <span>{m.name}{feeOverrides[m.name] !== undefined && <span className="text-xs" style={{ color: COLORS.accentDark }}> (מותאם אישית)</span>}</span>
                       <div className="flex items-center gap-3 text-xs">
-                        <span style={{ color: COLORS.textMuted }}>שולם ₪{paid.toLocaleString()}</span>
+                        <span style={{ color: aboveThreshold ? COLORS.accent2Dark : COLORS.danger }}>שולם ₪{paid.toLocaleString()}</span>
                         <span style={{ color: remaining > 0 ? COLORS.danger : COLORS.accent2Dark }}>יתרה ₪{remaining.toLocaleString()}</span>
                         <ChevronDown size={14} style={{ transform: open ? "rotate(180deg)" : "none" }} />
                       </div>
