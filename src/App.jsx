@@ -5618,6 +5618,21 @@ ${sections}
     );
   }
 
+  // Lays out a category's tabs 2-per-row (grid-cols-2) via renderNavItem's
+  // fullWidth flag - if a pinned full-width item (like the personal
+  // dashboard) leaves an odd number of regular items, the last one would
+  // otherwise sit alone with an empty cell beside it, so stretch it to
+  // full width too instead of leaving that gap.
+  function renderNavTabsGrid(tabs, isPinnedFullWidth) {
+    const regular = tabs.filter((t) => !isPinnedFullWidth(t));
+    const lastRegularId = regular[regular.length - 1]?.id;
+    const trailingOrphan = regular.length % 2 === 1;
+    return tabs.map((t) => {
+      const pinned = isPinnedFullWidth(t);
+      return renderNavItem(t, pinned || (trailingOrphan && !pinned && t.id === lastRegularId));
+    });
+  }
+
   const visibleShifts = (teamFilter === "הכל" ? SHIFTS : SHIFTS.filter((s) => s.team === teamFilter))
     .slice()
     .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
@@ -5856,8 +5871,8 @@ ${sections}
                 style={{ background: COLORS.input, border: `1px solid ${COLORS.divider}`, maxHeight: "60vh", boxShadow: "0 10px 30px rgba(58,34,42,0.28)" }}
               >
                 {expandedNavCategory === "personal"
-                  ? navPersonalTabs.map((t) => renderNavItem(t, t.id === "dashboard-personal"))
-                  : navCampTabs.map((t) => renderNavItem(t))}
+                  ? renderNavTabsGrid(navPersonalTabs, (t) => t.id === "dashboard-personal")
+                  : renderNavTabsGrid(navCampTabs, () => false)}
               </div>
             </>
           )}
