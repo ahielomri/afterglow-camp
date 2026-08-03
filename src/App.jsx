@@ -537,6 +537,10 @@ function duesMethodLabel(value) {
 // Threshold requested for the dues list's color coding, independent of each
 // member's actual camp-fee amount (which may be overridden per person).
 const DUES_PAID_THRESHOLD = 800;
+// Literal red/green requested for this indicator - the rest of the app's
+// palette is warm browns/tans, but this specific signal was asked for by color.
+const DUES_BELOW_BG = "#f8d7d3";
+const DUES_ABOVE_BG = "#d7ecd1";
 
 function csvEscape(value) {
   const s = String(value ?? "");
@@ -6362,13 +6366,15 @@ ${sections}
                           <div className="mt-2 space-y-1">
                             {myList.map((p) => (
                               <div key={p.id} className="text-xs rounded-lg px-2.5 py-1.5" style={{ background: COLORS.input, color: COLORS.textMuted }}>
-                                ₪{Number(p.amount).toLocaleString()} · {p.date || "ללא תאריך"}
-                                {p.method && ` · ${duesMethodLabel(p.method)}`}
+                                <div>
+                                  ₪{Number(p.amount).toLocaleString()} · {p.date || "ללא תאריך"}
+                                  {p.method && ` · ${duesMethodLabel(p.method)}`}
+                                </div>
                                 {p.recordedBy && (
-                                  <>
-                                    {" · נרשם ע\"י "}{p.recordedBy}
+                                  <div className="mt-0.5" style={{ opacity: 0.8 }}>
+                                    {"נרשם ע\"י "}{p.recordedBy}
                                     {p.recordedAt ? ` · ${new Date(p.recordedAt).toLocaleString("he-IL")}` : ""}
-                                  </>
+                                  </div>
                                 )}
                               </div>
                             ))}
@@ -7765,15 +7771,16 @@ ${sections}
                 const aboveThreshold = paid > DUES_PAID_THRESHOLD;
                 const open = expandedMember === m.name;
                 return (
-                  <div key={m.name} className="rounded-xl overflow-hidden" style={{ background: COLORS.surface, borderRight: `3px solid ${aboveThreshold ? COLORS.accent2 : COLORS.danger}` }}>
+                  <div key={m.name} className="rounded-xl overflow-hidden" style={{ background: aboveThreshold ? DUES_ABOVE_BG : DUES_BELOW_BG }}>
                     <button
                       onClick={() => setExpandedMember(open ? null : m.name)}
                       className="w-full flex items-center justify-between px-3 py-2.5 text-sm"
+                      style={{ color: COLORS.text }}
                     >
-                      <span>{m.name}{feeOverrides[m.name] !== undefined && <span className="text-xs" style={{ color: COLORS.accentDark }}> (מותאם אישית)</span>}</span>
-                      <div className="flex items-center gap-3 text-xs">
-                        <span style={{ color: aboveThreshold ? COLORS.accent2Dark : COLORS.danger }}>שולם ₪{paid.toLocaleString()}</span>
-                        <span style={{ color: remaining > 0 ? COLORS.danger : COLORS.accent2Dark }}>יתרה ₪{remaining.toLocaleString()}</span>
+                      <span>{m.name}{feeOverrides[m.name] !== undefined && <span className="text-xs" style={{ color: COLORS.text }}> (מותאם אישית)</span>}</span>
+                      <div className="flex items-center gap-3 text-xs" style={{ color: COLORS.text }}>
+                        <span>שולם ₪{paid.toLocaleString()}</span>
+                        <span>יתרה ₪{remaining.toLocaleString()}</span>
                         <ChevronDown size={14} style={{ transform: open ? "rotate(180deg)" : "none" }} />
                       </div>
                     </button>
@@ -7812,13 +7819,15 @@ ${sections}
                             {list.map((p) => (
                               <div key={p.id} className="flex items-center justify-between text-xs rounded-lg px-2.5 py-1.5" style={{ background: COLORS.input }}>
                                 <span>
-                                  ₪{Number(p.amount).toLocaleString()} · {p.date || "ללא תאריך"}
-                                  {p.method && <span> · {duesMethodLabel(p.method)}</span>}
+                                  <div>
+                                    ₪{Number(p.amount).toLocaleString()} · {p.date || "ללא תאריך"}
+                                    {p.method && ` · ${duesMethodLabel(p.method)}`}
+                                  </div>
                                   {p.recordedBy && (
-                                    <span style={{ color: COLORS.textMuted }}>
-                                      {" · נרשם ע\"י "}{p.recordedBy}
+                                    <div className="mt-0.5" style={{ color: COLORS.textMuted }}>
+                                      {"נרשם ע\"י "}{p.recordedBy}
                                       {p.recordedAt ? ` · ${new Date(p.recordedAt).toLocaleString("he-IL")}` : ""}
-                                    </span>
+                                    </div>
                                   )}
                                 </span>
                                 <button onClick={() => removePayment(m.name, p.id)} style={{ color: COLORS.textMuted }}>
