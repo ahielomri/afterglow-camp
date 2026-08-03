@@ -2968,6 +2968,7 @@ export default function App() {
   const [rideInfo, setRideInfo] = useState({});
   const [rideMatches, setRideMatches] = useState({});
   const [allocationInfo, setAllocationInfo] = useState({});
+  const [ticketPurchase, setTicketPurchaseState] = useState({});
   const [feeOverrides, setFeeOverrides] = useState({});
   const [memberEmails, setMemberEmails] = useState({});
   const [whatsappConsent, setWhatsappConsentState] = useState({});
@@ -3154,7 +3155,7 @@ export default function App() {
         rawLeads, rawPhones, rawRides, rawFeeOv, rawEmails, rawWhatsappConsent, rawPersonalCalendarAdds, rawChecklists,
         rawManualTeam, rawLogins, rawExtra, rawRemoved,
         rawAnn, rawPolls, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories, rawRideMatches,
-        rawShoppingList, rawShoppingRequests, rawExtraTeams, rawCustomChecklists, rawContentSchedule, rawContentSuggestions,
+        rawShoppingList, rawShoppingRequests, rawExtraTeams, rawCustomChecklists, rawContentSchedule, rawContentSuggestions, rawTicketPurchase,
       ] = await Promise.all([
         safeGet("shift-assignments", true),
         safeGet("budget-items", true),
@@ -3187,6 +3188,7 @@ export default function App() {
         safeGet("team-checklist-items", true),
         safeGet("content-schedule", true),
         safeGet("content-suggestions", true),
+        safeGet("ticket-purchase", true),
       ]);
 
       async function safeCall(fn, fallback, attempt = 0) {
@@ -3284,6 +3286,7 @@ export default function App() {
         window.storage.set("content-schedule", JSON.stringify(DEFAULT_CONTENT_SCHEDULE), true).catch(() => {});
       }
       setContentSuggestions(rawContentSuggestions ? JSON.parse(rawContentSuggestions) : []);
+      setTicketPurchaseState(rawTicketPurchase ? JSON.parse(rawTicketPurchase) : {});
     }
     loadSharedDataRef.current = loadSharedData;
 
@@ -3422,6 +3425,27 @@ export default function App() {
     } catch {
       showToast("שמירה נכשלה", "error");
     }
+  }
+
+  function membersToCsv() {
+    const headers = ["שם", "טלפון", "מייל", "רכש כרטיס לאירוע"];
+    const rows = [headers.join(",")];
+    allMembers.forEach((m) => {
+      const ticket = ticketPurchase[m.name] === "yes" ? "כן" : ticketPurchase[m.name] === "no" ? "לא" : "";
+      rows.push([m.name, memberPhones[m.name] || "", memberEmails[m.name] || "", ticket].map(csvEscape).join(","));
+    });
+    return "﻿" + rows.join("\r\n");
+  }
+
+  function downloadMembersCsv() {
+    const csv = membersToCsv();
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `רשימת-חברי-קמפ-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   function downloadBudgetExpensesCsv() {
@@ -4323,6 +4347,18 @@ export default function App() {
     try {
       await window.storage.set("ride-matches", JSON.stringify(next), true);
       logActivity("ביטול שיוך טרמפ", `${riderName} ← ${driverName}`);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function setTicketPurchase(name, value) {
+    const latest = await getFreshShared("ticket-purchase", ticketPurchase);
+    const next = { ...latest, [name]: value };
+    setTicketPurchaseState(next);
+    try {
+      await window.storage.set("ticket-purchase", JSON.stringify(next), true);
+      logActivity("עדכון רכישת כרטיס", name);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -6008,6 +6044,14 @@ ${sections}
                 <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.textMuted }}>הוספת חבר קמפ</h3>
                 <AddMemberForm onAdd={addMember} />
 
+                <button
+                  onClick={downloadMembersCsv}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold mt-3"
+                  style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, color: COLORS.textMuted }}
+                >
+                  <Download size={13} /> ייצוא רשימת חברי קמפ (שם, טלפון, מייל, כרטיס)
+                </button>
+
             <button
               onClick={() => { setShowMemberList(!showMemberList); if (!showMemberList) refreshRemovedMembersArchive(); }}
               className="w-full flex items-center justify-between mt-4 mb-2 text-sm font-bold"
@@ -6971,6 +7015,13 @@ ${sections}
                           {missingProfileFields.includes("הקצאה") && <span className="font-normal" style={{ color: COLORS.danger }}>· חובה</span>}
                         </div>
                         <AllocationWizard data={allocationInfo[identity]} onChange={(d) => setAllocationData(identity, d)} />
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
+                          <Ticket size={13} /> רכישת כרטיס לאירוע
+                        </div>
+                        <YesNoButtons value={ticketPurchase[identity]} onChange={(v) => setTicketPurchase(identity, v)} />
                       </div>
                     </div>
                   )}
