@@ -7616,7 +7616,7 @@ ${sections}
               <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ background: COLORS.surface }}>
-                    <th className="p-2 text-right" style={{ borderBottom: `1px solid ${COLORS.divider}`, minWidth: 90 }}>שעה</th>
+                    <th className="p-2 text-right" style={{ borderBottom: `1px solid ${COLORS.divider}`, minWidth: 112, width: 112 }}>שעה</th>
                     {contentSchedule.columns.map((col, ci) => (
                       <th key={ci} className="p-2 text-right align-top" style={{ borderBottom: `1px solid ${COLORS.divider}`, minWidth: 160 }}>
                         <div className="flex items-start justify-between gap-1">
@@ -7645,13 +7645,13 @@ ${sections}
                 <tbody>
                   {contentSchedule.rows.map((row) => (
                     <tr key={row.id} style={{ borderBottom: `1px solid ${COLORS.divider}` }}>
-                      <td className="p-2 align-top font-bold" style={{ color: COLORS.text }}>
+                      <td className="p-2 align-top font-bold" style={{ color: COLORS.text, minWidth: 112, width: 112 }}>
                         {canEditContent ? (
                           <input
                             defaultValue={row.label}
                             onBlur={(e) => { if (e.target.value !== row.label) updateContentRowLabel(row.id, e.target.value); }}
                             className="w-full px-1.5 py-1 rounded-lg text-xs font-bold outline-none"
-                            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}`, minWidth: 96 }}
                           />
                         ) : (
                           row.label
