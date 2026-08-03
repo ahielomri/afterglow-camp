@@ -5890,12 +5890,20 @@ ${sections}
                     { label: "תקציב מתוכנן", value: `₪${budgetTotals.planned.toLocaleString()}` },
                     { label: "הוצאות בפועל", value: `₪${budgetTotals.paid.toLocaleString()}` },
                     { label: "מקומות פנויים במשמרות", value: unfilledShiftsCount },
-                    { label: "חברים ללא משמרת", value: membersWithoutShift },
+                    { label: "חברים ללא משמרת", value: membersWithoutShift, onClick: () => setAdminSubTab("member-shifts") },
                     { label: "ימים לפתיחת השערים", value: daysUntil() },
                   ].map((c) => (
-                    <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                    <div
+                      key={c.label}
+                      onClick={c.onClick}
+                      className={`rounded-2xl p-4 ${c.onClick ? "text-right cursor-pointer active:scale-[0.97] transition-transform" : ""}`}
+                      style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, boxShadow: c.onClick ? "0 1px 3px rgba(58,34,42,0.15)" : "none" }}
+                    >
                       <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
-                      <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                      <div className="text-xs mt-1 flex items-center gap-1" style={{ color: COLORS.textMuted }}>
+                        {c.label}
+                        {c.onClick && <ChevronDown size={11} style={{ transform: "rotate(90deg)" }} />}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -5903,24 +5911,40 @@ ${sections}
                 <h3 className="text-xs font-bold mt-5 mb-2" style={{ color: COLORS.textMuted }}>מוכנות התניידות</h3>
                 <div className="grid grid-cols-3 gap-3 mb-3">
                   {[
-                    { label: "טרם מילאו פרטי הגעה", value: membersWithoutRideInfo },
-                    { label: "מציעים טרמפ", value: offeringRides.length },
-                    { label: "מחפשים טרמפ", value: lookingForRide.length },
+                    { label: "טרם מילאו פרטי הגעה", value: membersWithoutRideInfo, onClick: () => { setAdminSubTab("members"); setShowProfileCompletion(true); } },
+                    { label: "מציעים טרמפ", value: offeringRides.length, onClick: () => setTab("rides") },
+                    { label: "מחפשים טרמפ", value: lookingForRide.length, onClick: () => setTab("rides") },
                   ].map((c) => (
-                    <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                    <div
+                      key={c.label}
+                      onClick={c.onClick}
+                      className={`rounded-2xl p-4 ${c.onClick ? "text-right cursor-pointer active:scale-[0.97] transition-transform" : ""}`}
+                      style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, boxShadow: c.onClick ? "0 1px 3px rgba(58,34,42,0.15)" : "none" }}
+                    >
                       <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
-                      <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                      <div className="text-xs mt-1 flex items-center gap-1" style={{ color: COLORS.textMuted }}>
+                        {c.label}
+                        {c.onClick && <ChevronDown size={11} style={{ transform: "rotate(90deg)" }} />}
+                      </div>
                     </div>
                   ))}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { label: "יש להם מקום לציוד", value: offeringCargoSpace.length },
-                    { label: "יכולת גרירה (וו/עגלה)", value: towingCapable.length },
+                    { label: "יש להם מקום לציוד", value: offeringCargoSpace.length, onClick: () => setTab("rides") },
+                    { label: "יכולת גרירה (וו/עגלה)", value: towingCapable.length, onClick: () => setTab("rides") },
                   ].map((c) => (
-                    <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                    <div
+                      key={c.label}
+                      onClick={c.onClick}
+                      className={`rounded-2xl p-4 ${c.onClick ? "text-right cursor-pointer active:scale-[0.97] transition-transform" : ""}`}
+                      style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, boxShadow: c.onClick ? "0 1px 3px rgba(58,34,42,0.15)" : "none" }}
+                    >
                       <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accent2Dark }}>{c.value}</div>
-                      <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                      <div className="text-xs mt-1 flex items-center gap-1" style={{ color: COLORS.textMuted }}>
+                        {c.label}
+                        {c.onClick && <ChevronDown size={11} style={{ transform: "rotate(90deg)" }} />}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -5934,7 +5958,7 @@ ${sections}
                     {lookingForRide.length > 0 && <div className="text-xs">🚗 {lookingForRide.length} חברים מחפשים טרמפ ועדיין לא שובצו</div>}
                     {pendingContentSuggestions.length > 0 && (
                       <div className="text-xs">
-                        🎤 {pendingContentSuggestions.length} הצעות תוכן ממתינות לשיבוץ -{" "}
+                        {pendingContentSuggestions.length} הצעות תוכן ממתינות לשיבוץ -{" "}
                         <button onClick={() => setTab("content")} className="underline font-bold">מעבר ללוח תוכן</button>
                       </div>
                     )}
@@ -6538,7 +6562,7 @@ ${sections}
                 {nearBudgetCategories.includes(myLeadTeam) && <div className="text-xs">🟡 תקציב הצוות מתקרב לתכנון (מעל 85%)</div>}
                 {myLeadTeam === CONTENT_TEAM_NAME && pendingContentSuggestions.length > 0 && (
                   <div className="text-xs">
-                    🎤 {pendingContentSuggestions.length} הצעות תוכן ממתינות לשיבוץ -{" "}
+                    {pendingContentSuggestions.length} הצעות תוכן ממתינות לשיבוץ -{" "}
                     <button onClick={() => setTab("content")} className="underline font-bold">מעבר ללוח תוכן</button>
                   </div>
                 )}
