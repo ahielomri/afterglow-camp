@@ -475,6 +475,34 @@ export async function addMemberRow(name, role = "member") {
   if (error) throw error;
 }
 
+// Archives a full snapshot of a member's data at the moment they're
+// removed - gives the 7-day grace window (see purge-removed-members) a
+// real starting point, and gives an admin something to download even
+// after the person is gone. RLS restricts this to admins.
+export async function archiveRemovedMember(name, removedBy, snapshot) {
+  const { error } = await supabase
+    .from("removed_members")
+    .upsert({ name, removed_by: removedBy, snapshot, removed_at: new Date().toISOString() });
+  if (error) throw error;
+}
+
+export async function listRemovedMembers() {
+  const { data, error } = await supabase
+    .from("removed_members")
+    .select("name, removed_at, removed_by, snapshot")
+    .order("removed_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+// Un-does a removal within the 7-day window - the member's real data was
+// never touched during that window (only the archive row + the local
+// "hide from view" list), so restoring is just clearing those.
+export async function restoreRemovedMember(name) {
+  const { error } = await supabase.from("removed_members").delete().eq("name", name);
+  if (error) throw error;
+}
+
 // Admin-only: registers a real ID number (hashed server-side) for a
 // member, giving them real ID verification instead of the weaker
 // "no ID on file" path. Only succeeds if the caller is actually an
