@@ -2968,7 +2968,6 @@ export default function App() {
   const [rideInfo, setRideInfo] = useState({});
   const [rideMatches, setRideMatches] = useState({});
   const [allocationInfo, setAllocationInfo] = useState({});
-  const [ticketPurchase, setTicketPurchaseState] = useState({});
   const [feeOverrides, setFeeOverrides] = useState({});
   const [memberEmails, setMemberEmails] = useState({});
   const [whatsappConsent, setWhatsappConsentState] = useState({});
@@ -3155,7 +3154,7 @@ export default function App() {
         rawLeads, rawPhones, rawRides, rawFeeOv, rawEmails, rawWhatsappConsent, rawPersonalCalendarAdds, rawChecklists,
         rawManualTeam, rawLogins, rawExtra, rawRemoved,
         rawAnn, rawPolls, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories, rawRideMatches,
-        rawShoppingList, rawShoppingRequests, rawExtraTeams, rawCustomChecklists, rawContentSchedule, rawContentSuggestions, rawTicketPurchase,
+        rawShoppingList, rawShoppingRequests, rawExtraTeams, rawCustomChecklists, rawContentSchedule, rawContentSuggestions,
       ] = await Promise.all([
         safeGet("shift-assignments", true),
         safeGet("budget-items", true),
@@ -3188,7 +3187,6 @@ export default function App() {
         safeGet("team-checklist-items", true),
         safeGet("content-schedule", true),
         safeGet("content-suggestions", true),
-        safeGet("ticket-purchase", true),
       ]);
 
       async function safeCall(fn, fallback, attempt = 0) {
@@ -3286,7 +3284,6 @@ export default function App() {
         window.storage.set("content-schedule", JSON.stringify(DEFAULT_CONTENT_SCHEDULE), true).catch(() => {});
       }
       setContentSuggestions(rawContentSuggestions ? JSON.parse(rawContentSuggestions) : []);
-      setTicketPurchaseState(rawTicketPurchase ? JSON.parse(rawTicketPurchase) : {});
     }
     loadSharedDataRef.current = loadSharedData;
 
@@ -3431,7 +3428,8 @@ export default function App() {
     const headers = ["שם", "טלפון", "מייל", "רכש כרטיס לאירוע"];
     const rows = [headers.join(",")];
     allMembers.forEach((m) => {
-      const ticket = ticketPurchase[m.name] === "yes" ? "כן" : ticketPurchase[m.name] === "no" ? "לא" : "";
+      const used = allocationInfo[m.name]?.used;
+      const ticket = used === "yes" ? "כן" : used === "no" ? "לא" : "";
       rows.push([m.name, memberPhones[m.name] || "", memberEmails[m.name] || "", ticket].map(csvEscape).join(","));
     });
     return "﻿" + rows.join("\r\n");
@@ -4347,18 +4345,6 @@ export default function App() {
     try {
       await window.storage.set("ride-matches", JSON.stringify(next), true);
       logActivity("ביטול שיוך טרמפ", `${riderName} ← ${driverName}`);
-    } catch {
-      showToast("שמירה נכשלה", "error");
-    }
-  }
-
-  async function setTicketPurchase(name, value) {
-    const latest = await getFreshShared("ticket-purchase", ticketPurchase);
-    const next = { ...latest, [name]: value };
-    setTicketPurchaseState(next);
-    try {
-      await window.storage.set("ticket-purchase", JSON.stringify(next), true);
-      logActivity("עדכון רכישת כרטיס", name);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -7017,12 +7003,6 @@ ${sections}
                         <AllocationWizard data={allocationInfo[identity]} onChange={(d) => setAllocationData(identity, d)} />
                       </div>
 
-                      <div>
-                        <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
-                          <Ticket size={13} /> רכישת כרטיס לאירוע
-                        </div>
-                        <YesNoButtons value={ticketPurchase[identity]} onChange={(v) => setTicketPurchase(identity, v)} />
-                      </div>
                     </div>
                   )}
                 </div>
