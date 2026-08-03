@@ -2843,9 +2843,9 @@ function RouteRow({ name, detail, dotColor, isLast, canContact, contacting, onTo
 }
 
 // A category "stop" on the rides board - colored header badge + a route of member rows.
-function RideCategoryCard({ icon: Icon, title, count, headerColor, emptyText, children }) {
+function RideCategoryCard({ id, icon: Icon, title, count, headerColor, emptyText, children }) {
   return (
-    <div className="rounded-3xl overflow-hidden" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+    <div id={id} className="rounded-3xl overflow-hidden" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
       <div className="flex items-center gap-2 px-4 py-3" style={{ background: headerColor }}>
         <Icon size={16} color="white" />
         <span className="text-sm font-bold" style={{ color: "white" }}>{title}</span>
@@ -3060,6 +3060,13 @@ export default function App() {
   const [tab, setTab] = useState("dashboard-personal");
   const [adminSubTab, setAdminSubTab] = useState("overview");
   const [expandedNavCategory, setExpandedNavCategory] = useState(null);
+  const [pendingScrollTargetId, setPendingScrollTargetId] = useState(null);
+  useEffect(() => {
+    if (!pendingScrollTargetId) return;
+    const el = document.getElementById(pendingScrollTargetId);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    setPendingScrollTargetId(null);
+  }, [tab, pendingScrollTargetId]);
   const [teamFilter, setTeamFilter] = useState("הכל");
   const [shiftsView, setShiftsView] = useState("calendar");
   const [expandedTeam, setExpandedTeam] = useState(null);
@@ -5583,9 +5590,8 @@ ${sections}
           setExpandedNavCategory(null);
         }}
         title={locked ? "יש להשלים קודם את הפרטים האישיים" : undefined}
-        className="btn-nav-3d flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors relative text-center"
+        className={`btn-nav-3d flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors relative text-center ${fullWidth ? "col-span-2" : ""}`}
         style={{
-          flex: fullWidth ? "1 1 100%" : "1 1 calc(50% - 4px)",
           minWidth: 0,
           background: active ? COLORS.accent : COLORS.bg,
           color: active ? COLORS.bg : COLORS.text,
@@ -5837,7 +5843,7 @@ ${sections}
                   backdrop click closes it same as picking an item does. */}
               <div className="fixed inset-0 z-30" onClick={() => setExpandedNavCategory(null)} />
               <div
-                className="absolute right-0 left-0 mt-2 rounded-2xl p-3 flex flex-wrap gap-2 overflow-y-auto z-40"
+                className="absolute right-0 left-0 mt-2 rounded-2xl p-3 grid grid-cols-2 gap-2 overflow-y-auto z-40"
                 style={{ background: COLORS.input, border: `1px solid ${COLORS.divider}`, maxHeight: "60vh", boxShadow: "0 10px 30px rgba(58,34,42,0.28)" }}
               >
                 {expandedNavCategory === "personal"
@@ -5912,8 +5918,8 @@ ${sections}
                 <div className="grid grid-cols-3 gap-3 mb-3">
                   {[
                     { label: "טרם מילאו פרטי הגעה", value: membersWithoutRideInfo, onClick: () => { setAdminSubTab("members"); setShowProfileCompletion(true); } },
-                    { label: "מציעים טרמפ", value: offeringRides.length, onClick: () => setTab("rides") },
-                    { label: "מחפשים טרמפ", value: lookingForRide.length, onClick: () => setTab("rides") },
+                    { label: "מציעים טרמפ", value: offeringRides.length, onClick: () => { setTab("rides"); setPendingScrollTargetId("ride-offering"); } },
+                    { label: "מחפשים טרמפ", value: lookingForRide.length, onClick: () => { setTab("rides"); setPendingScrollTargetId("ride-looking"); } },
                   ].map((c) => (
                     <div
                       key={c.label}
@@ -5931,8 +5937,8 @@ ${sections}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { label: "יש להם מקום לציוד", value: offeringCargoSpace.length, onClick: () => setTab("rides") },
-                    { label: "יכולת גרירה (וו/עגלה)", value: towingCapable.length, onClick: () => setTab("rides") },
+                    { label: "יש להם מקום לציוד", value: offeringCargoSpace.length, onClick: () => { setTab("rides"); setPendingScrollTargetId("ride-cargo"); } },
+                    { label: "יכולת גרירה (וו/עגלה)", value: towingCapable.length, onClick: () => { setTab("rides"); setPendingScrollTargetId("ride-towing"); } },
                   ].map((c) => (
                     <div
                       key={c.label}
@@ -9191,7 +9197,7 @@ ${sections}
             )}
 
             <div className="grid sm:grid-cols-2 gap-4">
-              <RideCategoryCard icon={Car} title="מציעים טרמפ" count={offeringRides.length} headerColor={COLORS.accent2} emptyText="אף אחד עדיין לא הציע טרמפ">
+              <RideCategoryCard id="ride-offering" icon={Car} title="מציעים טרמפ" count={offeringRides.length} headerColor={COLORS.accent2} emptyText="אף אחד עדיין לא הציע טרמפ">
                 {offeringRides.map((m, i) => {
                   const d = rideInfo[m.name];
                   const matchedRiders = rideMatches[m.name] || [];
@@ -9217,7 +9223,7 @@ ${sections}
                 })}
               </RideCategoryCard>
 
-              <RideCategoryCard icon={Users} title="מחפשים טרמפ" count={lookingForRide.length} headerColor={COLORS.accent} emptyText="אף אחד עדיין לא מחפש טרמפ">
+              <RideCategoryCard id="ride-looking" icon={Users} title="מחפשים טרמפ" count={lookingForRide.length} headerColor={COLORS.accent} emptyText="אף אחד עדיין לא מחפש טרמפ">
                 {lookingForRide.map((m, i) => {
                   const d = rideInfo[m.name];
                   const matchedDriver = Object.keys(rideMatches).find((driver) => (rideMatches[driver] || []).includes(m.name));
@@ -9242,7 +9248,7 @@ ${sections}
                 })}
               </RideCategoryCard>
 
-              <RideCategoryCard icon={UserPlus} title="מקום לציוד/קניות" count={offeringCargoSpace.length} headerColor={COLORS.accent2} emptyText="אף אחד עדיין לא סימן מקום פנוי לציוד">
+              <RideCategoryCard id="ride-cargo" icon={UserPlus} title="מקום לציוד/קניות" count={offeringCargoSpace.length} headerColor={COLORS.accent2} emptyText="אף אחד עדיין לא סימן מקום פנוי לציוד">
                 {offeringCargoSpace.map((m, i) => {
                   const d = rideInfo[m.name];
                   const detail = [
@@ -9266,7 +9272,7 @@ ${sections}
                 })}
               </RideCategoryCard>
 
-              <RideCategoryCard icon={Car} title="יכולת גרירה - וו/עגלה" count={towingCapable.length} headerColor={COLORS.accent} emptyText="אף אחד עדיין לא סימן יכולת גרירה">
+              <RideCategoryCard id="ride-towing" icon={Car} title="יכולת גרירה - וו/עגלה" count={towingCapable.length} headerColor={COLORS.accent} emptyText="אף אחד עדיין לא סימן יכולת גרירה">
                 {towingCapable.map((m, i) => {
                   const d = rideInfo[m.name];
                   const bits = [];
