@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown as ChevronDownThin, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart, Utensils, Lightbulb, Camera, ImagePlus, Download, Sparkles, Tag, MoreVertical, Crown } from "lucide-react";
+import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown as ChevronDownThin, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart, Utensils, Lightbulb, Camera, ImagePlus, Download, Tag, MoreVertical, Crown } from "lucide-react";
 // Every ChevronDown in the app should read as bold/clickable, not just the
 // default thin stroke - default it here once instead of at each call site.
 function ChevronDown(props) {
@@ -481,14 +481,6 @@ function daysUntil() {
   return Math.ceil((EVENT_START - new Date()) / (1000 * 60 * 60 * 24));
 }
 
-// ---------------------------------------------------------------------------
-// Colors kept from the old "גלאו גלאו אפטר מי" pool-event feature (removed -
-// see git history for the full ride/food/content board) - the promoted nav
-// button that used to link there now points at the photo gallery instead,
-// but keeps this exact deep-blue/turquoise gradient and pulse.
-// ---------------------------------------------------------------------------
-const POOL_EVENT_COLOR_DEEP = "#0d3b66";
-const POOL_EVENT_COLOR_TEAL = "#22a6c7";
 
 // "committed" = the full cost regardless of payment status, "paid" = what's
 // actually been paid so far (the full amount unless marked partial).
@@ -5246,6 +5238,7 @@ ${sections}
     { id: "board", label: "לוח מודעות", icon: Megaphone },
   ];
   const navCampTabs = [
+    { id: "gallery", label: "מזכרת קטנה מאירוע גדול", icon: Camera },
     { id: "budget", label: "הוצאות", icon: Wallet },
     ...(canManageFinances ? [{ id: "finances", label: "כספים", icon: CreditCard }] : []),
     ...(isAdmin ? [{ id: "allocations", label: "לוח הקצאות", icon: Ticket }] : []),
@@ -5464,41 +5457,6 @@ ${sections}
           not just for a moment right after picking a tab. */}
       <div className="sticky top-0 z-30 pb-2" style={{ background: COLORS.bg, borderBottom: `1px solid ${COLORS.divider}` }}>
       <div className="max-w-4xl mx-auto px-6 pt-4">
-        <style>{`
-          @keyframes poolEventPulse {
-            0%, 100% { box-shadow: 0 0 0 0px ${POOL_EVENT_COLOR_TEAL}55, 0 2px 8px ${POOL_EVENT_COLOR_DEEP}33; }
-            50% { box-shadow: 0 0 0 6px ${POOL_EVENT_COLOR_TEAL}00, 0 4px 16px ${POOL_EVENT_COLOR_DEEP}55; }
-          }
-        `}</style>
-        {/* This used to be the Yom Gibush promo (pool-event) - same
-            gradient/pulse/position kept on purpose, only the content and
-            destination changed to the post-event photo gallery. */}
-        <button
-          onClick={() => setTab("gallery")}
-          className="w-full flex flex-col items-center justify-center gap-0.5 px-4 py-3 rounded-2xl text-sm font-bold transition-colors mb-2 active:scale-[0.98]"
-          style={{
-            background: `linear-gradient(90deg, ${POOL_EVENT_COLOR_DEEP}, ${POOL_EVENT_COLOR_TEAL}, ${POOL_EVENT_COLOR_DEEP})`,
-            color: "white",
-            border: `1px solid ${POOL_EVENT_COLOR_TEAL}`,
-            animation: tab === "gallery" ? "none" : "poolEventPulse 2.2s ease-in-out infinite",
-            boxShadow: tab === "gallery"
-              ? `0 0 0 2px ${POOL_EVENT_COLOR_TEAL}88, 0 4px 14px ${POOL_EVENT_COLOR_DEEP}66`
-              : `0 0 0 3px ${POOL_EVENT_COLOR_TEAL}33, 0 2px 10px ${POOL_EVENT_COLOR_DEEP}40`,
-          }}
-        >
-          <span className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
-            <Camera size={16} />
-            <span style={{ minWidth: 0 }}>מזכרת קטנה מאירוע גדול</span>
-            <Sparkles size={16} />
-          </span>
-          <span
-            className="flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full mt-0.5"
-            style={{ background: "rgba(255,255,255,0.22)", border: "1px solid rgba(255,255,255,0.4)" }}
-          >
-            להעלאת ולצפייה בתמונות מהאירוע <ChevronDown size={12} style={{ transform: "rotate(90deg)" }} />
-          </span>
-        </button>
-
         {roleDashboardTab && (
           <button
             onClick={() => setTab(roleDashboardTab.id)}
