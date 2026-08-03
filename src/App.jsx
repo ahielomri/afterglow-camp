@@ -265,7 +265,7 @@ const CONTENT_TEAM_NAME = "צוות תוכן גיפט";
 
 const TEAMS = [
   { name: "תכנון המחנה", desc: "תכנון פיזי והעמדה של הקמפ: מיקומי המטבח, השירותים, המקלחות, אזור הלינה ומרחב הגיפט/הסלון" },
-  { name: "הקמות", desc: "הגעה לפלאיה יומיים-שלושה לפני פתיחת האירוע. בנייה פיזית של כל תשתיות ומבני המחנה מאפס" },
+  { name: "הקמות", desc: "הגעה לפלאיה יומיים עד ארבעה ימים לפני פתיחת האירוע. בנייה פיזית של כל תשתיות ומבני המחנה מאפס" },
   { name: "פירוקים", desc: "ניהול אופרציית הפירוק ביום האחרון - כולם משתתפים ללא יוצא מן הכלל" },
   { name: "צוות המטבח", desc: "תפריט, כמויות, קנייה מרוכזת וניהול משמרות בישול קבועות ברוטציה של חברי מחנה" },
   { name: "מים", desc: "התקשרות מול ספק מים, מעקב מלאי ותיאום פינוי מים אפורים" },
@@ -336,7 +336,7 @@ const TEAM_CHECKLISTS = {
 
 function buildShifts() {
   const shifts = [];
-  const setupDays = ["2026-10-30", "2026-10-31", "2026-11-01"];
+  const setupDays = ["2026-10-29", "2026-10-30", "2026-10-31", "2026-11-01"];
   setupDays.forEach((d) =>
     shifts.push({ id: `setup-${d}`, phase: "הקמות", title: "הרשמה להקמות", team: "הקמות", date: d, start: "08:00", end: "18:00", spots: 8, noLimit: true, desc: "בנייה פיזית של תשתיות ומבני המחנה - ללא הגבלת מספר נרשמים" })
   );
@@ -537,7 +537,7 @@ const SHOPPING_CATALOG = [
 ];
 
 const TEAM_FILTERS = [...new Set(SHIFTS.map((s) => s.team))];
-const TRAVEL_DAYS = ["2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02", "2026-11-03"];
+const TRAVEL_DAYS = ["2026-10-29", "2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02", "2026-11-03"];
 
 const WEEKDAYS_HE = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
 function formatDate(iso) {
@@ -3064,7 +3064,16 @@ export default function App() {
   useEffect(() => {
     if (!pendingScrollTargetId) return;
     const el = document.getElementById(pendingScrollTargetId);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (el) {
+      // Plain scrollIntoView aligns the target's top edge to the very top
+      // of the viewport - but the nav bar up there is sticky, so the target
+      // just lands hidden underneath it instead of visible below it. Offset
+      // by the sticky bar's actual (not guessed) current height instead.
+      const stickyBar = document.getElementById("sticky-nav-bar");
+      const offset = (stickyBar?.offsetHeight || 0) + 12;
+      const top = el.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top, behavior: "smooth" });
+    }
     setPendingScrollTargetId(null);
   }, [tab, pendingScrollTargetId]);
   const [teamFilter, setTeamFilter] = useState("הכל");
@@ -5784,7 +5793,7 @@ ${sections}
       {/* Primary nav - "מקובץ למעלה" layout - sticky so the current-page
           label below it stays visible even after scrolling into content,
           not just for a moment right after picking a tab. */}
-      <div className="sticky top-0 z-30 pb-2" style={{ background: COLORS.bg, borderBottom: `1px solid ${COLORS.divider}` }}>
+      <div id="sticky-nav-bar" className="sticky top-0 z-30 pb-2" style={{ background: COLORS.bg, borderBottom: `1px solid ${COLORS.divider}` }}>
       <div className="max-w-4xl mx-auto px-6 pt-4">
         {roleDashboardTab && (
           <button
@@ -7015,84 +7024,106 @@ ${sections}
 
             {shiftsView === "calendar" ? (
               <div className="flex gap-2.5 overflow-x-auto pb-3 mb-2">
-                {[...new Set(visibleShifts.map((s) => s.date))].map((date) => {
-                  const [dy, dm, dd] = date.split("-").map(Number);
-                  const dow = WEEKDAYS_HE[new Date(dy, dm - 1, dd).getDay()];
-                  return (
-                  <div key={date} className="shrink-0 w-52 rounded-2xl overflow-hidden" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, boxShadow: "0 3px 10px rgba(58,34,42,0.10)" }}>
-                    <div className="px-3 py-2 flex items-center justify-between" style={{ background: COLORS.accent }}>
-                      <span className="text-xs font-semibold" style={{ color: COLORS.accentLight }}>יום {dow}</span>
-                      <span className="text-base font-black" style={{ fontFamily: FONT_NUM, color: COLORS.bg }}>{dd}.{dm}</span>
-                    </div>
-                    <div className="p-2 space-y-1.5">
-                      {visibleShifts.filter((s) => s.date === date).sort((a, b) => a.start.localeCompare(b.start)).map((s) => {
-                        const isTeardown = s.id === TEARDOWN_ID;
-                        const names = (isTeardown ? allMembers.map((m) => m.name) : (assignments[s.id] || [])).filter((n) => !removedMembers.includes(n));
-                        const spots = isTeardown ? allMembers.length : s.spots;
-                        const joined = isJoined(s.id);
-                        // isAtCapacity is a pure fact about the shift (no room left) -
-                        // shown regardless of whether the viewer is one of the people
-                        // filling it. `full` (which excludes shifts the viewer already
-                        // joined) is only for whether the join button should be disabled.
-                        const isAtCapacity = !s.noLimit && names.length >= spots;
-                        const full = isAtCapacity && !joined;
+                {(() => {
+                  const uniqueDates = [...new Set(visibleShifts.map((s) => s.date))];
+                  // Setup ("הקמות") days only ever hold one open-ended
+                  // signup shift each, so a whole card per day wastes a lot
+                  // of horizontal space - pair consecutive setup-only days
+                  // into a single card instead. Event/teardown days keep
+                  // one card each since they're packed with several shifts.
+                  const isSetupOnlyDate = (d) => visibleShifts.filter((s) => s.date === d).every((s) => s.phase === "הקמות");
+                  const dateGroups = [];
+                  uniqueDates.forEach((d) => {
+                    const prevGroup = dateGroups[dateGroups.length - 1];
+                    if (isSetupOnlyDate(d) && prevGroup && prevGroup.length === 1 && isSetupOnlyDate(prevGroup[0])) {
+                      prevGroup.push(d);
+                    } else {
+                      dateGroups.push([d]);
+                    }
+                  });
+                  return dateGroups.map((group) => (
+                    <div key={group.join("_")} className="shrink-0 w-52 rounded-2xl overflow-hidden" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, boxShadow: "0 3px 10px rgba(58,34,42,0.10)" }}>
+                      {group.map((date, groupIndex) => {
+                        const [dy, dm, dd] = date.split("-").map(Number);
+                        const dow = WEEKDAYS_HE[new Date(dy, dm - 1, dd).getDay()];
                         return (
-                          <div key={s.id} className="rounded-xl p-2" style={{ background: isAtCapacity ? COLORS.fullBg : COLORS.input, borderRight: `3px solid ${joined ? COLORS.accent2 : isAtCapacity ? COLORS.textMuted : COLORS.accent}` }}>
-                            {!isTeardown && !s.noTime && (
-                              <div className="text-[10px] flex items-center gap-1" style={{ color: isAtCapacity ? COLORS.textMuted : COLORS.accentDark, fontFamily: FONT_NUM }}>
-                                <Clock size={9} /> {s.start}–{s.end}
-                              </div>
-                            )}
-                            <div className="text-xs font-bold mt-0.5">{s.title}</div>
-                            {isTeardown ? (
-                              <TeardownTaskPicker selected={teardownTasks[identity] || []} onToggle={toggleTeardownTask} compact />
-                            ) : (
-                              <div className="flex items-center justify-between mt-1.5">
-                                <div className="flex items-center gap-1">
-                                  {s.noLimit ? (
-                                    <div className="shrink-0 flex items-center justify-center rounded-full text-[9px] font-bold" style={{ width: 17, height: 17, background: COLORS.accentLight, color: COLORS.accentDark }}>∞</div>
-                                  ) : (
-                                    <FillRing filled={names.length} total={spots} size={17} />
-                                  )}
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: COLORS.accentLight, color: COLORS.accentDark, fontFamily: FONT_NUM }}>{s.noLimit ? "ללא הגבלה" : `${names.length}/${spots}`}</span>
-                                </div>
-                                <button
-                                  onClick={() => (joined ? leave(s) : join(s))}
-                                  disabled={full}
-                                  className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
-                                  style={{
-                                    background: joined ? "transparent" : full ? COLORS.divider : COLORS.accent,
-                                    border: joined ? `1px solid ${COLORS.accent}` : "none",
-                                    color: joined ? COLORS.accentDark : COLORS.bg,
-                                    opacity: full ? 0.6 : 1,
-                                  }}
-                                >
-                                  {joined ? "בטל" : full ? "מלא" : "הצטרף"}
-                                </button>
-                              </div>
-                            )}
-                            {!isTeardown && names.length > 0 && (
-                              <div className="mt-1.5 pt-1.5 border-t flex flex-wrap gap-1" style={{ borderColor: COLORS.divider }}>
-                                {names.map((n) => (
-                                  <span key={n} className="text-[9px] pl-1 pr-1.5 py-0.5 rounded-full flex items-center gap-0.5" style={{ background: COLORS.surface2 }}>
-                                    {n}
-                                    {isAdmin && <button onClick={() => leave(s, n)} style={{ color: COLORS.textMuted }}><X size={8} /></button>}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                            {isAdmin && !isTeardown && (
-                              <div className="mt-1.5">
-                                <AdminAssignPicker members={allMembers} onAssign={(name) => join(s, name)} />
-                              </div>
-                            )}
+                        <div key={date} style={groupIndex > 0 ? { borderTop: `1px solid ${COLORS.divider}` } : undefined}>
+                          <div className="px-3 py-2 flex items-center justify-between" style={{ background: COLORS.accent }}>
+                            <span className="text-xs font-semibold" style={{ color: COLORS.accentLight }}>יום {dow}</span>
+                            <span className="text-base font-black" style={{ fontFamily: FONT_NUM, color: COLORS.bg }}>{dd}.{dm}</span>
                           </div>
+                          <div className="p-2 space-y-1.5">
+                            {visibleShifts.filter((s) => s.date === date).sort((a, b) => a.start.localeCompare(b.start)).map((s) => {
+                              const isTeardown = s.id === TEARDOWN_ID;
+                              const names = (isTeardown ? allMembers.map((m) => m.name) : (assignments[s.id] || [])).filter((n) => !removedMembers.includes(n));
+                              const spots = isTeardown ? allMembers.length : s.spots;
+                              const joined = isJoined(s.id);
+                              // isAtCapacity is a pure fact about the shift (no room left) -
+                              // shown regardless of whether the viewer is one of the people
+                              // filling it. `full` (which excludes shifts the viewer already
+                              // joined) is only for whether the join button should be disabled.
+                              const isAtCapacity = !s.noLimit && names.length >= spots;
+                              const full = isAtCapacity && !joined;
+                              return (
+                                <div key={s.id} className="rounded-xl p-2" style={{ background: isAtCapacity ? COLORS.fullBg : COLORS.input, borderRight: `3px solid ${joined ? COLORS.accent2 : isAtCapacity ? COLORS.textMuted : COLORS.accent}` }}>
+                                  {!isTeardown && !s.noTime && (
+                                    <div className="text-[10px] flex items-center gap-1" style={{ color: isAtCapacity ? COLORS.textMuted : COLORS.accentDark, fontFamily: FONT_NUM }}>
+                                      <Clock size={9} /> {s.start}–{s.end}
+                                    </div>
+                                  )}
+                                  <div className="text-xs font-bold mt-0.5">{s.title}</div>
+                                  {isTeardown ? (
+                                    <TeardownTaskPicker selected={teardownTasks[identity] || []} onToggle={toggleTeardownTask} compact />
+                                  ) : (
+                                    <div className="flex items-center justify-between mt-1.5">
+                                      <div className="flex items-center gap-1">
+                                        {s.noLimit ? (
+                                          <div className="shrink-0 flex items-center justify-center rounded-full text-[9px] font-bold" style={{ width: 17, height: 17, background: COLORS.accentLight, color: COLORS.accentDark }}>∞</div>
+                                        ) : (
+                                          <FillRing filled={names.length} total={spots} size={17} />
+                                        )}
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: COLORS.accentLight, color: COLORS.accentDark, fontFamily: FONT_NUM }}>{s.noLimit ? "ללא הגבלה" : `${names.length}/${spots}`}</span>
+                                      </div>
+                                      <button
+                                        onClick={() => (joined ? leave(s) : join(s))}
+                                        disabled={full}
+                                        className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
+                                        style={{
+                                          background: joined ? "transparent" : full ? COLORS.divider : COLORS.accent,
+                                          border: joined ? `1px solid ${COLORS.accent}` : "none",
+                                          color: joined ? COLORS.accentDark : COLORS.bg,
+                                          opacity: full ? 0.6 : 1,
+                                        }}
+                                      >
+                                        {joined ? "בטל" : full ? "מלא" : "הצטרף"}
+                                      </button>
+                                    </div>
+                                  )}
+                                  {!isTeardown && names.length > 0 && (
+                                    <div className="mt-1.5 pt-1.5 border-t flex flex-wrap gap-1" style={{ borderColor: COLORS.divider }}>
+                                      {names.map((n) => (
+                                        <span key={n} className="text-[9px] pl-1 pr-1.5 py-0.5 rounded-full flex items-center gap-0.5" style={{ background: COLORS.surface2 }}>
+                                          {n}
+                                          {isAdmin && <button onClick={() => leave(s, n)} style={{ color: COLORS.textMuted }}><X size={8} /></button>}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {isAdmin && !isTeardown && (
+                                    <div className="mt-1.5">
+                                      <AdminAssignPicker members={allMembers} onAssign={(name) => join(s, name)} />
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                         );
                       })}
                     </div>
-                  </div>
-                  );
-                })}
+                  ));
+                })()}
               </div>
             ) : (
             <div className="space-y-2 mb-8">
