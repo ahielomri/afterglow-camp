@@ -189,6 +189,80 @@ function normalizeTeamLeads(raw) {
   return next;
 }
 
+// Seed data for the "תוכן" (content) tab's evening-program table, taken
+// from the schedule handed over when the tab was first built. Editable
+// afterwards by "צוות תוכן גיפט" (leads + members) and admins. Each occupied
+// slot is a structured item (title/facilitator/description), not bare text,
+// so it can render as a button that expands into its own detail view - an
+// empty slot is simply `null`.
+function contentItem(title, description, facilitator = "") {
+  return { title, facilitator, description };
+}
+const DEFAULT_CONTENT_SCHEDULE = {
+  columns: [
+    "יום 1 – סיפורי המדבר",
+    "יום 2 – מסע הצלילים",
+    "יום 3 – שערי המדבר",
+    "יום 4 – ערב רוגע וחיבור",
+  ],
+  rows: [
+    {
+      id: "r1",
+      label: "16:45–17:00",
+      cells: [
+        contentItem("טקס קבלת פנים בדואי", ""),
+        contentItem("טקס קבלת פנים בדואי", ""),
+        contentItem("טקס קבלת פנים בדואי", ""),
+        contentItem("טקס קבלת פנים בדואי", ""),
+      ],
+    },
+    {
+      id: "r2",
+      label: "17:00–17:10",
+      cells: [
+        contentItem("התיישבות במעגל ופתיחת המארח", ""),
+        contentItem("התיישבות במעגל", ""),
+        contentItem("פתיחת מספר מעגלים", "פעילות בקבוצות קטנות"),
+        contentItem("פתיחת המעגל בנשימות קצרות", ""),
+      ],
+    },
+    {
+      id: "r3",
+      label: "17:00–18:30",
+      cells: [
+        contentItem(
+          "מספר סיפורים",
+          "סיפורי מדבר, נוודים ואגדות בסגנון אלף לילה ולילה - הסגנון הוא סגנון אימפרוביזציה ווידוי - סיפורים שמספרים לתוך הלילה לרוח"
+        ),
+        contentItem("סאונד הילינג ומסע צלילים", "ניקוי אנרגטי, מסע צלילים עם קערות וכלים אתניים, מדיטציה מונחית"),
+        contentItem("מגלי עתידות", "פתיחה בקלפים / טארוט, ניקוי אנרגטי, שיחות פתוחות וחיבורים"),
+        contentItem("להשאיר חלק ממך", "כותבים כוונה ומשאירים אותה במדורה"),
+      ],
+    },
+    {
+      id: "r4",
+      label: "18:30–18:45",
+      cells: [
+        contentItem("מעגל סיום קצר", "והזמנה להישאר במרחב"),
+        contentItem("סגירת המסע בשקט", ""),
+        contentItem("תפילה קצרה לזימונים", ""),
+        contentItem("טקס הודיה וסיום", ""),
+      ],
+    },
+    {
+      id: "r5",
+      label: "ארוח",
+      cells: [
+        contentItem("כיבוד", "קפה שחור, תה עם נענע, מרווה, מוזיקה מדברית, התכנסות באוהל"),
+        contentItem("כיבוד", "תה היביסקוס מתוק וקר"),
+        contentItem("כיבוד", "תה היביסקוס מתוק וקר"),
+        contentItem("כיבוד", "קפה שחור, תה עם נענע, מרווה, מוזיקה מדברית, התכנסות באוהל"),
+      ],
+    },
+  ],
+};
+const CONTENT_TEAM_NAME = "צוות תוכן גיפט";
+
 const TEAMS = [
   { name: "תכנון המחנה", desc: "תכנון פיזי והעמדה של הקמפ: מיקומי המטבח, השירותים, המקלחות, אזור הלינה ומרחב הגיפט/הסלון" },
   { name: "הקמות", desc: "הגעה לפלאיה יומיים-שלושה לפני פתיחת האירוע. בנייה פיזית של כל תשתיות ומבני המחנה מאפס" },
@@ -1542,6 +1616,129 @@ function TeardownTaskPicker({ selected, onToggle, compact }) {
   );
 }
 
+function ContentSuggestionForm({ onAdd }) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  return (
+    <div className="space-y-2">
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="שם התוכן המוצע"
+        className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      />
+      <textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="פירוט - במה מדובר, איך זה עובד..."
+        rows={2}
+        className="w-full px-3 py-2 rounded-xl text-sm outline-none resize-y"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      />
+      <button
+        onClick={() => { if (!title.trim()) return; onAdd(title, description); setTitle(""); setDescription(""); }}
+        className="px-3 py-1.5 rounded-full text-xs font-semibold"
+        style={{ background: COLORS.accent, color: COLORS.bg }}
+      >
+        <Plus size={13} className="inline -mt-0.5" /> שליחת הצעה
+      </button>
+    </div>
+  );
+}
+
+function ContentSuggestionAssignPicker({ schedule, onAssign }) {
+  const [rowId, setRowId] = useState(schedule.rows[0]?.id || "");
+  const [colIndex, setColIndex] = useState(0);
+  return (
+    <div className="mt-2 pt-2 border-t flex items-center gap-1.5 flex-wrap" style={{ borderColor: COLORS.divider }}>
+      <select
+        value={rowId}
+        onChange={(e) => setRowId(e.target.value)}
+        className="px-2 py-1 rounded-lg text-xs outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      >
+        {schedule.rows.map((r) => (
+          <option key={r.id} value={r.id}>{r.label || "(ללא שם)"}</option>
+        ))}
+      </select>
+      <select
+        value={colIndex}
+        onChange={(e) => setColIndex(Number(e.target.value))}
+        className="px-2 py-1 rounded-lg text-xs outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      >
+        {schedule.columns.map((c, i) => (
+          <option key={i} value={i}>{c}</option>
+        ))}
+      </select>
+      <button
+        onClick={() => onAssign(rowId, colIndex)}
+        className="px-3 py-1 rounded-full text-xs font-semibold"
+        style={{ background: COLORS.accent, color: COLORS.bg }}
+      >
+        אישור שיבוץ
+      </button>
+    </div>
+  );
+}
+
+function ContentCellEditor({ cell, canEdit, onSave, onClear }) {
+  const [title, setTitle] = useState(cell?.title || "");
+  const [facilitator, setFacilitator] = useState(cell?.facilitator || "");
+  const [description, setDescription] = useState(cell?.description || "");
+  if (!canEdit) {
+    if (!cell) return <p className="text-sm" style={{ color: COLORS.textMuted }}>אין עדיין תוכן במשבצת הזו.</p>;
+    return (
+      <div className="space-y-2 text-sm">
+        <div className="font-bold" style={{ color: COLORS.accentDark }}>{cell.title}</div>
+        {cell.facilitator && <div style={{ color: COLORS.textMuted }}>מי מעביר/ה: {cell.facilitator}</div>}
+        {cell.description && <div style={{ color: COLORS.textMuted, whiteSpace: "pre-line" }}>{cell.description}</div>}
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="שם התוכן"
+        className="w-full px-3 py-2 rounded-xl text-sm font-bold outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      />
+      <input
+        value={facilitator}
+        onChange={(e) => setFacilitator(e.target.value)}
+        placeholder="מי מעביר/ה את התוכן"
+        className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      />
+      <textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="מהות התוכן / פירוט"
+        rows={4}
+        className="w-full px-3 py-2 rounded-xl text-sm outline-none resize-y"
+        style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+      />
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => { if (!title.trim()) return; onSave({ title: title.trim(), facilitator: facilitator.trim(), description: description.trim() }); }}
+          className="px-3 py-1.5 rounded-full text-xs font-semibold"
+          style={{ background: COLORS.accent, color: COLORS.bg }}
+        >
+          שמירה
+        </button>
+        {cell && (
+          <button onClick={onClear} className="px-3 py-1.5 rounded-full text-xs" style={{ color: COLORS.danger }}>
+            הסרת תוכן מהמשבצת
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AddPaymentForm({ onAdd }) {
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState("");
@@ -2777,6 +2974,10 @@ export default function App() {
   const [personalCalendarAdds, setPersonalCalendarAddsState] = useState({});
   const [checklistState, setChecklistState] = useState({});
   const [manualTeamMembers, setManualTeamMembers] = useState({});
+  const [contentSchedule, setContentSchedule] = useState(DEFAULT_CONTENT_SCHEDULE);
+  const [contentSuggestions, setContentSuggestions] = useState([]);
+  const [openContentCell, setOpenContentCell] = useState(null);
+  const [assigningSuggestionId, setAssigningSuggestionId] = useState(null);
   const [extraTeams, setExtraTeams] = useState([]);
   const [customChecklists, setCustomChecklists] = useState({});
   const [budgetParams, setBudgetParams] = useState({
@@ -2937,7 +3138,7 @@ export default function App() {
         rawLeads, rawPhones, rawRides, rawFeeOv, rawEmails, rawWhatsappConsent, rawPersonalCalendarAdds, rawChecklists,
         rawManualTeam, rawLogins, rawExtra, rawRemoved,
         rawAnn, rawPolls, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories, rawRideMatches,
-        rawShoppingList, rawShoppingRequests, rawExtraTeams, rawCustomChecklists,
+        rawShoppingList, rawShoppingRequests, rawExtraTeams, rawCustomChecklists, rawContentSchedule, rawContentSuggestions,
       ] = await Promise.all([
         safeGet("shift-assignments", true),
         safeGet("budget-items", true),
@@ -2968,6 +3169,8 @@ export default function App() {
         safeGet("kitchen-shopping-requests", true),
         safeGet("extra-teams", true),
         safeGet("team-checklist-items", true),
+        safeGet("content-schedule", true),
+        safeGet("content-suggestions", true),
       ]);
 
       async function safeCall(fn, fallback, attempt = 0) {
@@ -3058,6 +3261,13 @@ export default function App() {
       setShoppingRequests(rawShoppingRequests ? JSON.parse(rawShoppingRequests) : []);
       setExtraTeams(rawExtraTeams ? JSON.parse(rawExtraTeams) : []);
       setCustomChecklists(rawCustomChecklists ? JSON.parse(rawCustomChecklists) : {});
+      if (rawContentSchedule) {
+        setContentSchedule(JSON.parse(rawContentSchedule));
+      } else {
+        setContentSchedule(DEFAULT_CONTENT_SCHEDULE);
+        window.storage.set("content-schedule", JSON.stringify(DEFAULT_CONTENT_SCHEDULE), true).catch(() => {});
+      }
+      setContentSuggestions(rawContentSuggestions ? JSON.parse(rawContentSuggestions) : []);
     }
     loadSharedDataRef.current = loadSharedData;
 
@@ -4861,6 +5071,92 @@ ${sections}
     return (teamLeads[teamName] || []).includes(identity) || teamMembers(teamName).includes(identity);
   }
 
+  async function saveContentSchedule(next) {
+    setContentSchedule(next);
+    try {
+      await window.storage.set("content-schedule", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+  async function updateContentCell(rowId, colIndex, value) {
+    const latest = await getFreshShared("content-schedule", contentSchedule);
+    const next = { ...latest, rows: latest.rows.map((r) => (r.id === rowId ? { ...r, cells: r.cells.map((c, i) => (i === colIndex ? value : c)) } : r)) };
+    await saveContentSchedule(next);
+  }
+  async function updateContentRowLabel(rowId, label) {
+    const latest = await getFreshShared("content-schedule", contentSchedule);
+    const next = { ...latest, rows: latest.rows.map((r) => (r.id === rowId ? { ...r, label } : r)) };
+    await saveContentSchedule(next);
+  }
+  async function updateContentColumnHeader(colIndex, value) {
+    const latest = await getFreshShared("content-schedule", contentSchedule);
+    const next = { ...latest, columns: latest.columns.map((c, i) => (i === colIndex ? value : c)) };
+    await saveContentSchedule(next);
+  }
+  async function addContentRow() {
+    const latest = await getFreshShared("content-schedule", contentSchedule);
+    const next = { ...latest, rows: [...latest.rows, { id: Date.now().toString(), label: "", cells: latest.columns.map(() => null) }] };
+    await saveContentSchedule(next);
+  }
+  async function removeContentRow(rowId) {
+    const latest = await getFreshShared("content-schedule", contentSchedule);
+    const next = { ...latest, rows: latest.rows.filter((r) => r.id !== rowId) };
+    await saveContentSchedule(next);
+  }
+  async function addContentColumn() {
+    const latest = await getFreshShared("content-schedule", contentSchedule);
+    const next = { columns: [...latest.columns, `יום ${latest.columns.length + 1}`], rows: latest.rows.map((r) => ({ ...r, cells: [...r.cells, null] })) };
+    await saveContentSchedule(next);
+  }
+  async function removeContentColumn(colIndex) {
+    const latest = await getFreshShared("content-schedule", contentSchedule);
+    const next = { columns: latest.columns.filter((_, i) => i !== colIndex), rows: latest.rows.map((r) => ({ ...r, cells: r.cells.filter((_, i) => i !== colIndex) })) };
+    await saveContentSchedule(next);
+  }
+
+  async function saveContentSuggestions(next) {
+    setContentSuggestions(next);
+    try {
+      await window.storage.set("content-suggestions", JSON.stringify(next), true);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+  async function submitContentSuggestion(title, description) {
+    if (!title.trim()) return;
+    const latest = await getFreshShared("content-suggestions", contentSuggestions);
+    const next = [...latest, { id: Date.now().toString(), title: title.trim(), description: description.trim(), suggestedBy: identity, createdAt: Date.now(), status: "pending" }];
+    await saveContentSuggestions(next);
+    showToast("ההצעה נשלחה לצוות תוכן - תודה!", "ok");
+    logActivity("הצעת תוכן חדשה", title.trim());
+  }
+  async function rejectContentSuggestion(id) {
+    const latest = await getFreshShared("content-suggestions", contentSuggestions);
+    const next = latest.map((s) => (s.id === id ? { ...s, status: "rejected" } : s));
+    await saveContentSuggestions(next);
+    logActivity("דחיית הצעת תוכן", id);
+  }
+  // Places a suggestion straight into a table slot (overwriting whatever was
+  // there) and marks it placed - the suggester's name becomes the default
+  // facilitator since they're who proposed running it, easy to edit after.
+  async function assignSuggestionToCell(suggestion, rowId, colIndex) {
+    const latestSchedule = await getFreshShared("content-schedule", contentSchedule);
+    const nextSchedule = {
+      ...latestSchedule,
+      rows: latestSchedule.rows.map((r) =>
+        r.id === rowId
+          ? { ...r, cells: r.cells.map((c, i) => (i === colIndex ? contentItem(suggestion.title, suggestion.description, suggestion.suggestedBy) : c)) }
+          : r
+      ),
+    };
+    await saveContentSchedule(nextSchedule);
+    const latestSuggestions = await getFreshShared("content-suggestions", contentSuggestions);
+    const nextSuggestions = latestSuggestions.map((s) => (s.id === suggestion.id ? { ...s, status: "placed" } : s));
+    await saveContentSuggestions(nextSuggestions);
+    logActivity("שיבוץ הצעת תוכן בטבלה", suggestion.title);
+  }
+
   function teamStats(team) {
     const teamShifts = SHIFTS.filter((s) => s.team === team && s.id !== TEARDOWN_ID);
     const unfilled = teamShifts.reduce((sum, s) => (s.noLimit ? sum : sum + Math.max(s.spots - (assignments[s.id] || []).length, 0)), 0);
@@ -4944,6 +5240,13 @@ ${sections}
   const myLeadTeam = !isAdmin ? Object.keys(teamLeads).find((t) => (teamLeads[t] || []).includes(identity)) : null;
   const canEditBudget = isAdmin || !!myLeadTeam;
   const canManageFinances = isAdmin || isInTeam("צוות תקציב");
+  const canEditContent = isAdmin || isInTeam(CONTENT_TEAM_NAME);
+  const canManageContentSuggestions = isAdmin || (teamLeads[CONTENT_TEAM_NAME] || []).includes(identity);
+  const pendingContentSuggestions = contentSuggestions.filter((s) => s.status === "pending");
+  // Pending suggestions are only actionable by admins/content-team leads -
+  // a regular member who submitted one can still see its own status, but
+  // shouldn't see (or act on) anyone else's queue.
+  const visiblePendingSuggestions = pendingContentSuggestions.filter((s) => canManageContentSuggestions || s.suggestedBy === identity);
 
   // Everyone must fill these in before using the rest of the app - see the
   // gating effect further down. "Filled" means "answered", not "answered
@@ -5258,6 +5561,7 @@ ${sections}
   ];
   const navCampTabs = [
     { id: "gallery", label: "מזכרת קטנה מאירוע גדול", icon: Camera },
+    { id: "content", label: "תוכן", icon: Flame },
     { id: "budget", label: "הוצאות", icon: Wallet },
     ...(canManageFinances ? [{ id: "finances", label: "כספים", icon: CreditCard }] : []),
     ...(isAdmin ? [{ id: "allocations", label: "לוח הקצאות", icon: Ticket }] : []),
@@ -5608,13 +5912,19 @@ ${sections}
                   ))}
                 </div>
 
-                {(paymentTotals.remaining > 0 || unfilledShiftsCount > 0 || membersWithoutShift > 0 || overBudgetCategories.length > 0 || nearBudgetCategories.length > 0 || lookingForRide.length > 0) && (
+                {(paymentTotals.remaining > 0 || unfilledShiftsCount > 0 || membersWithoutShift > 0 || overBudgetCategories.length > 0 || nearBudgetCategories.length > 0 || lookingForRide.length > 0 || pendingContentSuggestions.length > 0) && (
                   <div className="mt-4 rounded-2xl p-4 space-y-2" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
                     <div className="text-xs font-bold mb-1" style={{ color: COLORS.accentDark }}>התרעות חשובות</div>
                     {paymentTotals.remaining > 0 && <div className="text-xs">💰 עוד ₪{paymentTotals.remaining.toLocaleString()} לגבייה מחברי הקמפ</div>}
                     {unfilledShiftsCount > 0 && <div className="text-xs">📋 עוד {unfilledShiftsCount} מקומות פנויים במשמרות</div>}
                     {membersWithoutShift > 0 && <div className="text-xs">🙋 {membersWithoutShift} חברים עדיין לא שיבצו אף משמרת</div>}
                     {lookingForRide.length > 0 && <div className="text-xs">🚗 {lookingForRide.length} חברים מחפשים טרמפ ועדיין לא שובצו</div>}
+                    {pendingContentSuggestions.length > 0 && (
+                      <div className="text-xs">
+                        🎤 {pendingContentSuggestions.length} הצעות תוכן ממתינות לשיבוץ -{" "}
+                        <button onClick={() => setTab("content")} className="underline font-bold">מעבר ללוח תוכן</button>
+                      </div>
+                    )}
                     {overBudgetCategories.map((cat) => (
                       <div key={cat} className="text-xs">⚠️ הקטגוריה "{cat}" חרגה מהתקציב המתוכנן</div>
                     ))}
@@ -6209,10 +6519,16 @@ ${sections}
               })()}
             </div>
 
-            {(overBudgetCategories.includes(myLeadTeam) || nearBudgetCategories.includes(myLeadTeam)) && (
+            {(overBudgetCategories.includes(myLeadTeam) || nearBudgetCategories.includes(myLeadTeam) || (myLeadTeam === CONTENT_TEAM_NAME && pendingContentSuggestions.length > 0)) && (
               <div className="mt-3 rounded-2xl p-3" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
                 {overBudgetCategories.includes(myLeadTeam) && <div className="text-xs">⚠️ תקציב הצוות חרג מהתכנון</div>}
                 {nearBudgetCategories.includes(myLeadTeam) && <div className="text-xs">🟡 תקציב הצוות מתקרב לתכנון (מעל 85%)</div>}
+                {myLeadTeam === CONTENT_TEAM_NAME && pendingContentSuggestions.length > 0 && (
+                  <div className="text-xs">
+                    🎤 {pendingContentSuggestions.length} הצעות תוכן ממתינות לשיבוץ -{" "}
+                    <button onClick={() => setTab("content")} className="underline font-bold">מעבר ללוח תוכן</button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -7265,6 +7581,198 @@ ${sections}
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {tab === "content" && (
+          <div>
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <h2 className="text-sm font-bold" style={{ color: COLORS.accentDark }}>לוח תוכן</h2>
+              {canEditContent && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={addContentRow}
+                    className="text-xs px-3 py-1.5 rounded-full font-semibold flex items-center gap-1"
+                    style={{ background: COLORS.accent, color: COLORS.bg }}
+                  >
+                    <Plus size={12} /> הוספת שורה
+                  </button>
+                  <button
+                    onClick={addContentColumn}
+                    className="text-xs px-3 py-1.5 rounded-full font-semibold flex items-center gap-1"
+                    style={{ background: COLORS.accent2, color: COLORS.bg }}
+                  >
+                    <Plus size={12} /> הוספת יום
+                  </button>
+                </div>
+              )}
+            </div>
+            {!canEditContent && (
+              <p className="text-xs mb-3" style={{ color: COLORS.textMuted }}>
+                לוח זה מנוהל על ידי צוות תוכן גיפט - רק חברי הצוות ומובילי הצוות יכולים לערוך אותו.
+              </p>
+            )}
+            <div className="overflow-x-auto rounded-2xl" style={{ border: `1px solid ${COLORS.divider}` }}>
+              <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: COLORS.surface }}>
+                    <th className="p-2 text-right" style={{ borderBottom: `1px solid ${COLORS.divider}`, minWidth: 90 }}>שעה</th>
+                    {contentSchedule.columns.map((col, ci) => (
+                      <th key={ci} className="p-2 text-right align-top" style={{ borderBottom: `1px solid ${COLORS.divider}`, minWidth: 160 }}>
+                        <div className="flex items-start justify-between gap-1">
+                          {canEditContent ? (
+                            <textarea
+                              defaultValue={col}
+                              onBlur={(e) => { if (e.target.value !== col) updateContentColumnHeader(ci, e.target.value); }}
+                              className="w-full px-1.5 py-1 rounded-lg text-xs font-bold outline-none resize-none"
+                              rows={2}
+                              style={{ background: COLORS.input, color: COLORS.accentDark, border: `1px solid ${COLORS.divider}` }}
+                            />
+                          ) : (
+                            <span className="font-bold" style={{ color: COLORS.accentDark }}>{col}</span>
+                          )}
+                          {canEditContent && contentSchedule.columns.length > 1 && (
+                            <button onClick={() => { if (window.confirm(`להסיר את העמודה "${col}"?`)) removeContentColumn(ci); }} style={{ color: COLORS.textMuted }}>
+                              <X size={12} />
+                            </button>
+                          )}
+                        </div>
+                      </th>
+                    ))}
+                    {canEditContent && <th style={{ borderBottom: `1px solid ${COLORS.divider}` }} />}
+                  </tr>
+                </thead>
+                <tbody>
+                  {contentSchedule.rows.map((row) => (
+                    <tr key={row.id} style={{ borderBottom: `1px solid ${COLORS.divider}` }}>
+                      <td className="p-2 align-top font-bold" style={{ color: COLORS.text }}>
+                        {canEditContent ? (
+                          <input
+                            defaultValue={row.label}
+                            onBlur={(e) => { if (e.target.value !== row.label) updateContentRowLabel(row.id, e.target.value); }}
+                            className="w-full px-1.5 py-1 rounded-lg text-xs font-bold outline-none"
+                            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                          />
+                        ) : (
+                          row.label
+                        )}
+                      </td>
+                      {row.cells.map((cell, ci) => (
+                        <td key={ci} className="p-1.5 align-top">
+                          <button
+                            onClick={() => setOpenContentCell({ rowId: row.id, colIndex: ci })}
+                            className="w-full text-right px-2 py-2 rounded-lg text-xs active:scale-[0.97] transition-transform"
+                            style={{
+                              background: cell ? COLORS.accentLight : COLORS.input,
+                              color: cell ? COLORS.accentDark : COLORS.textMuted,
+                              border: `1px dashed ${cell ? "transparent" : COLORS.divider}`,
+                              fontWeight: cell ? 700 : 500,
+                              boxShadow: "0 1px 3px rgba(58,34,42,0.18), 0 1px 1px rgba(58,34,42,0.1)",
+                            }}
+                          >
+                            {cell ? cell.title : canEditContent ? "+ הוספת תוכן" : "—"}
+                          </button>
+                        </td>
+                      ))}
+                      {canEditContent && (
+                        <td className="p-2 align-top">
+                          <button onClick={() => { if (window.confirm("להסיר את השורה הזו?")) removeContentRow(row.id); }} style={{ color: COLORS.danger }}>
+                            <Trash2 size={13} />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-5 pt-4 border-t" style={{ borderColor: COLORS.divider }}>
+              <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.accentDark }}>הצעות תוכן</h3>
+              <p className="text-xs mb-3" style={{ color: COLORS.textMuted }}>
+                יש לך רעיון לתוכן בגיפט? שלח/י הצעה - צוות תוכן גיפט יבחן ויעדכן.
+              </p>
+              <ContentSuggestionForm onAdd={submitContentSuggestion} />
+            </div>
+
+            {visiblePendingSuggestions.length > 0 && (
+              <div className="mt-5 pt-4 border-t" style={{ borderColor: COLORS.divider }}>
+                <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.accentDark }}>
+                  {canManageContentSuggestions ? `הצעות ממתינות (${visiblePendingSuggestions.length})` : "ההצעות שלי - ממתינות לבדיקה"}
+                </h3>
+                <div className="space-y-2">
+                  {visiblePendingSuggestions.map((s) => (
+                    <div key={s.id} className="rounded-xl p-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                      <div className="text-sm font-bold" style={{ color: COLORS.text }}>{s.title}</div>
+                      {s.description && (
+                        <div className="text-xs mt-1" style={{ color: COLORS.textMuted, whiteSpace: "pre-line" }}>{s.description}</div>
+                      )}
+                      <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{"הוצע ע\"י "}{s.suggestedBy}</div>
+                      {canManageContentSuggestions && (
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          <button
+                            onClick={() => setAssigningSuggestionId(assigningSuggestionId === s.id ? null : s.id)}
+                            className="text-xs px-3 py-1.5 rounded-full font-semibold"
+                            style={{ background: COLORS.accent, color: COLORS.bg }}
+                          >
+                            שיבוץ בטבלה
+                          </button>
+                          <button
+                            onClick={() => { if (window.confirm(`לדחות את ההצעה "${s.title}"?`)) rejectContentSuggestion(s.id); }}
+                            className="text-xs px-3 py-1.5 rounded-full"
+                            style={{ color: COLORS.danger }}
+                          >
+                            דחייה
+                          </button>
+                        </div>
+                      )}
+                      {canManageContentSuggestions && assigningSuggestionId === s.id && (
+                        <ContentSuggestionAssignPicker
+                          schedule={contentSchedule}
+                          onAssign={(rowId, colIndex) => { assignSuggestionToCell(s, rowId, colIndex); setAssigningSuggestionId(null); }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {openContentCell && (() => {
+              const row = contentSchedule.rows.find((r) => r.id === openContentCell.rowId);
+              if (!row) return null;
+              const cell = row.cells[openContentCell.colIndex];
+              const colLabel = contentSchedule.columns[openContentCell.colIndex];
+              return (
+                <div
+                  className="fixed inset-0 z-50 flex items-center justify-center p-6"
+                  style={{ background: "rgba(20,15,10,0.6)" }}
+                  onClick={() => setOpenContentCell(null)}
+                >
+                  <div
+                    className="w-full max-w-sm rounded-3xl overflow-hidden"
+                    style={{ background: COLORS.bg, border: `1px solid ${COLORS.divider}` }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="text-xs font-bold" style={{ color: COLORS.textMuted }}>{row.label} · {colLabel}</div>
+                        <button onClick={() => setOpenContentCell(null)} style={{ color: COLORS.textMuted }}>
+                          <X size={18} />
+                        </button>
+                      </div>
+                      <ContentCellEditor
+                        key={`${openContentCell.rowId}-${openContentCell.colIndex}`}
+                        cell={cell}
+                        canEdit={canEditContent}
+                        onSave={(item) => { updateContentCell(openContentCell.rowId, openContentCell.colIndex, item); setOpenContentCell(null); }}
+                        onClear={() => { updateContentCell(openContentCell.rowId, openContentCell.colIndex, null); setOpenContentCell(null); }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
