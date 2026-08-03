@@ -5794,46 +5794,59 @@ ${sections}
           </button>
         )}
 
-        <div className="flex gap-2">
-          {[
-            { key: "personal", label: "אישי", tabs: navPersonalTabs },
-            { key: "camp", label: "קמפ", tabs: navCampTabs },
-          ].map((cat) => {
-            const open = expandedNavCategory === cat.key;
-            const activeTabInCat = cat.tabs.find((t) => t.id === tab);
-            const showBadge = cat.key === "personal" && hasNewBoardItems;
-            // "open" (just expanded to browse) and "actually viewing a screen
-            // in this category" are different things - only the latter should
-            // read as "selected"; merely browsing gets a lighter highlight.
-            return (
-              <button
-                key={cat.key}
-                onClick={() => setExpandedNavCategory(open ? null : cat.key)}
-                className="btn-nav-3d flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl text-sm font-bold transition-colors"
-                style={{
-                  position: "relative",
-                  background: activeTabInCat ? COLORS.accent : open ? COLORS.accentLight : COLORS.surface,
-                  color: activeTabInCat ? COLORS.bg : open ? COLORS.accentDark : COLORS.textMuted,
-                  border: `1px solid ${activeTabInCat || open ? COLORS.accent : COLORS.divider}`,
-                }}
-              >
-                <span className="truncate">{activeTabInCat ? `${cat.label} | ${activeTabInCat.label}` : cat.label}</span>
-                <ChevronDown size={13} style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
-                {showBadge && (
-                  <span className="rounded-full" style={{ position: "absolute", top: 6, insetInlineEnd: 10, width: 7, height: 7, background: COLORS.danger }} />
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        {expandedNavCategory && (
-          <div className="mt-2 rounded-2xl p-3 flex flex-wrap gap-2" style={{ background: COLORS.input, border: `1px solid ${COLORS.divider}` }}>
-            {expandedNavCategory === "personal"
-              ? navPersonalTabs.map((t) => renderNavItem(t, t.id === "dashboard-personal"))
-              : navCampTabs.map((t) => renderNavItem(t))}
+        <div className="relative">
+          <div className="flex gap-2">
+            {[
+              { key: "personal", label: "אישי", tabs: navPersonalTabs },
+              { key: "camp", label: "קמפ", tabs: navCampTabs },
+            ].map((cat) => {
+              const open = expandedNavCategory === cat.key;
+              const activeTabInCat = cat.tabs.find((t) => t.id === tab);
+              const showBadge = cat.key === "personal" && hasNewBoardItems;
+              // "open" (just expanded to browse) and "actually viewing a screen
+              // in this category" are different things - only the latter should
+              // read as "selected"; merely browsing gets a lighter highlight.
+              return (
+                <button
+                  key={cat.key}
+                  onClick={() => setExpandedNavCategory(open ? null : cat.key)}
+                  className="btn-nav-3d flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl text-sm font-bold transition-colors"
+                  style={{
+                    position: "relative",
+                    background: activeTabInCat ? COLORS.accent : open ? COLORS.accentLight : COLORS.surface,
+                    color: activeTabInCat ? COLORS.bg : open ? COLORS.accentDark : COLORS.textMuted,
+                    border: `1px solid ${activeTabInCat || open ? COLORS.accent : COLORS.divider}`,
+                  }}
+                >
+                  <span className="truncate">{activeTabInCat ? `${cat.label} | ${activeTabInCat.label}` : cat.label}</span>
+                  <ChevronDown size={13} style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+                  {showBadge && (
+                    <span className="rounded-full" style={{ position: "absolute", top: 6, insetInlineEnd: 10, width: 7, height: 7, background: COLORS.danger }} />
+                  )}
+                </button>
+              );
+            })}
           </div>
-        )}
+
+          {expandedNavCategory && (
+            <>
+              {/* Floating, not inline - a 10-item category list used to push the
+                  whole page's content down when expanded, forcing a lot of
+                  scrolling just to get back to what you were looking at. This
+                  overlays instead, capped at 60vh with its own scroll, and a
+                  backdrop click closes it same as picking an item does. */}
+              <div className="fixed inset-0 z-30" onClick={() => setExpandedNavCategory(null)} />
+              <div
+                className="absolute right-0 left-0 mt-2 rounded-2xl p-3 flex flex-wrap gap-2 overflow-y-auto z-40"
+                style={{ background: COLORS.input, border: `1px solid ${COLORS.divider}`, maxHeight: "60vh", boxShadow: "0 10px 30px rgba(58,34,42,0.28)" }}
+              >
+                {expandedNavCategory === "personal"
+                  ? navPersonalTabs.map((t) => renderNavItem(t, t.id === "dashboard-personal"))
+                  : navCampTabs.map((t) => renderNavItem(t))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
       </div>
 
