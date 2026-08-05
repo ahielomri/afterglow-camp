@@ -5460,6 +5460,15 @@ ${sections}
     () => SHIFTS.filter((s) => isJoined(s.id)).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start)),
     [assignments, identity]
   );
+  // "המשמרות שלי" stat card count - unlike the myShifts list itself (which
+  // still lists setup/teardown days so people see them in their personal
+  // schedule), the tally excludes teardown (automatic for everyone) and
+  // setup/הקמות (open-ended arrival days, not a real shift), same convention
+  // as memberShiftCounts/membersWithoutShift on the admin side.
+  const myShiftsCount = useMemo(
+    () => myShifts.filter((s) => s.id !== TEARDOWN_ID && s.phase !== "הקמות").length,
+    [myShifts]
+  );
   // Event announcements for "היומן שלי": admin/owner-posted events are
   // automatic for everyone, member-posted events only show up for people
   // who explicitly opted in via "הוסף ליומן שלי" on the announcement.
@@ -6896,7 +6905,7 @@ ${sections}
 
             <div className="grid grid-cols-3 gap-2 sm:gap-4">
               {[
-                { label: "המשמרות שלי", value: myShifts.length, onClick: () => setTab("my-shifts") },
+                { label: "המשמרות שלי", value: myShiftsCount, onClick: () => setTab("my-shifts") },
                 { label: "מקומות פנויים במשמרות", value: openShiftsCount, onClick: () => setTab("shifts") },
                 { label: "ימים לפתיחת השערים", value: daysUntil() },
               ].map((c) => (
