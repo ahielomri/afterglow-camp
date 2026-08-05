@@ -55,45 +55,8 @@ import {
 } from "./storage.js";
 
 // ---------------------------------------------------------------------------
-// Design tokens - "Organic" palette (original)
+// Design tokens - "Earth and Ash" palette (2b)
 // ---------------------------------------------------------------------------
-// Sunset-palette experiment, kept here as a backup in case we want it again:
-// const COLORS = {
-//   bg: "#fbebd6",
-//   surface: "#f8dfbe",
-//   surface2: "#ebcb99",
-//   input: "#fffbf2",
-//   text: "#4a342b",
-//   textMuted: "rgba(74,52,43,0.65)",
-//   divider: "rgba(74,52,43,0.16)",
-//   accent: "#e15d5d",
-//   accentDark: "#b0392f",
-//   accentLight: "#fbdcd2",
-//   accent2: "#b36aa3",
-//   accent2Dark: "#7d4a72",
-//   accent2Light: "#f4e5ef",
-//   danger: "#c43d3d",
-//   fullBg: "#e3d6c9",
-// };
-// Pink/coral palette, kept here as a backup in case we want it again:
-// const COLORS = {
-//   bg: "#fdf1f0",
-//   surface: "#f7dce0",
-//   surface2: "#f0c9d2",
-//   input: "#fff7f5",
-//   text: "#3a222a",
-//   textMuted: "rgba(58,34,42,0.65)",
-//   divider: "rgba(58,34,42,0.16)",
-//   accent: "#e0607a",
-//   accentDark: "#b8415c",
-//   accentLight: "#fbd8e0",
-//   accent2: "#f2935a",
-//   accent2Dark: "#c96b34",
-//   accent2Light: "#fce1c7",
-//   danger: "#c43d3d",
-//   fullBg: "#ddd6d1",
-// };
-// "Earth and Ash" palette (2b)
 const COLORS = {
   bg: "#ede6da",
   surface: "#dfd1bf",
@@ -2680,122 +2643,92 @@ function NumField({ label, value, onChange, placeholder, suffix }) {
   );
 }
 
-// Repeating rows of {name, qty, price} - used for equipment/lounge items etc.
-function ItemRowsEditor({ rows, onChange, qtyLabel = "כמות", priceLabel = "מחיר ליחידה" }) {
+// Generic repeating-row editor, driven by a column schema - covers what used
+// to be three near-identical editors (item name/qty/price, name/amount,
+// alcohol name/units/price) with one implementation. `fields` describes the
+// input columns in order, `subtotal(row)` computes that row's contribution
+// to the running total, and `emptyRow` is what a new row starts as.
+function GenericRowEditor({ rows, onChange, fields, subtotal, emptyRow, addLabel = "+ הוספת שורה" }) {
   function updateRow(i, patch) {
     onChange(rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   }
-  const subtotal = rows.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.price) || 0), 0);
+  const total = rows.reduce((s, r) => s + subtotal(r), 0);
   return (
     <div className="space-y-2">
       {rows.map((r, i) => (
         <div key={i} className="flex items-center gap-1.5">
-          <input
-            value={r.name}
-            onChange={(e) => updateRow(i, { name: e.target.value })}
-            placeholder="שם הפריט"
-            className="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-sm outline-none"
-            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-          />
-          <input
-            type="number" value={r.qty} onChange={(e) => updateRow(i, { qty: e.target.value })}
-            placeholder={qtyLabel}
-            className="w-20 px-2 py-1.5 rounded-lg text-sm outline-none"
-            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-          />
-          <input
-            type="number" value={r.price} onChange={(e) => updateRow(i, { price: e.target.value })}
-            placeholder={priceLabel}
-            className="w-24 px-2 py-1.5 rounded-lg text-sm outline-none"
-            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-          />
+          {fields.map((f) => (
+            <input
+              key={f.key}
+              type={f.type}
+              value={r[f.key]}
+              onChange={(e) => updateRow(i, { [f.key]: e.target.value })}
+              placeholder={f.placeholder}
+              className={`${f.flex ? "flex-1 min-w-0" : f.width} px-2 py-1.5 rounded-lg text-sm outline-none`}
+              style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+            />
+          ))}
           <button onClick={() => onChange(rows.filter((_, idx) => idx !== i))} style={{ color: COLORS.textMuted }}><X size={14} /></button>
         </div>
       ))}
       <div className="flex items-center justify-between">
-        <button onClick={() => onChange([...rows, { name: "", qty: "", price: "" }])} className="text-xs font-semibold" style={{ color: COLORS.accentDark }}>
-          + הוספת שורה
+        <button onClick={() => onChange([...rows, emptyRow])} className="text-xs font-semibold" style={{ color: COLORS.accentDark }}>
+          {addLabel}
         </button>
-        <span className="text-xs" style={{ color: COLORS.textMuted }}>סכום ביניים: ₪{subtotal.toLocaleString()}</span>
+        <span className="text-xs" style={{ color: COLORS.textMuted }}>סכום ביניים: ₪{total.toLocaleString()}</span>
       </div>
     </div>
   );
 }
 
-// Repeating rows of {name, amount} - used for one-time income, cashflow channels, alcohol categories (extended below)
-function AmountRowsEditor({ rows, onChange, placeholder = "שם" }) {
-  function updateRow(i, patch) {
-    onChange(rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
-  }
-  const subtotal = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+// Repeating rows of {name, qty, price} - used for equipment/lounge items etc.
+function ItemRowsEditor({ rows, onChange, qtyLabel = "כמות", priceLabel = "מחיר ליחידה" }) {
   return (
-    <div className="space-y-2">
-      {rows.map((r, i) => (
-        <div key={i} className="flex items-center gap-1.5">
-          <input
-            value={r.name}
-            onChange={(e) => updateRow(i, { name: e.target.value })}
-            placeholder={placeholder}
-            className="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-sm outline-none"
-            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-          />
-          <input
-            type="number" value={r.amount} onChange={(e) => updateRow(i, { amount: e.target.value })}
-            placeholder="סכום"
-            className="w-28 px-2 py-1.5 rounded-lg text-sm outline-none"
-            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-          />
-          <button onClick={() => onChange(rows.filter((_, idx) => idx !== i))} style={{ color: COLORS.textMuted }}><X size={14} /></button>
-        </div>
-      ))}
-      <div className="flex items-center justify-between">
-        <button onClick={() => onChange([...rows, { name: "", amount: "" }])} className="text-xs font-semibold" style={{ color: COLORS.accentDark }}>
-          + הוספת שורה
-        </button>
-        <span className="text-xs" style={{ color: COLORS.textMuted }}>סכום ביניים: ₪{subtotal.toLocaleString()}</span>
-      </div>
-    </div>
+    <GenericRowEditor
+      rows={rows}
+      onChange={onChange}
+      fields={[
+        { key: "name", type: "text", placeholder: "שם הפריט", flex: true },
+        { key: "qty", type: "number", placeholder: qtyLabel, width: "w-20" },
+        { key: "price", type: "number", placeholder: priceLabel, width: "w-24" },
+      ]}
+      subtotal={(r) => (Number(r.qty) || 0) * (Number(r.price) || 0)}
+      emptyRow={{ name: "", qty: "", price: "" }}
+    />
+  );
+}
+
+// Repeating rows of {name, amount} - used for one-time income, cashflow channels.
+function AmountRowsEditor({ rows, onChange, placeholder = "שם" }) {
+  return (
+    <GenericRowEditor
+      rows={rows}
+      onChange={onChange}
+      fields={[
+        { key: "name", type: "text", placeholder, flex: true },
+        { key: "amount", type: "number", placeholder: "סכום", width: "w-28" },
+      ]}
+      subtotal={(r) => Number(r.amount) || 0}
+      emptyRow={{ name: "", amount: "" }}
+    />
   );
 }
 
 // Alcohol categories: {name, units, price}
 function AlcoholRowsEditor({ rows, onChange }) {
-  function updateRow(i, patch) {
-    onChange(rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
-  }
-  const subtotal = rows.reduce((s, r) => s + (Number(r.units) || 0) * (Number(r.price) || 0), 0);
   return (
-    <div className="space-y-2">
-      {rows.map((r, i) => (
-        <div key={i} className="flex items-center gap-1.5">
-          <input
-            value={r.name} onChange={(e) => updateRow(i, { name: e.target.value })}
-            placeholder="סוג משקה (בירה/יין/ספיריטים...)"
-            className="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-sm outline-none"
-            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-          />
-          <input
-            type="number" value={r.units} onChange={(e) => updateRow(i, { units: e.target.value })}
-            placeholder="כמות יחידות"
-            className="w-24 px-2 py-1.5 rounded-lg text-sm outline-none"
-            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-          />
-          <input
-            type="number" value={r.price} onChange={(e) => updateRow(i, { price: e.target.value })}
-            placeholder="מחיר ליחידה"
-            className="w-24 px-2 py-1.5 rounded-lg text-sm outline-none"
-            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-          />
-          <button onClick={() => onChange(rows.filter((_, idx) => idx !== i))} style={{ color: COLORS.textMuted }}><X size={14} /></button>
-        </div>
-      ))}
-      <div className="flex items-center justify-between">
-        <button onClick={() => onChange([...rows, { name: "", units: "", price: "" }])} className="text-xs font-semibold" style={{ color: COLORS.accentDark }}>
-          + הוספת סוג משקה
-        </button>
-        <span className="text-xs" style={{ color: COLORS.textMuted }}>סכום ביניים: ₪{subtotal.toLocaleString()}</span>
-      </div>
-    </div>
+    <GenericRowEditor
+      rows={rows}
+      onChange={onChange}
+      fields={[
+        { key: "name", type: "text", placeholder: "סוג משקה (בירה/יין/ספיריטים...)", flex: true },
+        { key: "units", type: "number", placeholder: "כמות יחידות", width: "w-24" },
+        { key: "price", type: "number", placeholder: "מחיר ליחידה", width: "w-24" },
+      ]}
+      subtotal={(r) => (Number(r.units) || 0) * (Number(r.price) || 0)}
+      emptyRow={{ name: "", units: "", price: "" }}
+      addLabel="+ הוספת סוג משקה"
+    />
   );
 }
 
