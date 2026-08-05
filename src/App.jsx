@@ -7096,7 +7096,7 @@ ${sections}
                         const [dy, dm, dd] = date.split("-").map(Number);
                         const dow = WEEKDAYS_HE[new Date(dy, dm - 1, dd).getDay()];
                         return (
-                        <div key={date} style={groupIndex > 0 ? { borderTop: `1px solid ${COLORS.divider}` } : undefined}>
+                        <div key={date} style={groupIndex > 0 ? { borderTop: `1px solid ${COLORS.divider}`, marginTop: 10 } : undefined}>
                           <div className="px-3 py-2 flex items-center justify-between" style={{ background: COLORS.accent }}>
                             <span className="text-xs font-semibold" style={{ color: COLORS.accentLight }}>יום {dow}</span>
                             <span className="text-base font-black" style={{ fontFamily: FONT_NUM, color: COLORS.bg }}>{dd}.{dm}</span>
