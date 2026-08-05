@@ -6734,11 +6734,18 @@ ${sections}
                 <div
                   key={c.label}
                   onClick={c.onClick}
-                  className="rounded-2xl p-2.5 sm:p-5"
-                  style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, cursor: c.onClick ? "pointer" : "default" }}
+                  className={`rounded-2xl p-2.5 sm:p-5 ${c.onClick ? "cursor-pointer active:scale-[0.97] transition-transform" : ""}`}
+                  style={{
+                    background: COLORS.surface,
+                    border: `1px solid ${COLORS.divider}`,
+                    boxShadow: c.onClick ? "0 3px 0 rgba(58,34,42,0.18)" : "none",
+                  }}
                 >
                   <div className="text-xl sm:text-3xl font-black mt-1" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
-                  <div className="text-[10px] sm:text-xs mt-1 font-bold" style={{ color: COLORS.text }}>{c.label}</div>
+                  <div className="text-[10px] sm:text-xs mt-1 font-bold flex items-center gap-1" style={{ color: COLORS.text }}>
+                    {c.label}
+                    {c.onClick && <ChevronDown size={10} style={{ transform: "rotate(90deg)" }} />}
+                  </div>
                 </div>
               ))}
               {(campFee > 0 || feeOverrides[identity] !== undefined) && (
