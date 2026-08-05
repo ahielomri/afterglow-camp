@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown as ChevronDownThin, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart, Utensils, Lightbulb, Camera, ImagePlus, Download, Tag, MoreVertical, Crown, WifiOff } from "lucide-react";
+import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown as ChevronDownThin, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart, Camera, ImagePlus, Download, Tag, MoreVertical, Crown, WifiOff } from "lucide-react";
 // Every ChevronDown in the app should read as bold/clickable, not just the
 // default thin stroke - default it here once instead of at each call site.
 function ChevronDown(props) {
