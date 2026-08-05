@@ -4919,8 +4919,9 @@ ${cards}
     // unfilledShiftsCount/openShiftsCount elsewhere - it isn't a normal
     // slot-limited shift people opt into (spots = every member, "everyone
     // participates"), so counting its ~30 nominally-"open" spots would
-    // swamp the real numbers from the actual self-scheduled shifts.
-    const countedShifts = SHIFTS.filter((s) => s.id !== TEARDOWN_ID);
+    // swamp the real numbers from the actual self-scheduled shifts. Setup
+    // ("הקמות") is excluded too - it's an open-ended arrival day, not a shift.
+    const countedShifts = SHIFTS.filter((s) => s.id !== TEARDOWN_ID && s.phase !== "הקמות");
     const totalShifts = countedShifts.length;
     const totalVolunteers = countedShifts.reduce((s, sh) => s + (assignments[sh.id] || []).length, 0);
     // Uncapped shifts (noLimit) don't have a meaningful "people needed"
@@ -5484,14 +5485,15 @@ ${sections}
     [assignments]
   );
   const membersWithoutShift = useMemo(
-    () => allMembers.filter((m) => !SHIFTS.some((s) => s.id !== TEARDOWN_ID && (assignments[s.id] || []).includes(m.name))).length,
+    () => allMembers.filter((m) => !SHIFTS.some((s) => s.id !== TEARDOWN_ID && s.phase !== "הקמות" && (assignments[s.id] || []).includes(m.name))).length,
     [assignments, allMembers]
   );
   // Per-member shift count for the admin "משמרות חברי קמפ" list - teardown
   // excluded since everyone's on it by default, same convention as
-  // membersWithoutShift/unfilledShiftsCount above.
+  // membersWithoutShift/unfilledShiftsCount above. Setup ("הקמות") shifts
+  // are excluded too - they're open-ended arrival days, not a real shift.
   const memberShiftCounts = useMemo(() => {
-    const countedShifts = SHIFTS.filter((s) => s.id !== TEARDOWN_ID);
+    const countedShifts = SHIFTS.filter((s) => s.id !== TEARDOWN_ID && s.phase !== "הקמות");
     return allMembers
       .map((m) => ({
         name: m.name,
@@ -5638,7 +5640,6 @@ ${sections}
     { id: "content", label: "תוכן", icon: Flame },
     { id: "budget", label: "הוצאות", icon: Wallet },
     ...(canManageFinances ? [{ id: "finances", label: "כספים", icon: CreditCard }] : []),
-    ...(isAdmin ? [{ id: "allocations", label: "לוח הקצאות", icon: Ticket }] : []),
     { id: "teams", label: "צוותים", icon: Tent },
     { id: "rides", label: "התניידות", icon: Car },
     { id: "contacts", label: "חברי קמפ", icon: Phone },
@@ -5964,6 +5965,7 @@ ${sections}
                 { id: "overview", label: "סקירה", icon: LayoutDashboard },
                 { id: "members", label: "חברי קמפ", icon: Users },
                 { id: "member-shifts", label: "משמרות חברי קמפ", icon: CalendarDays },
+                { id: "allocations", label: "הקצאות", icon: Ticket },
                 { id: "comms", label: "תקשורת", icon: MessageCircle },
                 ...(isOwner ? [{ id: "logs", label: "יומנים", icon: History }] : []),
                 { id: "emergency", label: "חירום", icon: HeartPulse },
@@ -6317,12 +6319,12 @@ ${sections}
               <div>
                 <h3 className="text-sm font-bold mb-3" style={{ color: COLORS.accentDark }}>משמרות חברי קמפ</h3>
                 <p className="text-xs mb-3" style={{ color: COLORS.textMuted }}>
-                  כמות המשמרות שכל חבר/ה שיבץ/ה את עצמו/ה אליהן (לא כולל פירוקים - כולם משתתפים בו). מי שאין לו/ה משמרת בכלל מוצג/ת עם 0.
+                  כמות המשמרות שכל חבר/ה שיבץ/ה את עצמו/ה אליהן (לא כולל פירוקים - כולם משתתפים בו, ולא כולל הקמות - זה לא נחשב משמרת). מי שאין לו/ה משמרת בכלל מוצג/ת עם 0.
                 </p>
                 <div className="space-y-1.5">
                   {memberShiftCounts.map((m) => {
                     const open = expandedMemberShifts === m.name;
-                    const theirShifts = SHIFTS.filter((s) => s.id !== TEARDOWN_ID && (assignments[s.id] || []).includes(m.name));
+                    const theirShifts = SHIFTS.filter((s) => s.id !== TEARDOWN_ID && s.phase !== "הקמות" && (assignments[s.id] || []).includes(m.name));
                     return (
                       <div key={m.name} className="rounded-xl overflow-hidden" style={{ background: m.count === 0 ? COLORS.accent2Light : COLORS.surface }}>
                         <button
@@ -6362,6 +6364,77 @@ ${sections}
                     );
                   })}
                 </div>
+              </div>
+            )}
+
+            {adminSubTab === "allocations" && (
+              <div>
+                <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>
+                  כל חבר/ה מעדכן/ת בטאב "לוח בקרה אישי" האם יש לו/ה הקצאה למידברן, האם נוצלה לאחר שעברה המכירה, והאם יש הקצאה נוספת. הטאב הזה מוצג רק למנהלים.
+                </p>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                  {[
+                    { label: "יש הקצאה", value: membersWithAllocation.length },
+                    { label: "נוצלה", value: membersUsedAllocation.length },
+                    { label: "טרם נוצלה", value: membersPendingAllocation.length },
+                    { label: "הקצאה נוספת", value: membersWithExtraAllocation.length },
+                  ].map((c) => (
+                    <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                      <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
+                      <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {membersWithoutAllocationInfo.length > 0 && (
+                  <div className="rounded-2xl p-3 mb-5" style={{ background: COLORS.accentLight, color: COLORS.accentDark, boxShadow: "0 3px 0 rgba(58,34,42,0.18)" }}>
+                    <button
+                      onClick={() => setShowMissingAllocation(!showMissingAllocation)}
+                      className="w-full flex items-center justify-between text-xs font-bold"
+                    >
+                      <span>{membersWithoutAllocationInfo.length} חברים עדיין לא מילאו פרטי הקצאה</span>
+                      <ChevronDown size={14} style={{ transform: showMissingAllocation ? "rotate(180deg)" : "none" }} />
+                    </button>
+                    {showMissingAllocation && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {membersWithoutAllocationInfo.map((m) => (
+                          <span key={m.name} className="text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.55)" }}>
+                            {m.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  {allMembers.map((m) => {
+                    const d = allocationInfo[m.name];
+                    if (!d) return null;
+                    return (
+                      <div key={m.name} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2 flex-wrap text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                        <span className="font-semibold text-sm">{m.name}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {d.hasAllocation === "yes" ? (
+                            <span className="px-2 py-0.5 rounded-full font-semibold" style={{ background: COLORS.accent2Light, color: COLORS.accent2Dark }}>
+                              יש הקצאה{d.used === "yes" ? " · נוצלה" : " · טרם נוצלה"}
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full" style={{ background: COLORS.input, color: COLORS.textMuted }}>אין הקצאה</span>
+                          )}
+                          {d.hasExtra === "yes" && (
+                            <span className="px-2 py-0.5 rounded-full font-semibold" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>הקצאה נוספת</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {allMembers.every((m) => !allocationInfo[m.name]) && (
+                  <p className="text-xs text-center py-10" style={{ color: COLORS.textMuted }}>עדיין אין נתוני הקצאות.</p>
+                )}
               </div>
             )}
 
@@ -8041,9 +8114,12 @@ ${sections}
               ].map((c) => {
                 // Green = positive, red = negative, brown (the app's normal
                 // neutral surface) = exactly zero - same sign-based scheme
-                // requested for the dues list earlier.
-                const tint = c.value > 0 ? DUES_ABOVE_BG : c.value < 0 ? DUES_BELOW_BG : COLORS.surface;
-                const danger = c.value < 0;
+                // requested for the dues list earlier. "שולם בפועל" is money
+                // going out, so it's always red regardless of sign, not
+                // judged by the same +/- rule as the others.
+                const isPaidTile = c.label === "שולם בפועל";
+                const tint = isPaidTile ? DUES_BELOW_BG : c.value > 0 ? DUES_ABOVE_BG : c.value < 0 ? DUES_BELOW_BG : COLORS.surface;
+                const danger = isPaidTile || c.value < 0;
                 const Icon = c.icon;
                 return (
                   <div key={c.label} className="rounded-2xl p-4" style={{ background: tint, border: `1px solid ${COLORS.divider}`, boxShadow: "0 1px 4px rgba(58,34,42,0.06)" }}>
@@ -8113,7 +8189,7 @@ ${sections}
                     <div className="h-1.5 rounded-full mt-2 overflow-hidden" style={{ background: COLORS.divider }}>
                       <div className="h-full rounded-full" style={{ width: `${pct}%`, background: COLORS.accent }} />
                     </div>
-                    <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
+                    <div className="text-xs mt-1 text-left" style={{ color: COLORS.textMuted }}>
                       תקציב מתוכנן: ₪{planned.toLocaleString()} · נותר מתקציב: <b style={{ color: remainingFromBudget < 0 ? COLORS.danger : COLORS.accent2Dark }}>₪{remainingFromBudget.toLocaleString()}</b>
                     </div>
 
@@ -9195,77 +9271,6 @@ ${sections}
                 </div>
               );
             })()}
-          </div>
-        )}
-
-        {tab === "allocations" && isAdmin && (
-          <div>
-            <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>
-              כל חבר/ה מעדכן/ת בטאב "לוח בקרה אישי" האם יש לו/ה הקצאה למידברן, האם נוצלה לאחר שעברה המכירה, והאם יש הקצאה נוספת. הטאב הזה מוצג רק למנהלים.
-            </p>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-              {[
-                { label: "יש הקצאה", value: membersWithAllocation.length },
-                { label: "נוצלה", value: membersUsedAllocation.length },
-                { label: "טרם נוצלה", value: membersPendingAllocation.length },
-                { label: "הקצאה נוספת", value: membersWithExtraAllocation.length },
-              ].map((c) => (
-                <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                  <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
-                  <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
-                </div>
-              ))}
-            </div>
-
-            {membersWithoutAllocationInfo.length > 0 && (
-              <div className="rounded-2xl p-3 mb-5" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>
-                <button
-                  onClick={() => setShowMissingAllocation(!showMissingAllocation)}
-                  className="w-full flex items-center justify-between text-xs font-bold"
-                >
-                  <span>{membersWithoutAllocationInfo.length} חברים עדיין לא מילאו פרטי הקצאה</span>
-                  <ChevronDown size={14} style={{ transform: showMissingAllocation ? "rotate(180deg)" : "none" }} />
-                </button>
-                {showMissingAllocation && (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {membersWithoutAllocationInfo.map((m) => (
-                      <span key={m.name} className="text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.55)" }}>
-                        {m.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              {allMembers.map((m) => {
-                const d = allocationInfo[m.name];
-                if (!d) return null;
-                return (
-                  <div key={m.name} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2 flex-wrap text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                    <span className="font-semibold text-sm">{m.name}</span>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {d.hasAllocation === "yes" ? (
-                        <span className="px-2 py-0.5 rounded-full font-semibold" style={{ background: COLORS.accent2Light, color: COLORS.accent2Dark }}>
-                          יש הקצאה{d.used === "yes" ? " · נוצלה" : " · טרם נוצלה"}
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-full" style={{ background: COLORS.input, color: COLORS.textMuted }}>אין הקצאה</span>
-                      )}
-                      {d.hasExtra === "yes" && (
-                        <span className="px-2 py-0.5 rounded-full font-semibold" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>הקצאה נוספת</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {allMembers.every((m) => !allocationInfo[m.name]) && (
-              <p className="text-xs text-center py-10" style={{ color: COLORS.textMuted }}>עדיין אין נתוני הקצאות.</p>
-            )}
           </div>
         )}
 
