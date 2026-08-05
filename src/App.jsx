@@ -1794,7 +1794,7 @@ function TeamChecklist({ items, state, canCheck, canManage, onToggle, onAdd, onE
         <span>{doneCount}/{items.length}</span>
       </div>
       {items.length === 0 && <p className="text-xs mb-1.5" style={{ color: COLORS.textMuted }}>אין עדיין פריטים בצ'קליסט.</p>}
-      <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
+      <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
         {items.map((item, i) =>
           editingIndex === i ? (
             <div key={i} className="flex items-center gap-1.5">
@@ -1815,15 +1815,22 @@ function TeamChecklist({ items, state, canCheck, canManage, onToggle, onAdd, onE
               <button onClick={() => setEditingIndex(null)} className="text-xs shrink-0" style={{ color: COLORS.textMuted }}>ביטול</button>
             </div>
           ) : (
-            <div key={i} className="flex items-center gap-2 text-xs">
-              <label className={`flex items-center gap-2 flex-1 ${canCheck ? "cursor-pointer" : "cursor-not-allowed"}`}>
-                <input type="checkbox" checked={!!state[i]} disabled={!canCheck} onChange={() => canCheck && onToggle(i)} />
+            <div key={i} className="flex items-center gap-2 text-sm rounded-xl px-2 py-1.5" style={{ background: COLORS.input }}>
+              <label className={`flex items-center gap-2.5 flex-1 ${canCheck ? "cursor-pointer" : "cursor-not-allowed"}`}>
+                <input
+                  type="checkbox"
+                  checked={!!state[i]}
+                  disabled={!canCheck}
+                  onChange={() => canCheck && onToggle(i)}
+                  className="shrink-0"
+                  style={{ width: 22, height: 22, accentColor: COLORS.accent2 }}
+                />
                 <span style={{ textDecoration: state[i] ? "line-through" : "none", opacity: state[i] ? 0.6 : 1 }}>{item}</span>
               </label>
               {canManage && (
                 <>
-                  <button onClick={() => { setEditingIndex(i); setEditText(item); }} className="shrink-0" style={{ color: COLORS.textMuted }}><Pencil size={12} /></button>
-                  <button onClick={() => onRemove(i)} className="shrink-0" style={{ color: COLORS.textMuted }}><Trash2 size={12} /></button>
+                  <button onClick={() => { setEditingIndex(i); setEditText(item); }} className="shrink-0" style={{ color: COLORS.textMuted }}><Pencil size={14} /></button>
+                  <button onClick={() => onRemove(i)} className="shrink-0" style={{ color: COLORS.textMuted }}><Trash2 size={14} /></button>
                 </>
               )}
             </div>
@@ -3061,6 +3068,7 @@ export default function App() {
   const [tab, setTab] = useState("dashboard-personal");
   const [adminSubTab, setAdminSubTab] = useState("overview");
   const [expandedNavCategory, setExpandedNavCategory] = useState(null);
+  const [showMissingAllocation, setShowMissingAllocation] = useState(false);
   // Owner-only: lets the owner open any team's "לוח בקרה צוות" view (the
   // same screen a team's own lead sees) without actually being that team's
   // lead - regular admins don't get this, only the owner.
@@ -5636,7 +5644,7 @@ ${sections}
     { id: "contacts", label: "חברי קמפ", icon: Phone },
     { id: "equipment", label: "ציוד קמפ", icon: Package },
     { id: "shopping", label: "קניות מטבח", icon: ShoppingCart },
-    { id: "gallery", label: "מזכרת קטנה מאירוע גדול", icon: Camera },
+    { id: "gallery", label: "גלריית המחנה", icon: Camera },
   ];
   function renderNavItem(t, fullWidth) {
     const locked = !profileComplete && !PROFILE_GATE_EXEMPT_TABS.includes(t.id);
@@ -5786,8 +5794,8 @@ ${sections}
               <div className="text-lg" style={{ fontFamily: FONT_HEADING, color: COLORS.accentDark }}>תויגת בתמונה 📸</div>
               <p className="text-sm mt-2 mb-4">
                 {unseenPhotoTags.length === 1
-                  ? `${unseenPhotoTags[0].uploader} תייג/ה אותך בתמונה במזכרת קטנה מאירוע גדול`
-                  : `תויגת ב-${unseenPhotoTags.length} תמונות במזכרת קטנה מאירוע גדול`}
+                  ? `${unseenPhotoTags[0].uploader} תייג/ה אותך בתמונה בגלריית המחנה`
+                  : `תויגת ב-${unseenPhotoTags.length} תמונות בגלריית המחנה`}
               </p>
               <div className="flex gap-3 justify-center mb-3">
                 <button
@@ -6677,6 +6685,18 @@ ${sections}
                 </select>
               )}
             </div>
+            {(() => {
+              const leads = teamLeadsOf(viewedTeam);
+              if (leads.length === 0) return null;
+              return (
+                <div className="text-xs mb-3" style={{ color: COLORS.textMuted }}>
+                  <span>מוביל/ה: <b style={{ color: COLORS.accentDark }}>{leads[0].name}</b></span>
+                  {leads[1] && (
+                    <span> · מוביל/ה משנה: <b style={{ color: COLORS.accentDark }}>{leads[1].name}</b></span>
+                  )}
+                </div>
+              );
+            })()}
             <div className="grid grid-cols-2 gap-3">
               {(() => {
                 const t = teamStats(viewedTeam);
@@ -6723,15 +6743,15 @@ ${sections}
             </div>
 
             <h3 className="text-xs font-bold mt-5 mb-2" style={{ color: COLORS.textMuted }}>חברי הצוות ({teamMembers(viewedTeam).length})</h3>
-            <div className="flex flex-wrap gap-1.5 mb-1">
+            <div className="grid grid-cols-2 gap-1.5 mb-1">
               {teamMembers(viewedTeam).length === 0 ? (
-                <p className="text-xs" style={{ color: COLORS.textMuted }}>עדיין אף אחד לא שיבץ משמרת בצוות הזה.</p>
+                <p className="text-xs col-span-2" style={{ color: COLORS.textMuted }}>עדיין אף אחד לא שיבץ משמרת בצוות הזה.</p>
               ) : (
                 teamMembers(viewedTeam).map((n) => (
                   <span key={n} className="text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5" style={{ background: COLORS.surface }} dir="ltr">
-                    <span dir="rtl">{n}</span>{memberPhones[n] ? ` · ${memberPhones[n]}` : ""}
+                    <span dir="rtl" className="truncate">{n}</span>{memberPhones[n] ? ` · ${memberPhones[n]}` : ""}
                     {isManualTeamMember(viewedTeam, n) && (
-                      <button onClick={() => removeManualTeamMember(viewedTeam, n)} style={{ color: COLORS.textMuted }}><X size={10} /></button>
+                      <button onClick={() => removeManualTeamMember(viewedTeam, n)} style={{ color: COLORS.textMuted }} className="shrink-0"><X size={10} /></button>
                     )}
                   </span>
                 ))
@@ -7628,7 +7648,7 @@ ${sections}
         {tab === "gallery" && (
           <div>
             <h3 className="text-sm font-bold mb-1 flex items-center gap-1.5" style={{ color: COLORS.accentDark }}>
-              <Camera size={15} /> מזכרת קטנה מאירוע גדול
+              <Camera size={15} /> גלריית המחנה
             </h3>
             <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>
               כל תמונה שמעלים כאן נשארת לכולם - זו הדרך שלנו לזכור ביחד את יום הגיבוש.
@@ -8013,16 +8033,20 @@ ${sections}
           <div>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
               {[
-                { label: "תקציב מתוכנן", value: budgetTotals.planned, icon: Wallet, tint: COLORS.surface },
-                { label: "הכנסות", value: budgetTotals.duesCollected, icon: Ticket, tint: COLORS.accent2Light },
-                { label: "התחייבויות", value: budgetTotals.committed, icon: Clock, tint: budgetTotals.committed > 0 ? COLORS.accentLight : COLORS.surface },
-                { label: "שולם בפועל", value: budgetTotals.paid, icon: Check, tint: COLORS.surface },
-                { label: "יתרה זמינה", value: budgetTotals.remaining, icon: CreditCard, tint: budgetTotals.remaining < 0 ? "#ecd6cf" : COLORS.accent2Light },
+                { label: "תקציב מתוכנן", value: budgetTotals.planned, icon: Wallet },
+                { label: "הכנסות", value: budgetTotals.duesCollected, icon: Ticket },
+                { label: "התחייבויות", value: budgetTotals.committed, icon: Clock },
+                { label: "שולם בפועל", value: budgetTotals.paid, icon: Check },
+                { label: "יתרה זמינה", value: budgetTotals.remaining, icon: CreditCard },
               ].map((c) => {
-                const danger = c.label === "יתרה זמינה" && c.value < 0;
+                // Green = positive, red = negative, brown (the app's normal
+                // neutral surface) = exactly zero - same sign-based scheme
+                // requested for the dues list earlier.
+                const tint = c.value > 0 ? DUES_ABOVE_BG : c.value < 0 ? DUES_BELOW_BG : COLORS.surface;
+                const danger = c.value < 0;
                 const Icon = c.icon;
                 return (
-                  <div key={c.label} className="rounded-2xl p-4" style={{ background: c.tint, border: `1px solid ${COLORS.divider}`, boxShadow: "0 1px 4px rgba(58,34,42,0.06)" }}>
+                  <div key={c.label} className="rounded-2xl p-4" style={{ background: tint, border: `1px solid ${COLORS.divider}`, boxShadow: "0 1px 4px rgba(58,34,42,0.06)" }}>
                     <Icon size={16} style={{ color: danger ? COLORS.danger : COLORS.accentDark, opacity: 0.75, marginBottom: 6 }} />
                     <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: danger ? COLORS.danger : COLORS.text }}>
                       ₪{c.value.toLocaleString()}
@@ -8069,7 +8093,8 @@ ${sections}
                 const legacyPaid = items.reduce((s, b) => s + (Number(b.paid) || 0), 0);
                 const expensesPaid = catExpenses.reduce((s, e) => s + expenseAmounts(e).paid, 0);
                 const paid = legacyPaid + expensesPaid;
-                const toPay = planned - paid;
+                const committed = catExpenses.reduce((s, e) => s + expenseAmounts(e).committed, 0);
+                const remainingFromBudget = planned - paid;
                 const owedToMembers = catExpenses.filter((e) => e.refundToMember && !e.refundPaid).reduce((s, e) => s + (Number(e.amount) || 0), 0);
                 const pct = planned > 0 ? Math.min(paid / planned, 1) * 100 : 0;
                 const canManageThis = isAdmin || myLeadTeam === cat;
@@ -8078,8 +8103,8 @@ ${sections}
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <span className="font-bold">{cat}</span>
                       <div className="flex items-center gap-4 text-xs flex-wrap">
-                        <span>סכום לתשלום: <b style={{ color: toPay > 0 ? COLORS.danger : COLORS.accent2Dark }}>₪{toPay.toLocaleString()}</b></span>
                         <span>סה"כ שולם: <b style={{ color: COLORS.moneyAccent }}>₪{paid.toLocaleString()}</b></span>
+                        <span>סה"כ התחייבות: <b style={{ color: committed > 0 ? COLORS.danger : COLORS.accent2Dark }}>₪{committed.toLocaleString()}</b></span>
                         {owedToMembers > 0 && (
                           <span>תשלום לחברי קמפ: <b style={{ color: COLORS.danger }}>₪{owedToMembers.toLocaleString()}</b></span>
                         )}
@@ -8088,7 +8113,9 @@ ${sections}
                     <div className="h-1.5 rounded-full mt-2 overflow-hidden" style={{ background: COLORS.divider }}>
                       <div className="h-full rounded-full" style={{ width: `${pct}%`, background: COLORS.accent }} />
                     </div>
-                    <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>תקציב מתוכנן: ₪{planned.toLocaleString()}</div>
+                    <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
+                      תקציב מתוכנן: ₪{planned.toLocaleString()} · נותר מתקציב: <b style={{ color: remainingFromBudget < 0 ? COLORS.danger : COLORS.accent2Dark }}>₪{remainingFromBudget.toLocaleString()}</b>
+                    </div>
 
                     {catExpenses.length > 0 && (
                       <div className="mt-3 space-y-1.5">
@@ -9192,8 +9219,23 @@ ${sections}
             </div>
 
             {membersWithoutAllocationInfo.length > 0 && (
-              <div className="rounded-2xl p-3 mb-5 text-xs" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>
-                {membersWithoutAllocationInfo.length} חברים עדיין לא מילאו פרטי הקצאה
+              <div className="rounded-2xl p-3 mb-5" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>
+                <button
+                  onClick={() => setShowMissingAllocation(!showMissingAllocation)}
+                  className="w-full flex items-center justify-between text-xs font-bold"
+                >
+                  <span>{membersWithoutAllocationInfo.length} חברים עדיין לא מילאו פרטי הקצאה</span>
+                  <ChevronDown size={14} style={{ transform: showMissingAllocation ? "rotate(180deg)" : "none" }} />
+                </button>
+                {showMissingAllocation && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {membersWithoutAllocationInfo.map((m) => (
+                      <span key={m.name} className="text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.55)" }}>
+                        {m.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
