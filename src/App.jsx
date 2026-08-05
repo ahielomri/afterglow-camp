@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown as ChevronDownThin, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart, Utensils, Lightbulb, Camera, ImagePlus, Download, Tag, MoreVertical, Crown } from "lucide-react";
+import { Users, CalendarDays, Clock, Flame, Tent, ChevronDown as ChevronDownThin, Check, X, LogOut, Wallet, Plus, Trash2, CreditCard, Phone, Car, UserPlus, Megaphone, HeartPulse, History, Bell, BellOff, Package, MapPin, Ticket, MessageCircle, Pencil, ShieldCheck, ShieldOff, LockKeyhole, LayoutDashboard, Home, ShoppingCart, Utensils, Lightbulb, Camera, ImagePlus, Download, Tag, MoreVertical, Crown, WifiOff } from "lucide-react";
 // Every ChevronDown in the app should read as bold/clickable, not just the
 // default thin stroke - default it here once instead of at each call site.
 function ChevronDown(props) {
   return <ChevronDownThin strokeWidth={3} {...props} />;
 }
-import JSZip from "jszip";
 import { pushSupported, pushPermission, enablePush, disablePush, isPushSubscribed, resetPush } from "./push.js";
+import { runBudgetEngine } from "./budgetEngine.js";
 import heroDesert from "./assets/hero-sunset-logo-2.jpg";
 import funBanner from "./assets/fun-banner.jpg";
 import {
@@ -350,6 +350,40 @@ const TEARDOWN_TASKS = [
 ];
 const TEARDOWN_ID = "teardown-2026-11-07";
 const SHIFTS = buildShifts();
+
+// Offline fallback: the event site itself has no signal (see the emergency-
+// card PDF export, which exists for exactly that reason). A member who
+// closes and reopens the app there would otherwise land back on the login
+// screen with nothing to show - identity restore and every kv_store read
+// both require a live round-trip to Supabase, so a pure network failure
+// silently wipes everything to empty. This snapshot is a plain localStorage
+// mirror of the two things worth having offline (their own shifts, their
+// own emergency contact) written after every successful load, and read
+// back only when a fresh load genuinely can't reach the network.
+const OFFLINE_SNAPSHOT_KEY = "offline-snapshot-v1";
+
+function saveOfflineSnapshot(identity, assignments, emergencyInfo) {
+  try {
+    localStorage.setItem(OFFLINE_SNAPSHOT_KEY, JSON.stringify({
+      identity,
+      ts: Date.now(),
+      assignments,
+      myEmergencyInfo: emergencyInfo[identity] || null,
+    }));
+  } catch {
+    // Storage full/unavailable - offline mode just won't have anything to
+    // fall back to next time, same as never having been online before.
+  }
+}
+
+function loadOfflineSnapshot() {
+  try {
+    const raw = localStorage.getItem(OFFLINE_SNAPSHOT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
 const BUDGET_CATEGORIES = [
   "מטבח ומזון", "מים", "שירותים ומקלחות", "הובלות", "ציוד", "בנייה והקמות",
   "עיצוב ותפאורה", "תוכן וגיפט", "חשמל", "דלק", "קרח", "חשל\"ש", "ביטוח", "שונות",
@@ -2800,103 +2834,15 @@ function RideCategoryCard({ id, icon: Icon, title, count, headerColor, emptyText
   );
 }
 
-// ---------------------------------------------------------------------------
-// Camp budget engine - implements the handover-doc formulas exactly.
-// Every number here is an input re-entered each planning cycle; nothing
-// is hardcoded. Section numbers in comments match the source document.
-// Pulled out to a plain function (instead of living inline in a useMemo)
-// so it can be run twice: once with the real camp-member count, and once
-// with a hypothetical "what if we had N members" count for planning.
-// ---------------------------------------------------------------------------
-function runBudgetEngine(p, N, budgetExpenses, paymentTotals) {
-  const num = (v) => Number(v) || 0;
-  const eventDays = num(p.global.eventDays);
-  const defaultPct = num(p.global.contingencyPct);
-  const pctFor = (sectionKey) => {
-    const ov = p.contingencyOverrides[sectionKey];
-    return ov !== undefined && ov !== "" ? num(ov) : defaultPct;
-  };
-  const perPerson = (total) => (N > 0 ? total / N : 0);
-
-  // 02 - מחנה (כולל הסלון)
-  const campItemsTotal = p.campInfra.items.reduce((s, r) => s + num(r.qty) * num(r.price), 0);
-  const loungeItemsTotal = p.campInfra.loungeItems.reduce((s, r) => s + num(r.qty) * num(r.price), 0);
-  const iceCost = num(p.campInfra.icePricePerKg) * num(p.campInfra.iceKgPerDay) * num(p.campInfra.iceDays);
-  const elecCost = num(p.campInfra.elecPricePerKw) * num(p.campInfra.elecKw);
-  const oneTimeIncomeTotal = p.campInfra.oneTimeIncome.reduce((s, r) => s + num(r.amount), 0);
-  const campBase = campItemsTotal + loungeItemsTotal + iceCost + elecCost;
-  const campContingency = campBase * (pctFor("camp") / 100);
-  const campTotal = campBase + campContingency;
-
-  // 03 - מים ומקלחות
-  const w = p.water;
-  const totalLiters = N * num(w.literPerPersonPerDay) * eventDays;
-  const waterBase = num(w.tankFaucetCost) + num(w.fillCost) * num(w.fillCount) + num(w.drainCost) * num(w.drainCount) + num(w.showerUnitCost) * num(w.showerUnitsCount);
-  const waterContingency = waterBase * (pctFor("water") / 100);
-  const waterTotal = waterBase + waterContingency;
-
-  // 04 - שירותים (תברואה)
-  const s = p.sanitation;
-  const pumpOutCost = N * num(s.pumpFreqPerPersonPerDay) * eventDays * num(s.pumpCost);
-  const sanitationBase = pumpOutCost + num(s.sawdustFreq) * num(s.sawdustCost) + num(s.drainCellCost) + num(s.chemicalToiletsCost);
-  const sanitationContingency = sanitationBase * (pctFor("sanitation") / 100);
-  const sanitationTotal = sanitationBase + sanitationContingency;
-
-  // 05 - אוכל
-  const f = p.food;
-  const setupFoodCost = num(f.setupPeopleCount) * num(f.setupDays) * num(f.setupCostPerDay);
-  const eventFoodCost = num(f.actualDiners) * num(f.mealsPerDay) * num(f.eventDays) * num(f.costPerMeal);
-  const foodTotal = setupFoodCost + eventFoodCost + num(f.contingencyAmount);
-
-  // 06 - אלכוהול
-  const alcoholBase = p.alcohol.categories.reduce((sum, c) => sum + num(c.units) * num(c.price), 0);
-  const alcoholTotal = alcoholBase;
-
-  // 07 - כללי
-  const g = p.general;
-  const splitRatio = g.splitRatioPct === "" ? 100 : num(g.splitRatioPct);
-  const generalShare = num(g.fixedAnnualCost) * (splitRatio / 100);
-
-  // 10 - רישום הוצאות בפועל, מקובץ לפי שיוך תקציבי
-  const actualByAllocation = {};
-  budgetExpenses.forEach((e) => {
-    const key = e.allocation || "שונות";
-    const amt = (e.isRefund ? -1 : 1) * num(e.amount);
-    actualByAllocation[key] = (actualByAllocation[key] || 0) + amt;
-  });
-  const totalActual = Object.values(actualByAllocation).reduce((s, v) => s + v, 0);
-
-  // 12 - נוסחת האיחוד הסופית
-  const totalCampCost = campTotal + waterTotal + sanitationTotal + foodTotal + alcoholTotal + generalShare;
-  const duesCollected = paymentTotals.paid;
-  const vatRefund = num(p.income.vatRefund);
-  const externalNet = num(p.income.externalNet);
-  const totalIncome = duesCollected + vatRefund + externalNet + oneTimeIncomeTotal;
-  const gapToRaise = totalCampCost - totalIncome;
-
-  // 11 - תזרים מזומנים
-  const channelsTotal = p.cashflow.channels.reduce((s, c) => s + num(c.amount), 0);
-  const pendingPayments = num(p.cashflow.pendingPayments);
-  const knownCommitments = num(p.cashflow.knownCommitments);
-  const cashflowGap = totalCampCost - channelsTotal;
-  const projectedBalance = cashflowGap + vatRefund - knownCommitments + pendingPayments;
-
-  return {
-    N, eventDays,
-    campItemsTotal, loungeItemsTotal, iceCost, elecCost, oneTimeIncomeTotal, campBase, campContingency, campTotal, campPerPerson: perPerson(campTotal),
-    totalLiters, waterBase, waterContingency, waterTotal, waterPerPerson: perPerson(waterTotal),
-    pumpOutCost, sanitationBase, sanitationContingency, sanitationTotal, sanitationPerPerson: perPerson(sanitationTotal),
-    setupFoodCost, eventFoodCost, foodTotal,
-    alcoholBase, alcoholTotal, alcoholPerPerson: perPerson(alcoholTotal),
-    generalShare, generalPerPerson: perPerson(generalShare),
-    actualByAllocation, totalActual,
-    totalCampCost, duesCollected, vatRefund, externalNet, totalIncome, gapToRaise,
-    channelsTotal, pendingPayments, knownCommitments, cashflowGap, projectedBalance,
-  };
-}
-
 export default function App() {
   const [identity, setIdentity] = useState(null);
+  // True when identity/assignments/emergencyInfo came from the offline
+  // fallback snapshot (see OFFLINE_SNAPSHOT_KEY below) instead of a real,
+  // just-verified Supabase session - the event site itself has no signal,
+  // so someone reopening the app there would otherwise get bounced back to
+  // the login screen with nothing to show. Read-only: there's no real
+  // session backing this, so any write action still fails normally.
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [assignments, setAssignments] = useState({});
   const [budgetItems, setBudgetItems] = useState([]);
   const [categoryBudgets, setCategoryBudgets] = useState({});
@@ -3257,6 +3203,21 @@ export default function App() {
         ]);
         if (restoredName) {
           await applyIdentity(restoredName, false);
+        } else if (!navigator.onLine) {
+          // getSignedInMemberName came back empty, but that's expected
+          // offline (it needs a live "members" table lookup even though
+          // the local auth session itself is still on the device) - fall
+          // back to whatever was last cached instead of stranding a
+          // returning member on the login screen with no signal to log in.
+          const snap = loadOfflineSnapshot();
+          if (snap?.identity) {
+            setAssignments(snap.assignments || {});
+            if (snap.myEmergencyInfo) {
+              setEmergencyInfo((prev) => ({ ...prev, [snap.identity]: snap.myEmergencyInfo }));
+            }
+            setIdentity(snap.identity);
+            setIsOfflineMode(true);
+          }
         }
       } catch (err) {
         showToast("חלק מהנתונים לא נטענו כמו שצריך - נסה/י לרענן את הדף", "error");
@@ -3265,6 +3226,16 @@ export default function App() {
       }
     })();
   }, []);
+
+  // Keeps the offline snapshot fresh after every real (online) load, so
+  // whatever the next offline-restore falls back to is never more than one
+  // successful session out of date. Skipped in offline mode itself, since
+  // there assignments/emergencyInfo already came from the snapshot and
+  // rewriting it would just bump its timestamp without adding anything.
+  useEffect(() => {
+    if (!identity || isOfflineMode || !navigator.onLine) return;
+    saveOfflineSnapshot(identity, assignments, emergencyInfo);
+  }, [identity, isOfflineMode, assignments, emergencyInfo]);
 
   useEffect(() => {
     if (!loading && identity) {
@@ -3698,6 +3669,7 @@ export default function App() {
 
   async function applyIdentity(name, logHistory = true) {
     setIdentity(name);
+    setIsOfflineMode(false);
     // Fired immediately and not awaited, before the slower calls below -
     // this used to run last in a long sequential await chain, so a member
     // who opened the app and navigated away (or hit a slow/failing call
@@ -3754,6 +3726,7 @@ export default function App() {
 
   async function logout() {
     setIdentity(null);
+    setIsOfflineMode(false);
     try {
       await signOutMember();
     } catch {}
@@ -4017,6 +3990,11 @@ export default function App() {
     if (!eventPhotos || eventPhotos.length === 0) return;
     setEventPhotosZipping(true);
     try {
+      // Loaded on demand - jszip is only needed for this one bulk-download
+      // action, so keeping it out of the main bundle saves everyone else
+      // (checking a shift, reading the board) real download weight on
+      // mobile data in the field.
+      const { default: JSZip } = await import("jszip");
       const zip = new JSZip();
       await Promise.all(
         eventPhotos.map(async (photo) => {
@@ -5211,6 +5189,22 @@ ${sections}
       .sort((a, b) => a.name.localeCompare(b.name, "he"));
   }, [extraMembers, removedMembers, dbRoles, idOnFileNames]);
 
+  // The teardown shift's real roster is "everyone currently in camp", which
+  // is dynamic (allMembers.length) - but SHIFTS itself is a static,
+  // module-level array built once at load time, so its own `spots` field
+  // is frozen at whatever MEMBERS.length was back then. Every render site
+  // that shows a shift's names/capacity needs to special-case teardown
+  // through allMembers instead of trusting s.spots directly, or it'll
+  // silently show a stale headcount once anyone's added outside the
+  // original static roster - this centralizes that so a future call site
+  // can't forget the check.
+  function shiftNamesAndSpots(s) {
+    const isTeardown = s.id === TEARDOWN_ID;
+    const names = (isTeardown ? allMembers.map((m) => m.name) : (assignments[s.id] || [])).filter((n) => !removedMembers.includes(n));
+    const spots = isTeardown ? allMembers.length : s.spots;
+    return { names, spots };
+  }
+
   const allBudgetCategories = useMemo(
     () => [...BUDGET_CATEGORIES, ...extraBudgetCategories],
     [extraBudgetCategories]
@@ -5805,6 +5799,12 @@ ${sections}
             <LogOut size={13} /> לא אני, החלף/י משתמש
           </button>
         </div>
+        {isOfflineMode && (
+          <div className="relative max-w-4xl mx-auto mt-2 flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl" style={{ background: COLORS.accent2Light, color: COLORS.accent2Dark }}>
+            <WifiOff size={13} />
+            אין חיבור לרשת - מוצג מידע שמור ממועד ההתחברות האחרון. לא ניתן לשמור שינויים כרגע.
+          </div>
+        )}
       </div>
 
       {/* Primary nav - "מקובץ למעלה" layout - sticky so the current-page
@@ -6745,12 +6745,10 @@ ${sections}
             <h3 className="text-xs font-bold mt-5 mb-2" style={{ color: COLORS.textMuted }}>המשמרות של הצוות</h3>
             <div className="space-y-1.5">
               {SHIFTS.filter((s) => s.team === viewedTeam).map((s) => {
-                const isTeardownRow = s.id === TEARDOWN_ID;
-                const names = isTeardownRow ? allMembers.map((m) => m.name) : (assignments[s.id] || []);
-                const spots = isTeardownRow ? allMembers.length : s.spots;
+                const { names, spots } = shiftNamesAndSpots(s);
                 return (
                   <div key={s.id} className="rounded-xl px-3 py-2 flex items-center justify-between text-xs" style={{ background: COLORS.surface }}>
-                    <span>{s.title} · {formatDate(s.date)}{isTeardownRow || s.noTime ? "" : ` · ${s.start}–${s.end}`}</span>
+                    <span>{s.title} · {formatDate(s.date)}{s.id === TEARDOWN_ID || s.noTime ? "" : ` · ${s.start}–${s.end}`}</span>
                     <span className="px-2 py-0.5 rounded-full" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>{s.noLimit ? "ללא הגבלה" : `${names.length}/${spots}`}</span>
                   </div>
                 );
@@ -7229,8 +7227,7 @@ ${sections}
                           <div className="p-2 space-y-1.5">
                             {visibleShifts.filter((s) => s.date === date).sort((a, b) => a.start.localeCompare(b.start)).map((s) => {
                               const isTeardown = s.id === TEARDOWN_ID;
-                              const names = (isTeardown ? allMembers.map((m) => m.name) : (assignments[s.id] || [])).filter((n) => !removedMembers.includes(n));
-                              const spots = isTeardown ? allMembers.length : s.spots;
+                              const { names, spots } = shiftNamesAndSpots(s);
                               const joined = isJoined(s.id);
                               // isAtCapacity is a pure fact about the shift (no room left) -
                               // shown regardless of whether the viewer is one of the people
@@ -7303,8 +7300,7 @@ ${sections}
             <div className="space-y-2 mb-8">
               {visibleShifts.map((s) => {
                 const isTeardown = s.id === TEARDOWN_ID;
-                const names = (isTeardown ? allMembers.map((m) => m.name) : (assignments[s.id] || [])).filter((n) => !removedMembers.includes(n));
-                const spots = isTeardown ? allMembers.length : s.spots;
+                const { names, spots } = shiftNamesAndSpots(s);
                 const joined = isJoined(s.id);
                 const isAtCapacity = !s.noLimit && names.length >= spots;
                 const full = isAtCapacity && !joined;
