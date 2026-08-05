@@ -3035,6 +3035,7 @@ export default function App() {
   const [reminderTitle, setReminderTitle] = useState("");
   const [reminderMessage, setReminderMessage] = useState("");
   const [sendingReminder, setSendingReminder] = useState(false);
+  const [sendingItemReminderId, setSendingItemReminderId] = useState(null);
   const [editingMemberId, setEditingMemberId] = useState(null);
   const [editIdValue, setEditIdValue] = useState("");
   const [editNameValue, setEditNameValue] = useState("");
@@ -3060,6 +3061,10 @@ export default function App() {
   const [tab, setTab] = useState("dashboard-personal");
   const [adminSubTab, setAdminSubTab] = useState("overview");
   const [expandedNavCategory, setExpandedNavCategory] = useState(null);
+  // Owner-only: lets the owner open any team's "לוח בקרה צוות" view (the
+  // same screen a team's own lead sees) without actually being that team's
+  // lead - regular admins don't get this, only the owner.
+  const [ownerTeamView, setOwnerTeamView] = useState("");
   const [pendingScrollTargetId, setPendingScrollTargetId] = useState(null);
   useEffect(() => {
     if (!pendingScrollTargetId) return;
@@ -4751,6 +4756,27 @@ export default function App() {
     }
   }
 
+  // Admin-only: re-pushes a notification about one specific announcement or
+  // poll that's already on the board - separate from the automatic push a
+  // new post triggers once, for nudging people who missed it the first time.
+  async function sendItemReminder(itemId, title, message) {
+    setSendingItemReminderId(itemId);
+    try {
+      const result = await sendEventReminderPush(title, message);
+      const sent = result?.sent ?? 0;
+      if (sent > 0) {
+        showToast(`תזכורת נשלחה ל-${sent} מכשירים`, "ok");
+      } else {
+        showToast("לא נשלחה אף התראה בפועל - כנראה שאף אחד עדיין לא אישר התראות דחיפה", "error");
+      }
+      logActivity("שליחת תזכורת ללוח מודעות", title);
+    } catch (err) {
+      showToast(`שליחת התזכורת נכשלה: ${err?.message || "שגיאה לא ידועה"}`, "error");
+    } finally {
+      setSendingItemReminderId(null);
+    }
+  }
+
   async function addAnnouncement(text, eventInfo, audience) {
     if (!text.trim()) return;
     const latest = await getFreshShared("announcements", announcements);
@@ -5601,7 +5627,6 @@ ${sections}
     { id: "board", label: "לוח מודעות", icon: Megaphone },
   ];
   const navCampTabs = [
-    { id: "gallery", label: "מזכרת קטנה מאירוע גדול", icon: Camera },
     { id: "content", label: "תוכן", icon: Flame },
     { id: "budget", label: "הוצאות", icon: Wallet },
     ...(canManageFinances ? [{ id: "finances", label: "כספים", icon: CreditCard }] : []),
@@ -5611,6 +5636,7 @@ ${sections}
     { id: "contacts", label: "חברי קמפ", icon: Phone },
     { id: "equipment", label: "ציוד קמפ", icon: Package },
     { id: "shopping", label: "קניות מטבח", icon: ShoppingCart },
+    { id: "gallery", label: "מזכרת קטנה מאירוע גדול", icon: Camera },
   ];
   function renderNavItem(t, fullWidth) {
     const locked = !profileComplete && !PROFILE_GATE_EXEMPT_TABS.includes(t.id);
@@ -5846,6 +5872,20 @@ ${sections}
             }}
           >
             <LayoutDashboard size={16} /> {roleDashboardTab.label}
+          </button>
+        )}
+
+        {isOwner && (
+          <button
+            onClick={() => setTab("dashboard-team")}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-sm font-bold transition-colors mb-2"
+            style={{
+              background: tab === "dashboard-team" ? COLORS.accent2 : COLORS.surface,
+              color: tab === "dashboard-team" ? "white" : COLORS.accent2Dark,
+              border: `1px solid ${tab === "dashboard-team" ? COLORS.accent2 : COLORS.divider}`,
+            }}
+          >
+            <Tent size={16} /> לוח בקרה צוות (הצגה לכל צוות)
           </button>
         )}
 
@@ -6599,12 +6639,47 @@ ${sections}
           </div>
         )}
 
-        {tab === "dashboard-team" && myLeadTeam && (
+        {tab === "dashboard-team" && (myLeadTeam || isOwner) && (() => {
+          const viewedTeam = myLeadTeam || ownerTeamView;
+          if (!viewedTeam) {
+            return (
+              <div>
+                <h2 className="text-sm font-bold mb-3" style={{ color: COLORS.accentDark }}>לוח בקרה צוות - הצגה לכל צוות</h2>
+                <p className="text-xs mb-3" style={{ color: COLORS.textMuted }}>בחר/י צוות כדי לראות את לוח הבקרה שלו, בדיוק כפי שמובילת הצוות רואה אותו.</p>
+                <select
+                  value={ownerTeamView}
+                  onChange={(e) => setOwnerTeamView(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                  style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                >
+                  <option value="">בחר/י צוות...</option>
+                  {allTeams.map((t) => (
+                    <option key={t.name} value={t.name}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+            );
+          }
+          return (
           <div>
-            <h2 className="text-sm font-bold mb-3" style={{ color: COLORS.accentDark }}>לוח בקרה - צוות {myLeadTeam}</h2>
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <h2 className="text-sm font-bold" style={{ color: COLORS.accentDark }}>לוח בקרה - צוות {viewedTeam}</h2>
+              {isOwner && !myLeadTeam && (
+                <select
+                  value={ownerTeamView}
+                  onChange={(e) => setOwnerTeamView(e.target.value)}
+                  className="px-2 py-1 rounded-lg text-xs outline-none"
+                  style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                >
+                  {allTeams.map((t) => (
+                    <option key={t.name} value={t.name}>{t.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               {(() => {
-                const t = teamStats(myLeadTeam);
+                const t = teamStats(viewedTeam);
                 return [
                   { label: "משמרות הצוות", value: t.totalShifts },
                   { label: "מקומות פנויים", value: t.unfilled },
@@ -6619,11 +6694,11 @@ ${sections}
               })()}
             </div>
 
-            {(overBudgetCategories.includes(myLeadTeam) || nearBudgetCategories.includes(myLeadTeam) || (myLeadTeam === CONTENT_TEAM_NAME && pendingContentSuggestions.length > 0)) && (
+            {(overBudgetCategories.includes(viewedTeam) || nearBudgetCategories.includes(viewedTeam) || (viewedTeam === CONTENT_TEAM_NAME && pendingContentSuggestions.length > 0)) && (
               <div className="mt-3 rounded-2xl p-3" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
-                {overBudgetCategories.includes(myLeadTeam) && <div className="text-xs">⚠️ תקציב הצוות חרג מהתכנון</div>}
-                {nearBudgetCategories.includes(myLeadTeam) && <div className="text-xs">🟡 תקציב הצוות מתקרב לתכנון (מעל 85%)</div>}
-                {myLeadTeam === CONTENT_TEAM_NAME && pendingContentSuggestions.length > 0 && (
+                {overBudgetCategories.includes(viewedTeam) && <div className="text-xs">⚠️ תקציב הצוות חרג מהתכנון</div>}
+                {nearBudgetCategories.includes(viewedTeam) && <div className="text-xs">🟡 תקציב הצוות מתקרב לתכנון (מעל 85%)</div>}
+                {viewedTeam === CONTENT_TEAM_NAME && pendingContentSuggestions.length > 0 && (
                   <div className="text-xs">
                     {pendingContentSuggestions.length} הצעות תוכן ממתינות לשיבוץ -{" "}
                     <button onClick={() => setTab("content")} className="underline font-bold">מעבר ללוח תוכן</button>
@@ -6634,7 +6709,7 @@ ${sections}
 
             <h3 className="text-xs font-bold mt-5 mb-2" style={{ color: COLORS.textMuted }}>המשמרות של הצוות</h3>
             <div className="space-y-1.5">
-              {SHIFTS.filter((s) => s.team === myLeadTeam).map((s) => {
+              {SHIFTS.filter((s) => s.team === viewedTeam).map((s) => {
                 const isTeardownRow = s.id === TEARDOWN_ID;
                 const names = isTeardownRow ? allMembers.map((m) => m.name) : (assignments[s.id] || []);
                 const spots = isTeardownRow ? allMembers.length : s.spots;
@@ -6647,16 +6722,16 @@ ${sections}
               })}
             </div>
 
-            <h3 className="text-xs font-bold mt-5 mb-2" style={{ color: COLORS.textMuted }}>חברי הצוות ({teamMembers(myLeadTeam).length})</h3>
+            <h3 className="text-xs font-bold mt-5 mb-2" style={{ color: COLORS.textMuted }}>חברי הצוות ({teamMembers(viewedTeam).length})</h3>
             <div className="flex flex-wrap gap-1.5 mb-1">
-              {teamMembers(myLeadTeam).length === 0 ? (
+              {teamMembers(viewedTeam).length === 0 ? (
                 <p className="text-xs" style={{ color: COLORS.textMuted }}>עדיין אף אחד לא שיבץ משמרת בצוות הזה.</p>
               ) : (
-                teamMembers(myLeadTeam).map((n) => (
+                teamMembers(viewedTeam).map((n) => (
                   <span key={n} className="text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5" style={{ background: COLORS.surface }} dir="ltr">
                     <span dir="rtl">{n}</span>{memberPhones[n] ? ` · ${memberPhones[n]}` : ""}
-                    {isManualTeamMember(myLeadTeam, n) && (
-                      <button onClick={() => removeManualTeamMember(myLeadTeam, n)} style={{ color: COLORS.textMuted }}><X size={10} /></button>
+                    {isManualTeamMember(viewedTeam, n) && (
+                      <button onClick={() => removeManualTeamMember(viewedTeam, n)} style={{ color: COLORS.textMuted }}><X size={10} /></button>
                     )}
                   </span>
                 ))
@@ -6664,28 +6739,29 @@ ${sections}
             </div>
             <div className="mt-2">
               <div className="text-xs mb-1" style={{ color: COLORS.textMuted }}>הוספת חבר/ה לצוות ללא משמרת</div>
-              <AdminAssignPicker members={allMembers} onAssign={(name) => addManualTeamMember(myLeadTeam, name)} />
+              <AdminAssignPicker members={allMembers} onAssign={(name) => addManualTeamMember(viewedTeam, name)} />
             </div>
 
             <div className="mt-5 pt-4 border-t" style={{ borderColor: COLORS.divider }}>
               <TeamChecklist
-                items={checklistItemsFor(myLeadTeam)}
-                state={checklistState[myLeadTeam] || {}}
+                items={checklistItemsFor(viewedTeam)}
+                state={checklistState[viewedTeam] || {}}
                 canCheck
                 canManage
-                onToggle={(i) => toggleChecklistItem(myLeadTeam, i)}
-                onAdd={(text) => addChecklistItem(myLeadTeam, text)}
-                onEdit={(i, text) => editChecklistItem(myLeadTeam, i, text)}
-                onRemove={(i) => removeChecklistItem(myLeadTeam, i)}
+                onToggle={(i) => toggleChecklistItem(viewedTeam, i)}
+                onAdd={(text) => addChecklistItem(viewedTeam, text)}
+                onEdit={(i, text) => editChecklistItem(viewedTeam, i, text)}
+                onRemove={(i) => removeChecklistItem(viewedTeam, i)}
               />
             </div>
 
             <div className="mt-5 pt-4 border-t" style={{ borderColor: COLORS.divider }}>
               <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>הוספת הוצאה לצוות</h3>
-              <BudgetExpenseForm onAdd={addBudgetExpense} onError={(msg) => showToast(msg, "error")} lockedAllocation={myLeadTeam} categories={allBudgetCategories} allMembers={allMembers} />
+              <BudgetExpenseForm onAdd={addBudgetExpense} onError={(msg) => showToast(msg, "error")} lockedAllocation={viewedTeam} categories={allBudgetCategories} allMembers={allMembers} />
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {tab === "dashboard-personal" && (
           <div>
@@ -7386,8 +7462,18 @@ ${sections}
                     <div key={p.id} className="rounded-2xl p-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-semibold">{p.question}</span>
-                        {(isAdmin) && (
-                          <button onClick={() => removePoll(p.id)} style={{ color: COLORS.textMuted }}><Trash2 size={13} /></button>
+                        {isAdmin && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => sendItemReminder(p.id, "תזכורת: סקר ממתין לך", p.question)}
+                              disabled={sendingItemReminderId === p.id}
+                              title="שליחת תזכורת דחיפה על הסקר הזה"
+                              style={{ color: COLORS.textMuted, opacity: sendingItemReminderId === p.id ? 0.5 : 1 }}
+                            >
+                              <Bell size={13} />
+                            </button>
+                            <button onClick={() => removePoll(p.id)} style={{ color: COLORS.textMuted }}><Trash2 size={13} /></button>
+                          </div>
                         )}
                       </div>
                       {!answered ? (
@@ -7457,6 +7543,16 @@ ${sections}
                         </span>
                         <div className="flex items-center gap-2">
                           <span className="text-xs" style={{ color: COLORS.textMuted }}>{new Date(a.ts).toLocaleDateString("he-IL")}</span>
+                          {isAdmin && (
+                            <button
+                              onClick={() => sendItemReminder(a.id, "תזכורת: מודעה בלוח", a.text)}
+                              disabled={sendingItemReminderId === a.id}
+                              title="שליחת תזכורת דחיפה על המודעה הזו"
+                              style={{ color: COLORS.textMuted, opacity: sendingItemReminderId === a.id ? 0.5 : 1 }}
+                            >
+                              <Bell size={13} />
+                            </button>
+                          )}
                           {(isAdmin || a.author === identity) && (
                             <button onClick={() => removeAnnouncement(a.id)} style={{ color: COLORS.textMuted }}>
                               <Trash2 size={13} />
