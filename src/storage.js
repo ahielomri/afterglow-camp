@@ -143,6 +143,14 @@ async function resizeImageFile(file, maxDim = 1600, quality = 0.82) {
 // null if the backup didn't happen.
 async function backupOriginalToDrive(file, uploaderName) {
   try {
+    // backup-photo-to-drive requires a real signed-in member session (not
+    // just the public anon key - see the security hardening on the function
+    // itself), and every member has a genuine Supabase Auth session by the
+    // time they can upload a photo (see applyIdentity/handleLogin in
+    // App.jsx), so this should always be available here.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return null;
+
     const form = new FormData();
     form.append("file", file, file.name);
     // Camera/share-sheet uploads often arrive with a generic name (no real
@@ -153,13 +161,10 @@ async function backupOriginalToDrive(file, uploaderName) {
     const stamp = new Date().toISOString().slice(0, 19).replace("T", " ").replace(/:/g, "-");
     form.append("filename", `${stamp} - ${uploaderName}.${ext}`);
     const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("drive_backup_timeout")), 25000));
-    // Most members never sign in (no Supabase Auth session), so the SDK has no
-    // session token to attach - it needs an explicit Authorization header here or
-    // this verify_jwt-protected function never receives the request at all.
     const { data, error } = await Promise.race([
       supabase.functions.invoke("backup-photo-to-drive", {
         body: form,
-        headers: { Authorization: `Bearer ${supabaseAnonKey}` },
+        headers: { Authorization: `Bearer ${session.access_token}` },
       }),
       timeout,
     ]);
@@ -226,9 +231,14 @@ export async function listEventPhotos() {
 // copy the gallery displays. Throws on failure; callers should fall back
 // to the compressed Storage copy (photo.url) rather than block a download.
 export async function fetchOriginalPhotoBlob(driveFileId) {
+  // get-drive-photo requires a real signed-in member session (see the
+  // security hardening on the function itself) - same reasoning as
+  // backupOriginalToDrive above.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("not_signed_in");
   const url = `${supabaseUrl}/functions/v1/get-drive-photo?fileId=${encodeURIComponent(driveFileId)}`;
   const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${supabaseAnonKey}`, apikey: supabaseAnonKey },
+    headers: { Authorization: `Bearer ${session.access_token}`, apikey: supabaseAnonKey },
   });
   if (!res.ok) throw new Error(`get-drive-photo failed: ${res.status}`);
   return res.blob();
