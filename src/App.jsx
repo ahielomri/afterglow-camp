@@ -1108,41 +1108,105 @@ function EditableCategoryList({ categories, onRename, onRemove }) {
   );
 }
 
-function CategoryBudgetForm({ onSet, categories }) {
-  const [cat, setCat] = useState(categories[0]);
-  const [amount, setAmount] = useState("");
+// One row per budget category/department. `published` (categoryBudgets[cat])
+// is the number the department actually sees everywhere in the app right
+// now. A category with a live parameter/item-row calculation is NOT
+// editable here - it's only ever updated by explicitly publishing it from
+// the "תקציב" tab (see PublishBudgetRow below), so what's shown here is the
+// published value, not the live one, and might legitimately lag behind it
+// until someone publishes. A category with no calculation at all is a
+// plain manual number, editable right here (click to open a small input).
+function DepartmentBudgetRow({ cat, hasComputed, published, onSet }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(published || "");
+
+  function commit() {
+    setEditing(false);
+    if ((Number(value) || 0) !== published) onSet(cat, value);
+  }
 
   return (
-    <div className="rounded-2xl p-4 mb-4 flex items-end gap-2 flex-wrap" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-      <div className="flex-1 min-w-[160px]">
-        <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>מחלקה</label>
-        <div className="relative">
-          <select
-            value={cat} onChange={(e) => setCat(e.target.value)}
-            className="w-full appearance-none pl-9 pr-3 py-2.5 rounded-xl text-sm outline-none"
-            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-          >
-            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <ChevronDown size={15} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: COLORS.text }} />
+    <div className="flex items-center justify-between text-sm rounded-xl px-3 py-2.5 gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <span className="font-semibold">{cat}</span>
+      {hasComputed ? (
+        published > 0 ? (
+          <span style={{ color: COLORS.accent2Dark, fontFamily: FONT_NUM }}>תקציב מפורסם: ₪{published.toLocaleString()}</span>
+        ) : (
+          <span style={{ color: COLORS.danger }}>טרם פורסם - יש לפרסם בטאב "תקציב"</span>
+        )
+      ) : editing ? (
+        <div className="flex items-center gap-1.5">
+          <input
+            type="number"
+            autoFocus
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && commit()}
+            onBlur={commit}
+            placeholder="0"
+            className="w-24 px-2 py-1.5 rounded-lg text-sm outline-none text-left"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}`, fontFamily: FONT_NUM }}
+          />
+          <button onMouseDown={(e) => e.preventDefault()} onClick={commit} style={{ color: COLORS.accent2Dark }}>
+            <Check size={15} />
+          </button>
         </div>
+      ) : (
+        <button onClick={() => { setValue(published || ""); setEditing(true); }} className="flex items-center gap-1" style={{ color: published > 0 ? COLORS.textMuted : COLORS.danger }}>
+          {published > 0 ? `הוזן ידנית: ₪${published.toLocaleString()}` : "אין נתון - לחיצה להזנה ידנית"}
+          <Pencil size={12} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Compares the live-computed value (engine.categoryPlanned) against what's
+// currently published (categoryBudgets) for one category, and lets finance
+// push the live number out to the department - with an explicit confirm,
+// since publishing immediately changes what that team sees everywhere.
+function PublishBudgetRow({ cat, computed, published, onPublish }) {
+  const [confirming, setConfirming] = useState(false);
+  const upToDate = Math.round(computed) === Math.round(published);
+
+  return (
+    <div className="rounded-xl px-3 py-2.5 text-sm" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="font-semibold">{cat}</span>
+        <span style={{ fontFamily: FONT_NUM, color: COLORS.textMuted }}>
+          מחושב כעת: ₪{Math.round(computed).toLocaleString()} · מפורסם למחלקה: ₪{Math.round(published).toLocaleString()}
+        </span>
       </div>
-      <div className="flex-1 min-w-[140px]">
-        <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>תקציב מתוכנן (₪)</label>
-        <input
-          type="number" value={amount} onChange={(e) => setAmount(e.target.value)}
-          placeholder="0"
-          className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
-          style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
-        />
-      </div>
-      <button
-        onClick={() => { onSet(cat, amount); setAmount(""); }}
-        className="px-4 py-2.5 rounded-xl text-sm font-semibold"
-        style={{ background: COLORS.accent, color: COLORS.bg }}
-      >
-        עדכון תקציב
-      </button>
+      {!upToDate && !confirming && (
+        <button
+          onClick={() => setConfirming(true)}
+          className="mt-2 text-sm px-3 py-1.5 rounded-full font-semibold"
+          style={{ background: COLORS.accent, color: COLORS.bg }}
+        >
+          פרסום עדכון למחלקה
+        </button>
+      )}
+      {confirming && (
+        <div className="mt-2 rounded-lg p-2.5 text-sm" style={{ background: COLORS.input }}>
+          <div className="mb-2">בלחיצת שמירה תקציב הצוות יעודכן. להמשיך?</div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { onPublish(cat, computed); setConfirming(false); }}
+              className="px-4 py-1.5 rounded-full font-semibold"
+              style={{ background: COLORS.accent, color: COLORS.bg }}
+            >
+              כן, לפרסם
+            </button>
+            <button
+              onClick={() => setConfirming(false)}
+              className="px-4 py-1.5 rounded-full font-semibold"
+              style={{ background: COLORS.surface, color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}
+            >
+              לא
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3357,10 +3421,26 @@ export default function App() {
   }
 
   async function setCategoryBudget(cat, amount) {
+    const value = Number(amount) || 0;
     const latest = await getFreshShared("category-budgets", categoryBudgets);
-    await persistCategoryBudgets({ ...latest, [cat]: Number(amount) || 0 });
+    await persistCategoryBudgets({ ...latest, [cat]: value });
     showToast(`תקציב ${cat} עודכן`, "ok");
-    logActivity("עדכון תקציב מחלקה", `${cat}: ₪${Number(amount) || 0}`);
+    logActivity("עדכון תקציב מחלקה", `${cat}: ₪${value}`);
+    // Every team whose budget lands in this category (see
+    // TEAM_BUDGET_CATEGORY) gets pushed the moment its number changes -
+    // whether that's a manual entry here or a publish from the parameters
+    // engine. Best-effort: a non-admin budget-team member can save a
+    // budget but the push edge function is admin/owner-only, so a failure
+    // here must never block the save itself.
+    const leadNames = [...TEAMS, ...extraTeams]
+      .filter((t) => budgetCategoryForTeam(t.name) === cat)
+      .flatMap((t) => teamLeads[t.name] || []);
+    const uniqueLeads = [...new Set(leadNames)];
+    if (uniqueLeads.length > 0) {
+      try {
+        await sendEventReminderPush("עדכון תקציב", `תקציב "${cat}" עודכן ל-₪${value.toLocaleString()}`, undefined, uniqueLeads);
+      } catch {}
+    }
   }
 
   async function patchBudgetParams(section, patch) {
@@ -5825,16 +5905,16 @@ ${sections}
     () => runBudgetEngine(budgetParams, allMembers.length, budgetExpenses, paymentTotals),
     [budgetParams, budgetExpenses, paymentTotals, allMembers.length]
   );
-  // "תקציב מתוכנן" per category: prefers the amount computed live from the
-  // budget parameters (engine.categoryPlanned - see runBudgetEngine) over
-  // the older manually-typed categoryBudgets number, so filling in real
-  // numbers in the parameters calculator actually shows up as a planned
-  // budget instead of staying disconnected at 0. categoryBudgets is still
-  // the source for categories that don't correspond to any parameter
-  // section (e.g. ביטוח, חשל"ש) - there's nothing to compute there.
+  // "תקציב מתוכנן" per category is always the last *published* number
+  // (categoryBudgets), never the live engine.categoryPlanned value directly -
+  // deliberately. While Netta is mid-edit on the parameters below, the
+  // live-computed number would otherwise flicker through every department's
+  // screen with every keystroke, including half-typed numbers. A department
+  // only sees a new number once someone explicitly publishes it (see the
+  // "פרסום תקציב למחלקות" section in the תקציב tab), which copies the
+  // live computed value into categoryBudgets at that moment.
   function plannedForCategory(cat) {
-    const computed = engine.categoryPlanned[cat];
-    return computed > 0 ? computed : Number(categoryBudgets[cat]) || 0;
+    return Number(categoryBudgets[cat]) || 0;
   }
   const whatIfN = Number(budgetParams.global.whatIfN) || 0;
   const whatIfEngine = useMemo(() => {
@@ -9069,6 +9149,13 @@ ${sections}
                 תקציב
               </button>
               <button
+                onClick={() => setFinancesView("departments")}
+                className="px-4 py-2 rounded-full text-sm font-semibold"
+                style={{ background: financesView === "departments" ? COLORS.accent : COLORS.surface, color: financesView === "departments" ? COLORS.bg : COLORS.textMuted }}
+              >
+                מחלקות
+              </button>
+              <button
                 onClick={() => setFinancesView("receipts")}
                 className="px-4 py-2 rounded-full text-sm font-semibold"
                 style={{ background: financesView === "receipts" ? COLORS.accent : COLORS.surface, color: financesView === "receipts" ? COLORS.bg : COLORS.textMuted }}
@@ -9293,39 +9380,6 @@ ${sections}
 
             {financesView === "budget" && (
             <div>
-            <div className="mb-4">
-              <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.accentDark }}>מנוע תקציב מפורט (צוות תקציב)</h3>
-              <p className="text-xs mb-3" style={{ color: COLORS.textMuted }}>
-                לכל מחלקה - אם יש לה חישוב מהפרמטרים למטה (או משורת פריט מתויגת), הסכום נמשך משם אוטומטית ואין צורך לעדכן כלום ביד. מחלקה בלי חישוב מסומנת בהערה, ואפשר להזין לה תקציב ידני למטה ב"הגדרת תקציב למחלקה".
-              </p>
-              <div className="space-y-1.5 mb-4">
-                {allTeams.map((t) => {
-                  const cat = budgetCategoryForTeam(t.name);
-                  const computed = engine.categoryPlanned[cat] || 0;
-                  const manual = Number(categoryBudgets[cat]) || 0;
-                  return (
-                    <div key={t.name} className="flex items-center justify-between text-xs rounded-xl px-3 py-2 gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                      <span className="font-semibold">{t.name}</span>
-                      {computed > 0 ? (
-                        <span style={{ color: COLORS.accent2Dark, fontFamily: FONT_NUM }}>מחושב אוטומטית: ₪{Math.round(computed).toLocaleString()}</span>
-                      ) : manual > 0 ? (
-                        <span style={{ color: COLORS.textMuted, fontFamily: FONT_NUM }}>הוזן ידנית: ₪{manual.toLocaleString()}</span>
-                      ) : (
-                        <span style={{ color: COLORS.danger }}>אין נתון מחושב - יש להזין ידנית למטה</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.textMuted }}>פתיחת קטגוריית הוצאה חדשה</h3>
-              <p className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
-                אם יש הוצאה שלא שייכת לשום צוות קיים - אפשר לפתוח קטגוריה חדשה שתופיע גם בטאב "הוצאות". רק צוות תקציב/מנהלים יכולים לפתוח קטגוריה חדשה.
-              </p>
-              <NewCategoryForm onAdd={addBudgetCategory} />
-              <EditableCategoryList categories={extraBudgetCategories} onRename={renameBudgetCategory} onRemove={removeBudgetCategory} />
-              <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.textMuted }}>הגדרת תקציב למחלקה</h3>
-              <CategoryBudgetForm onSet={setCategoryBudget} categories={allBudgetCategories} />
-            </div>
             {/* 12 - נוסחת האיחוד הסופית */}
             <div className="rounded-2xl p-4 mb-6" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
               <div className="text-xs font-bold mb-2" style={{ color: COLORS.accentDark }}>נוסחת האיחוד הסופית</div>
@@ -9360,6 +9414,26 @@ ${sections}
                 </div>
               )}
             </div>
+
+            {canEditBudget && (() => {
+              const publishRows = allBudgetCategories
+                .map((cat) => ({ cat, computed: engine.categoryPlanned[cat] || 0, published: Number(categoryBudgets[cat]) || 0 }))
+                .filter((r) => r.computed > 0);
+              if (publishRows.length === 0) return null;
+              return (
+                <div className="mb-6">
+                  <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.accentDark }}>פרסום תקציב למחלקות</h3>
+                  <p className="text-xs mb-3" style={{ color: COLORS.textMuted }}>
+                    השינויים בפרמטרים למטה הם טיוטה - מחלקה רואה מספר חדש רק אחרי שמפרסמים אותו כאן במפורש, כדי שאף אחד לא יראה מספר שעדיין באמצע עריכה. פרסום שולח גם התראה לראשי הצוות הרלוונטי.
+                  </p>
+                  <div className="space-y-1.5">
+                    {publishRows.map((r) => (
+                      <PublishBudgetRow key={r.cat} cat={r.cat} computed={r.computed} published={r.published} onPublish={setCategoryBudget} />
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {!canEditBudget && (
               <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>הפרמטרים המלאים ניתנים לעריכה על ידי מנהלים בלבד. זו תצוגת הסיכום.</p>
@@ -9737,6 +9811,32 @@ ${sections}
               );
             })()}
             </div>
+            )}
+
+            {financesView === "departments" && (
+              <div>
+                <h3 className="text-base font-bold mb-2" style={{ color: COLORS.accentDark }}>מנוע תקציב מפורט (צוות תקציב)</h3>
+                <p className="text-sm mb-3" style={{ color: COLORS.textMuted }}>
+                  מחלקה עם חישוב מפרמטרים מתעדכנת רק כשמפרסמים אליה עדכון בטאב "תקציב" - לא באופן חי. מחלקה בלי חישוב אפשר לעדכן ישירות כאן - לחיצה על השורה פותחת שדה להזנת סכום.
+                </p>
+                <div className="space-y-1.5 mb-4">
+                  {allBudgetCategories.map((cat) => (
+                    <DepartmentBudgetRow
+                      key={cat}
+                      cat={cat}
+                      hasComputed={(engine.categoryPlanned[cat] || 0) > 0}
+                      published={Number(categoryBudgets[cat]) || 0}
+                      onSet={setCategoryBudget}
+                    />
+                  ))}
+                </div>
+                <h3 className="text-base font-bold mb-2" style={{ color: COLORS.textMuted }}>פתיחת קטגוריית הוצאה חדשה</h3>
+                <p className="text-sm mb-2" style={{ color: COLORS.textMuted }}>
+                  אם יש הוצאה שלא שייכת לשום צוות קיים - אפשר לפתוח קטגוריה חדשה שתופיע גם בטאב "הוצאות". רק צוות תקציב/מנהלים יכולים לפתוח קטגוריה חדשה.
+                </p>
+                <NewCategoryForm onAdd={addBudgetCategory} />
+                <EditableCategoryList categories={extraBudgetCategories} onRename={renameBudgetCategory} onRemove={removeBudgetCategory} />
+              </div>
             )}
 
             {financesView === "receipts" && (() => {
