@@ -610,6 +610,45 @@ function csvEscape(value) {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+function escapeXml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+// Builds a real multi-sheet .xls workbook (Excel 2003 XML / SpreadsheetML)
+// with no external library - the obvious alternative, the "xlsx" npm
+// package, ships a known high-severity prototype-pollution/ReDoS
+// vulnerability, and the patched build SheetJS actually recommends is only
+// distributed from their own CDN (not npm), which this environment's
+// network policy blocks. SpreadsheetML is a plain, well-documented XML
+// schema that Excel and Google Sheets both open natively, so it sidesteps
+// the dependency (and its vulnerability) entirely.
+function buildSpreadsheetMLWorkbook(sheets) {
+  const sheetsXml = sheets.map(({ name, rows }) => {
+    const rowsXml = rows.map((row) => {
+      const cellsXml = row.map((cell) => {
+        const isNumber = typeof cell === "number" && Number.isFinite(cell);
+        return `<Cell><Data ss:Type="${isNumber ? "Number" : "String"}">${escapeXml(cell)}</Data></Cell>`;
+      }).join("");
+      return `<Row>${cellsXml}</Row>`;
+    }).join("");
+    // Excel sheet names: 31 chars max, and a handful of characters are
+    // outright forbidden - stripped rather than escaped, since an escaped
+    // "&amp;" would still count against (and likely blow) the 31-char cap.
+    const safeName = escapeXml(name.replace(/[:\\/?*[\]]/g, " ").slice(0, 31));
+    return `<Worksheet ss:Name="${safeName}"><Table>${rowsXml}</Table></Worksheet>`;
+  }).join("");
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+${sheetsXml}
+</Workbook>`;
+}
+
 function expensesToCsv(list) {
   const rows = [EXPENSE_CSV_HEADERS.join(",")];
   list.forEach((e) => rows.push(EXPENSE_CSV_HEADERS.map((h) => csvEscape(e[h])).join(",")));
@@ -2922,6 +2961,8 @@ export default function App() {
   const [reminderMessage, setReminderMessage] = useState("");
   const [sendingReminder, setSendingReminder] = useState(false);
   const [sendingItemReminderId, setSendingItemReminderId] = useState(null);
+  const [expandedPollVoters, setExpandedPollVoters] = useState(null);
+  const [remindingNonVotersPollId, setRemindingNonVotersPollId] = useState(null);
   const [editingMemberId, setEditingMemberId] = useState(null);
   const [editIdValue, setEditIdValue] = useState("");
   const [editNameValue, setEditNameValue] = useState("");
@@ -2946,6 +2987,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("dashboard-personal");
   const [adminSubTab, setAdminSubTab] = useState("overview");
+  const [exportingKey, setExportingKey] = useState(null);
   const [expandedNavCategory, setExpandedNavCategory] = useState(null);
   const [showMissingAllocation, setShowMissingAllocation] = useState(false);
   // Owner-only: lets the owner open any team's "לוח בקרה צוות" view (the
@@ -3341,40 +3383,297 @@ export default function App() {
     }
   }
 
-  function membersToCsv() {
+  function downloadCsvFile(csv, filename) {
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Admin list exports - "ייצוא רשימות" tab.
+  //
+  // Every builder below takes a `data` bag instead of reading component
+  // state directly, and getFreshExportData() re-fetches that bag from the
+  // server right before each export runs. State here is "whatever was true
+  // the last time this screen loaded" - a list an admin is about to hand to
+  // the whole camp needs to be current, not that (this is the same class of
+  // staleness that made a payment someone had just recorded look like ₪0 on
+  // a screen that was already open). Builders return rows as a plain
+  // array-of-arrays (header row first) so the same data feeds the CSV,
+  // Excel and PDF outputs without three formatters drifting out of sync.
+  // ---------------------------------------------------------------------------
+
+  async function getFreshExportData() {
+    const [
+      freshExtra, freshRoles, freshAssignments, freshPayments, freshFeeOverrides, freshCampFeeRaw,
+      freshPhones, freshEmails, freshManualTeam, freshLeadsRaw, freshEquipment, freshExpenses,
+      freshShopping, freshContentSchedule, freshAllocationInfo, freshEmergencyInfo,
+    ] = await Promise.all([
+      getFreshShared("extra-members", extraMembers),
+      getAllMemberRoles().catch(() => dbRoles),
+      getFreshShared("shift-assignments", assignments),
+      getFreshShared("member-payments", memberPayments),
+      getFreshShared("fee-overrides", feeOverrides),
+      getFreshShared("camp-fee", campFee),
+      getFreshShared("member-phones", memberPhones),
+      getFreshShared("member-emails", memberEmails),
+      getFreshShared("manual-team-members", manualTeamMembers),
+      getFreshShared("team-leads", teamLeads),
+      getFreshShared("camp-equipment", campEquipment),
+      getFreshShared("budget-expenses", budgetExpenses),
+      getFreshShared("kitchen-shopping-list", shoppingList),
+      getFreshShared("content-schedule", contentSchedule),
+      listAllocationInfo().catch(() => allocationInfo),
+      listEmergencyInfo().catch(() => emergencyInfo),
+    ]);
+
+    // Same union/de-dup logic as the allMembers useMemo, just fed from the
+    // fresh fetches above instead of state.
+    const byName = new Map();
+    [...MEMBERS, ...freshExtra, ...Object.keys(freshRoles).map((name) => ({ name, role: freshRoles[name] }))]
+      .filter((m) => !removedMembers.includes(m.name))
+      .forEach((m) => {
+        const existing = byName.get(m.name);
+        if (!existing || (!existing.idOnFile && m.idOnFile)) byName.set(m.name, m);
+      });
+    const freshAllMembers = [...byName.values()]
+      .map((m) => ({ ...m, role: freshRoles[m.name] || m.role }))
+      .sort((a, b) => a.name.localeCompare(b.name, "he"));
+
+    return {
+      allMembers: freshAllMembers,
+      memberPhones: freshPhones,
+      memberEmails: freshEmails,
+      allocationInfo: freshAllocationInfo,
+      assignments: freshAssignments,
+      memberPayments: freshPayments,
+      feeOverrides: freshFeeOverrides,
+      campFee: Number(freshCampFeeRaw) || 0,
+      campEquipment: freshEquipment,
+      budgetExpenses: freshExpenses,
+      contentSchedule: freshContentSchedule,
+      manualTeamMembers: freshManualTeam,
+      teamLeads: normalizeTeamLeads(freshLeadsRaw),
+      shoppingList: freshShopping,
+      emergencyInfo: freshEmergencyInfo,
+    };
+  }
+
+  function freshTeamMembers(data, teamName) {
+    const teamShiftIds = SHIFTS.filter((s) => s.team === teamName).map((s) => s.id);
+    const names = new Set();
+    teamShiftIds.forEach((id) => {
+      (id === TEARDOWN_ID ? data.allMembers.map((m) => m.name) : (data.assignments[id] || [])).forEach((n) => names.add(n));
+    });
+    (data.manualTeamMembers[teamName] || []).forEach((n) => names.add(n));
+    return [...names].filter((n) => !removedMembers.includes(n));
+  }
+  function freshTeamLeadsOf(data, teamName) {
+    return (data.teamLeads[teamName] || [])
+      .map((name) => data.allMembers.find((m) => m.name === name))
+      .filter(Boolean);
+  }
+
+  function buildMembersRows(data) {
     // ת.ז left blank on purpose - the app only ever stores a one-way hash
     // of it (never the number itself), so there's nothing real to put here.
-    // Column kept anyway so the sheet's layout matches what was asked for.
-    const headers = ["טלפון", "ת.ז", "שם", "מייל", "נקנה כרטיס"];
-    const rows = [headers.join(",")];
-    allMembers.forEach((m) => {
-      const used = allocationInfo[m.name]?.used;
+    const rows = [["טלפון", "ת.ז", "שם", "מייל", "נקנה כרטיס"]];
+    data.allMembers.forEach((m) => {
+      const used = data.allocationInfo[m.name]?.used;
       const ticket = used === "yes" ? "כן" : used === "no" ? "לא" : "";
-      rows.push([memberPhones[m.name] || "", "", m.name, memberEmails[m.name] || "", ticket].map(csvEscape).join(","));
+      rows.push([data.memberPhones[m.name] || "", "", m.name, data.memberEmails[m.name] || "", ticket]);
     });
-    return "﻿" + rows.join("\r\n");
+    return rows;
+  }
+
+  function buildMemberShiftsRows(data) {
+    const countedShifts = SHIFTS.filter((s) => s.id !== TEARDOWN_ID && s.phase !== "הקמות");
+    const counts = data.allMembers
+      .map((m) => ({ name: m.name, count: countedShifts.filter((s) => (data.assignments[s.id] || []).includes(m.name)).length }))
+      .sort((a, b) => a.count - b.count || a.name.localeCompare(b.name, "he"));
+    const rows = [["שם", "כמות משמרות"]];
+    counts.forEach((m) => rows.push([m.name, m.count]));
+    return rows;
+  }
+
+  function buildContentScheduleRows(data) {
+    const rows = [["שעה", "יום", "כותרת", "מנחה/ת", "תיאור"]];
+    data.contentSchedule.rows.forEach((r) => {
+      r.cells.forEach((cell, i) => {
+        if (!cell || !cell.title) return;
+        rows.push([r.label, data.contentSchedule.columns[i] || "", cell.title, cell.facilitator || "", cell.description || ""]);
+      });
+    });
+    return rows;
+  }
+
+  function buildFinancesRows(data) {
+    const rows = [["שם", "שולם", "דמי קמפ", "יתרה"]];
+    data.allMembers.forEach((m) => {
+      const list = Array.isArray(data.memberPayments[m.name]) ? data.memberPayments[m.name] : [];
+      const paid = list.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+      const fee = data.feeOverrides[m.name] !== undefined ? Number(data.feeOverrides[m.name]) : data.campFee;
+      rows.push([m.name, paid, fee, fee - paid]);
+    });
+    return rows;
+  }
+
+  function buildCampEquipmentRows(data) {
+    const rows = [["קטגוריה", "שם פריט", "כמות", "מצב", "מיקום", "הערות"]];
+    data.campEquipment.forEach((e) => rows.push([e.category || "", e.name, e.qty, e.condition || "", e.location || "", e.notes || ""]));
+    return rows;
+  }
+
+  function buildExpensesRows(data) {
+    const rows = [EXPENSE_CSV_HEADERS];
+    data.budgetExpenses.forEach((e) => rows.push(EXPENSE_CSV_HEADERS.map((h) => e[h])));
+    return rows;
+  }
+
+  function buildTeamsRows(data) {
+    const rows = [["צוות", "מוביל/ה", "מוביל/ה משנה", "חברי הצוות"]];
+    allTeams.forEach((t) => {
+      const leads = freshTeamLeadsOf(data, t.name);
+      const members = freshTeamMembers(data, t.name);
+      rows.push([t.name, leads[0]?.name || "", leads[1]?.name || "", members.join("; ")]);
+    });
+    return rows;
+  }
+
+  function buildKitchenShoppingRows(data) {
+    const rows = [["פריט", "כמות", "יחידה", "מחיר", "הערות", "נקנה"]];
+    data.shoppingList.forEach((it) => rows.push([it.name, it.qty || "", it.unit || "", it.price || "", it.notes || "", it.bought ? "כן" : "לא"]));
+    return rows;
+  }
+
+  function rowsToCsv(rows) {
+    return "﻿" + rows.map((r) => r.map(csvEscape).join(",")).join("\r\n");
+  }
+
+  const EXPORT_LISTS = [
+    { key: "members", label: "רשימת חברי קמפ", filename: "רשימת-חברי-קמפ", build: buildMembersRows, icon: Users },
+    { key: "shifts", label: "משמרות חברי קמפ", filename: "משמרות-חברי-קמפ", build: buildMemberShiftsRows, icon: CalendarDays },
+    { key: "content", label: "לוח תוכן", filename: "לוח-תוכן", build: buildContentScheduleRows, icon: Flame },
+    { key: "finances", label: "כספים - דמי קמפ", filename: "כספים-דמי-קמפ", build: buildFinancesRows, icon: CreditCard },
+    { key: "equipment", label: "ציוד קמפ", filename: "ציוד-קמפ", build: buildCampEquipmentRows, icon: Package },
+    { key: "expenses", label: "הוצאות", filename: "הוצאות-קמפ", build: buildExpensesRows, icon: Wallet },
+    { key: "teams", label: "צוותים", filename: "צוותים", build: buildTeamsRows, icon: Users },
+    { key: "shopping", label: "קניות מטבח", filename: "קניות-מטבח", build: buildKitchenShoppingRows, icon: ShoppingCart },
+  ];
+
+  async function downloadListCsv(listKey) {
+    const list = EXPORT_LISTS.find((l) => l.key === listKey);
+    setExportingKey(listKey);
+    try {
+      const data = await getFreshExportData();
+      downloadCsvFile(rowsToCsv(list.build(data)), `${list.filename}-${new Date().toISOString().slice(0, 10)}.csv`);
+      logActivity("ייצוא רשימה", list.label);
+    } catch (err) {
+      showToast(`הייצוא נכשל: ${err?.message || "שגיאה לא ידועה"}`, "error");
+    } finally {
+      setExportingKey(null);
+    }
   }
 
   function downloadMembersCsv() {
-    const csv = membersToCsv();
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `רשימת-חברי-קמפ-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadListCsv("members");
+  }
+  function downloadBudgetExpensesCsv() {
+    downloadListCsv("expenses");
   }
 
-  function downloadBudgetExpensesCsv() {
-    const csv = expensesToCsv(budgetExpenses);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `הוצאות-קמפ-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  // "ייצא הכל" - bundles every list into one zip instead of firing eight
+  // separate downloads at once, which browsers routinely throttle or block
+  // as if they were popups.
+  async function exportAllListsZip() {
+    setExportingKey("all-zip");
+    try {
+      const [{ default: JSZip }, data] = await Promise.all([import("jszip"), getFreshExportData()]);
+      const zip = new JSZip();
+      EXPORT_LISTS.forEach((list) => zip.file(`${list.filename}.csv`, rowsToCsv(list.build(data))));
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `afterglow-כל-הרשימות-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      logActivity("ייצוא כל הרשימות (ZIP)", "");
+    } catch (err) {
+      showToast(`ייצוא הכל נכשל: ${err?.message || "שגיאה לא ידועה"}`, "error");
+    } finally {
+      setExportingKey(null);
+    }
+  }
+
+  // "ייצוא Excel" - one .xlsx workbook, one sheet per list, instead of a
+  // zip of separate CSVs - opens straight in Excel/Sheets, no extracting.
+  async function exportAllListsExcel() {
+    setExportingKey("all-excel");
+    try {
+      const data = await getFreshExportData();
+      const workbook = buildSpreadsheetMLWorkbook(EXPORT_LISTS.map((list) => ({ name: list.label, rows: list.build(data) })));
+      const blob = new Blob([workbook], { type: "application/vnd.ms-excel" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `afterglow-כל-הרשימות-${new Date().toISOString().slice(0, 10)}.xls`;
+      a.click();
+      URL.revokeObjectURL(url);
+      logActivity("ייצוא כל הרשימות (Excel)", "");
+    } catch (err) {
+      showToast(`ייצוא ה-Excel נכשל: ${err?.message || "שגיאה לא ידועה"}`, "error");
+    } finally {
+      setExportingKey(null);
+    }
+  }
+
+  // "ייצוא PDF" - one printable document, all lists as tables, same
+  // window.open + print pattern as exportShiftsPdf/exportEmergencyCardsPdf
+  // below. The window has to open synchronously in the click handler
+  // (before the fresh-data fetch), or popup blockers kill it.
+  async function exportAllListsPdf() {
+    const win = window.open("", "_blank");
+    if (!win) return showToast("נחסמה פתיחת חלון - יש לאפשר חלונות קופצים לאתר", "error");
+    setExportingKey("all-pdf");
+    try {
+      const data = await getFreshExportData();
+      const sections = EXPORT_LISTS.map((list) => {
+        const [header, ...body] = list.build(data);
+        return `<h2>${escapeHtml(list.label)}</h2>
+<table>
+  <thead><tr>${header.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead>
+  <tbody>${body.map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(c ?? "")}</td>`).join("")}</tr>`).join("")}</tbody>
+</table>`;
+      }).join("");
+      win.document.write(`<!doctype html>
+<html dir="rtl" lang="he"><head><meta charset="UTF-8"><title>ייצוא רשימות - Afterglow</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #222; }
+  h1 { font-size: 18px; margin: 0 0 16px; }
+  h2 { font-size: 14px; margin: 22px 0 8px; border-bottom: 1px solid #ccc; padding-bottom: 4px; break-before: page; }
+  h2:first-of-type { break-before: avoid; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 6px; break-inside: avoid; }
+  th, td { border: 1px solid #ddd; padding: 4px 8px; font-size: 11px; text-align: right; vertical-align: top; }
+  th { background: #f4f4f4; }
+</style>
+</head><body>
+<h1>ייצוא רשימות - Afterglow (${escapeHtml(new Date().toLocaleDateString("he-IL"))})</h1>
+${sections}
+</body></html>`);
+      win.document.close();
+      win.focus();
+      setTimeout(() => win.print(), 300);
+      logActivity("ייצוא כל הרשימות (PDF)", "");
+    } catch (err) {
+      showToast(`ייצוא ה-PDF נכשל: ${err?.message || "שגיאה לא ידועה"}`, "error");
+    } finally {
+      setExportingKey(null);
+    }
   }
 
   // Admin-only: bulk-imports expense rows from a CSV (e.g. exported from
@@ -4696,6 +4995,28 @@ export default function App() {
     }
   }
 
+  // Admin-only: pushes a reminder only to members who haven't answered this
+  // specific poll yet - unlike sendItemReminder above (which broadcasts to
+  // everyone who's approved push, answered or not).
+  async function remindNonVoters(poll, nonVoterNames) {
+    if (nonVoterNames.length === 0) return;
+    setRemindingNonVotersPollId(poll.id);
+    try {
+      const result = await sendEventReminderPush("תזכורת: סקר ממתין לך", poll.question, undefined, nonVoterNames);
+      const sent = result?.sent ?? 0;
+      if (sent > 0) {
+        showToast(`תזכורת נשלחה ל-${sent} ממי שעדיין לא הצביע/ה`, "ok");
+      } else {
+        showToast("לא נשלחה אף התראה בפועל - כנראה שאף אחד ממי שלא הצביע לא אישר התראות דחיפה", "error");
+      }
+      logActivity("שליחת תזכורת למי שלא הצביע בסקר", poll.question);
+    } catch (err) {
+      showToast(`שליחת התזכורת נכשלה: ${err?.message || "שגיאה לא ידועה"}`, "error");
+    } finally {
+      setRemindingNonVotersPollId(null);
+    }
+  }
+
   async function addAnnouncement(text, eventInfo, audience) {
     if (!text.trim()) return;
     const latest = await getFreshShared("announcements", announcements);
@@ -4786,20 +5107,26 @@ export default function App() {
   // member's emergency card in one document - for the medical team to
   // print out before the event, since the desert site itself has no signal
   // to load the app live in an emergency.
-  function exportEmergencyCardsPdf() {
+  async function exportEmergencyCardsPdf() {
     const win = window.open("", "_blank");
     if (!win) return showToast("נחסמה פתיחת חלון - יש לאפשר חלונות קופצים לאתר", "error");
-    const cards = allMembers.map((m) => {
-      const d = emergencyInfo[m.name] || {};
-      return `<div class="card">
+    setExportingKey("emergency-pdf");
+    try {
+      // Fetched fresh rather than trusting state - this is exactly the kind
+      // of "just updated it, still shows old data" gap a printout can't
+      // afford, since the medical team may only see this once, on paper.
+      const data = await getFreshExportData();
+      const cards = data.allMembers.map((m) => {
+        const d = data.emergencyInfo[m.name] || {};
+        return `<div class="card">
         <h3>${escapeHtml(m.name)}</h3>
         <div><b>איש קשר לחירום:</b> ${escapeHtml(d.contactName || "—")}${d.contactPhone ? ` · ${escapeHtml(d.contactPhone)}` : ""}</div>
         <div><b>אלרגיות:</b> ${escapeHtml(d.allergies || "—")}</div>
         <div><b>מגבלות רפואיות:</b> ${escapeHtml(d.medical || "—")}</div>
         <div><b>תזונה:</b> ${escapeHtml(d.dietary || "—")}</div>
       </div>`;
-    }).join("");
-    win.document.write(`<!doctype html>
+      }).join("");
+      win.document.write(`<!doctype html>
 <html dir="rtl" lang="he"><head><meta charset="UTF-8"><title>כרטיסי חירום - Afterglow</title>
 <style>
   body { font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #222; }
@@ -4812,9 +5139,14 @@ export default function App() {
 <h1>כרטיסי חירום - Afterglow (${escapeHtml(new Date().toLocaleDateString("he-IL"))})</h1>
 ${cards}
 </body></html>`);
-    win.document.close();
-    win.focus();
-    setTimeout(() => win.print(), 300);
+      win.document.close();
+      win.focus();
+      setTimeout(() => win.print(), 300);
+    } catch (err) {
+      showToast(`הייצוא נכשל: ${err?.message || "שגיאה לא ידועה"}`, "error");
+    } finally {
+      setExportingKey(null);
+    }
   }
 
   // Admin-only: a printable (save-as-PDF) roster of every shift and who's
@@ -4822,9 +5154,14 @@ ${cards}
   // different counts - a shift with 5 spots and 3 people signed up is still
   // 1 shift, but 3 volunteers; "open"/"filled" are the same two numbers
   // restated as spots rather than people.
-  function exportShiftsPdf() {
+  async function exportShiftsPdf() {
     const win = window.open("", "_blank");
     if (!win) return showToast("נחסמה פתיחת חלון - יש לאפשר חלונות קופצים לאתר", "error");
+    setExportingKey("shifts-pdf");
+    try {
+    // Fetched fresh rather than trusting state, same reasoning as
+    // exportEmergencyCardsPdf above.
+    const freshAssignments = await getFreshShared("shift-assignments", assignments);
 
     // Teardown is excluded from the summary counts, same as
     // unfilledShiftsCount/openShiftsCount elsewhere - it isn't a normal
@@ -4834,13 +5171,13 @@ ${cards}
     // ("הקמות") is excluded too - it's an open-ended arrival day, not a shift.
     const countedShifts = SHIFTS.filter((s) => s.id !== TEARDOWN_ID && s.phase !== "הקמות");
     const totalShifts = countedShifts.length;
-    const totalVolunteers = countedShifts.reduce((s, sh) => s + (assignments[sh.id] || []).length, 0);
+    const totalVolunteers = countedShifts.reduce((s, sh) => s + (freshAssignments[sh.id] || []).length, 0);
     // Uncapped shifts (noLimit) don't have a meaningful "people needed"
     // number, so they're left out of the spots/open-spots math the same
     // way teardown is - but they still count toward totalShifts/totalVolunteers above.
     const cappedShifts = countedShifts.filter((s) => !s.noLimit);
     const totalSpots = cappedShifts.reduce((s, sh) => s + sh.spots, 0);
-    const cappedVolunteers = cappedShifts.reduce((s, sh) => s + (assignments[sh.id] || []).length, 0);
+    const cappedVolunteers = cappedShifts.reduce((s, sh) => s + (freshAssignments[sh.id] || []).length, 0);
     const openSpots = Math.max(totalSpots - cappedVolunteers, 0);
 
     const phases = [...new Set(SHIFTS.map((s) => s.phase))];
@@ -4859,7 +5196,7 @@ ${cards}
               <td></td>
             </tr>`;
           }
-          const names = assignments[s.id] || [];
+          const names = freshAssignments[s.id] || [];
           const namesHtml = names.length > 0 ? names.map((n) => escapeHtml(n)).join(", ") : "";
           return `<tr>
             <td>${escapeHtml(s.title)}</td>
@@ -4881,7 +5218,7 @@ ${cards}
             covered.push(escapeHtml(s.title));
             return;
           }
-          const count = (assignments[s.id] || []).length;
+          const count = (freshAssignments[s.id] || []).length;
           if (count >= s.spots) covered.push(escapeHtml(s.title));
           else missing.push(`${escapeHtml(s.title)} (חסרים ${s.spots - count})`);
         });
@@ -4931,6 +5268,11 @@ ${sections}
     win.document.close();
     win.focus();
     setTimeout(() => win.print(), 300);
+    } catch (err) {
+      showToast(`הייצוא נכשל: ${err?.message || "שגיאה לא ידועה"}`, "error");
+    } finally {
+      setExportingKey(null);
+    }
   }
 
   async function createPoll(question, options) {
@@ -5908,6 +6250,7 @@ ${sections}
                 { id: "members", label: "חברי קמפ", icon: Users },
                 { id: "member-shifts", label: "משמרות חברי קמפ", icon: CalendarDays },
                 { id: "allocations", label: "הקצאות", icon: Ticket },
+                { id: "exports", label: "ייצוא רשימות", icon: Download },
                 { id: "comms", label: "תקשורת", icon: MessageCircle },
                 ...(isOwner ? [{ id: "logs", label: "יומנים", icon: History }] : []),
                 { id: "emergency", label: "חירום", icon: HeartPulse },
@@ -6377,6 +6720,70 @@ ${sections}
                 {allMembers.every((m) => !allocationInfo[m.name]) && (
                   <p className="text-xs text-center py-10" style={{ color: COLORS.textMuted }}>עדיין אין נתוני הקצאות.</p>
                 )}
+              </div>
+            )}
+
+            {adminSubTab === "exports" && (
+              <div>
+                <h3 className="text-sm font-bold mb-3" style={{ color: COLORS.accentDark }}>ייצוא רשימות</h3>
+                <p className="text-xs mb-3" style={{ color: COLORS.textMuted }}>
+                  ניתן להוריד כל רשימה בנפרד, או את כולן ביחד.
+                </p>
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  <button
+                    onClick={exportAllListsZip}
+                    disabled={!!exportingKey}
+                    className="flex flex-col items-center justify-center gap-1 px-2 py-3 rounded-2xl text-xs font-bold"
+                    style={{ background: COLORS.accent, color: COLORS.bg, opacity: exportingKey && exportingKey !== "all-zip" ? 0.5 : exportingKey === "all-zip" ? 0.7 : 1, boxShadow: "0 3px 0 rgba(58,34,42,0.18)" }}
+                  >
+                    <Download size={16} /> {exportingKey === "all-zip" ? "מייצא..." : "הכל · ZIP"}
+                  </button>
+                  <button
+                    onClick={exportAllListsExcel}
+                    disabled={!!exportingKey}
+                    className="flex flex-col items-center justify-center gap-1 px-2 py-3 rounded-2xl text-xs font-bold"
+                    style={{ background: COLORS.accent2, color: COLORS.bg, opacity: exportingKey && exportingKey !== "all-excel" ? 0.5 : exportingKey === "all-excel" ? 0.7 : 1, boxShadow: "0 3px 0 rgba(58,34,42,0.18)" }}
+                  >
+                    <Download size={16} /> {exportingKey === "all-excel" ? "מייצא..." : "הכל · Excel"}
+                  </button>
+                  <button
+                    onClick={exportAllListsPdf}
+                    disabled={!!exportingKey}
+                    className="flex flex-col items-center justify-center gap-1 px-2 py-3 rounded-2xl text-xs font-bold"
+                    style={{ background: COLORS.accentDark, color: COLORS.bg, opacity: exportingKey && exportingKey !== "all-pdf" ? 0.5 : exportingKey === "all-pdf" ? 0.7 : 1, boxShadow: "0 3px 0 rgba(58,34,42,0.18)" }}
+                  >
+                    <Download size={16} /> {exportingKey === "all-pdf" ? "מייצא..." : "הכל · PDF"}
+                  </button>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {EXPORT_LISTS.map((list) => (
+                    <button
+                      key={list.key}
+                      onClick={() => downloadListCsv(list.key)}
+                      disabled={!!exportingKey}
+                      className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold"
+                      style={{ background: COLORS.surface, color: COLORS.text, border: `1px solid ${COLORS.divider}`, opacity: exportingKey && exportingKey !== list.key ? 0.5 : 1 }}
+                    >
+                      <list.icon size={14} style={{ color: COLORS.accentDark }} /> {exportingKey === list.key ? "מייצא..." : list.label}
+                    </button>
+                  ))}
+                  <button
+                    onClick={exportEmergencyCardsPdf}
+                    disabled={!!exportingKey}
+                    className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold"
+                    style={{ background: COLORS.surface, color: COLORS.text, border: `1px solid ${COLORS.divider}`, opacity: exportingKey && exportingKey !== "emergency-pdf" ? 0.5 : 1 }}
+                  >
+                    <HeartPulse size={14} style={{ color: COLORS.accentDark }} /> {exportingKey === "emergency-pdf" ? "מייצא..." : "כרטיסי חירום (PDF)"}
+                  </button>
+                  <button
+                    onClick={exportShiftsPdf}
+                    disabled={!!exportingKey}
+                    className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold"
+                    style={{ background: COLORS.surface, color: COLORS.text, border: `1px solid ${COLORS.divider}`, opacity: exportingKey && exportingKey !== "shifts-pdf" ? 0.5 : 1 }}
+                  >
+                    <CalendarDays size={14} style={{ color: COLORS.accentDark }} /> {exportingKey === "shifts-pdf" ? "מייצא..." : "לוח משמרות (PDF)"}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -7535,6 +7942,46 @@ ${sections}
                           ))}
                         </div>
                       )}
+                      {isAdmin && (() => {
+                        const nonVoterNames = allMembers.map((m) => m.name).filter((n) => p.responses?.[n] === undefined);
+                        const voterCount = allMembers.length - nonVoterNames.length;
+                        const open = expandedPollVoters === p.id;
+                        return (
+                          <div className="mt-2 pt-2 border-t" style={{ borderColor: COLORS.divider }}>
+                            <button
+                              onClick={() => setExpandedPollVoters(open ? null : p.id)}
+                              className="text-xs font-semibold flex items-center gap-1"
+                              style={{ color: COLORS.accentDark }}
+                            >
+                              <ChevronDown size={11} style={{ transform: open ? "rotate(180deg)" : "none" }} />
+                              הצביעו: {voterCount} · לא הצביעו: {nonVoterNames.length}
+                            </button>
+                            {open && (
+                              <div className="mt-1.5 space-y-1.5">
+                                {nonVoterNames.length > 0 ? (
+                                  <>
+                                    <div className="flex flex-wrap gap-1">
+                                      {nonVoterNames.map((n) => (
+                                        <span key={n} className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: COLORS.accent2Light, color: COLORS.accent2Dark }}>{n}</span>
+                                      ))}
+                                    </div>
+                                    <button
+                                      onClick={() => remindNonVoters(p, nonVoterNames)}
+                                      disabled={remindingNonVotersPollId === p.id}
+                                      className="text-xs font-semibold px-3 py-1.5 rounded-full"
+                                      style={{ background: COLORS.accent2, color: COLORS.bg, opacity: remindingNonVotersPollId === p.id ? 0.6 : 1, boxShadow: "0 3px 0 rgba(58,34,42,0.18)" }}
+                                    >
+                                      {remindingNonVotersPollId === p.id ? "שולח..." : `שליחת תזכורת ל-${nonVoterNames.length} שלא הצביעו`}
+                                    </button>
+                                  </>
+                                ) : (
+                                  <div className="text-[11px]" style={{ color: COLORS.textMuted }}>כולם הצביעו 🎉</div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })}
