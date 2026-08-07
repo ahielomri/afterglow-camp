@@ -5500,14 +5500,16 @@ ${sections}
     }
   }
 
+  // Team membership is a deliberate assignment (by an admin or that team's
+  // own lead, via addManualTeamMember - backed by the real team_members
+  // table, see the comment below), not an inference from "signed up for a
+  // shift under this team" - someone helping out with one kitchen shift
+  // isn't automatically "on" צוות המטבח, and letting shift signup imply
+  // membership also meant it could silently grant team-gated permissions
+  // (isInTeam feeds canManageFinances/canManageShopping) to someone who
+  // never was actually assigned to the team.
   function teamMembers(teamName) {
-    const teamShiftIds = SHIFTS.filter((s) => s.team === teamName).map((s) => s.id);
-    const names = new Set();
-    teamShiftIds.forEach((id) => {
-      (id === TEARDOWN_ID ? allMembers.map((m) => m.name) : (assignments[id] || [])).forEach((n) => names.add(n));
-    });
-    (manualTeamMembers[teamName] || []).forEach((n) => names.add(n));
-    return [...names].filter((n) => !removedMembers.includes(n));
+    return (manualTeamMembers[teamName] || []).filter((n) => !removedMembers.includes(n));
   }
   function isManualTeamMember(teamName, name) {
     return (manualTeamMembers[teamName] || []).includes(name);
@@ -7349,14 +7351,19 @@ ${sections}
                     </div>
                   )}
 
-                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>המשמרות של הצוות</h3>
+                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>לוח המשמרות של הצוות - מי אמור להיות בכל משמרת</h3>
                   <div className="space-y-1.5">
                     {SHIFTS.filter((s) => s.team === viewedTeam).map((s) => {
                       const { names, spots } = shiftNamesAndSpots(s);
                       return (
-                        <div key={s.id} className="rounded-xl px-3 py-2 flex items-center justify-between text-xs" style={{ background: COLORS.surface }}>
-                          <span>{s.title} · {formatDate(s.date)}{s.id === TEARDOWN_ID || s.noTime ? "" : ` · ${s.start}–${s.end}`}</span>
-                          <span className="px-2 py-0.5 rounded-full" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>{s.noLimit ? "ללא הגבלה" : `${names.length}/${spots}`}</span>
+                        <div key={s.id} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.surface }}>
+                          <div className="flex items-center justify-between">
+                            <span>{s.title} · {formatDate(s.date)}{s.id === TEARDOWN_ID || s.noTime ? "" : ` · ${s.start}–${s.end}`}</span>
+                            <span className="px-2 py-0.5 rounded-full shrink-0" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>{s.noLimit ? "ללא הגבלה" : `${names.length}/${spots}`}</span>
+                          </div>
+                          <div className="mt-1" style={{ color: names.length > 0 ? COLORS.textMuted : COLORS.danger }}>
+                            {names.length > 0 ? names.join(", ") : "אף אחד עדיין לא שובץ"}
+                          </div>
                         </div>
                       );
                     })}
