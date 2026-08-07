@@ -412,6 +412,26 @@ function budgetCategoryForTeam(team) {
   return TEAM_BUDGET_CATEGORY[team] || team;
 }
 
+// Which parameters accordion section (see showBudgetSection in the תקציב
+// tab) actually computes a given category's live number - used so a
+// department row in the מחלקות tab can jump straight to where its number
+// comes from instead of leaving finance to go hunting for it. Categories
+// with a fixed 1:1 section keep that section; every category that instead
+// comes from tagged item rows (ציוד, הובלות, בנייה והקמות, עיצוב ותפאורה,
+// תוכן וגיפט, and any custom category) all live in the same "מחנה" section,
+// since that's the only place item rows get a category tag.
+const BUDGET_SECTION_FOR_CATEGORY = {
+  "מים": "water",
+  "שירותים ומקלחות": "sanitation",
+  "מטבח ומזון": "food",
+  "שונות": "general",
+  "קרח": "camp",
+  "חשמל": "camp",
+};
+function budgetSectionForCategory(cat) {
+  return BUDGET_SECTION_FOR_CATEGORY[cat] || "camp";
+}
+
 const EQUIPMENT_CATEGORIES = TEAMS.map((t) => t.name);
 const EQUIPMENT_CONDITIONS = ["תקין", "דורש תיקון", "חסר / אבד"];
 
@@ -1141,7 +1161,7 @@ function EditableCategoryList({ categories, onRename, onRemove }) {
 // disabled/grayed when the two already match - so the row never
 // disappears or silently changes shape). A category with no calculation
 // at all is a plain manual number, editable right here.
-function DepartmentBudgetRow({ cat, hasComputed, computed, published, onSet }) {
+function DepartmentBudgetRow({ cat, hasComputed, computed, published, onSet, onNavigate }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(published || "");
   const [confirming, setConfirming] = useState(false);
@@ -1155,7 +1175,13 @@ function DepartmentBudgetRow({ cat, hasComputed, computed, published, onSet }) {
   return (
     <div className="rounded-xl px-3 py-2.5 text-sm" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <span className="font-semibold">{cat}</span>
+        {hasComputed ? (
+          <button onClick={() => onNavigate(cat)} className="font-semibold underline decoration-dotted" style={{ color: COLORS.accentDark }}>
+            {cat}
+          </button>
+        ) : (
+          <span className="font-semibold">{cat}</span>
+        )}
         {hasComputed ? (
           <span style={{ fontFamily: FONT_NUM, color: COLORS.textMuted }}>
             מחושב: ₪{Math.round(computed).toLocaleString()} · מפורסם: ₪{Math.round(published).toLocaleString()}
@@ -1521,8 +1547,15 @@ function ShoppingRequestForm({ onAdd }) {
   );
 }
 
-function BudgetExpenseForm({ onAdd, lockedAllocation, categories, initial, onCancel, onError, allMembers }) {
+function BudgetExpenseForm({ onAdd, lockedAllocation, categories, initial, onCancel, onError, allMembers, budgetParams }) {
   const [allocation, setAllocation] = useState(initial?.allocation || lockedAllocation || "");
+  const [plannedItemName, setPlannedItemName] = useState(initial?.plannedItemName || "");
+  // Only offered when the selected category actually has tagged item rows
+  // in the parameters (see budgetSectionForCategory/ItemRowsEditor) -
+  // matched by name, since item rows don't have a stable id of their own.
+  const plannedItemOptions = [...(budgetParams?.campInfra?.items || []), ...(budgetParams?.campInfra?.loungeItems || [])]
+    .filter((r) => (r.category || "ציוד") === allocation && r.name)
+    .map((r) => r.name);
   const [description, setDescription] = useState(initial?.description || "");
   const [vendor, setVendor] = useState(initial?.vendor || "");
   const [amount, setAmount] = useState(initial?.amount ?? "");
@@ -1568,6 +1601,7 @@ function BudgetExpenseForm({ onAdd, lockedAllocation, categories, initial, onCan
     }
     onAdd({
       allocation, description, vendor, amount, purchaseDate,
+      plannedItemName,
       paymentStatus,
       paidAmount: paymentStatus === "partial" ? paidAmount : amount,
       remainingAmount: paymentStatus === "partial" ? remaining : 0,
@@ -1583,6 +1617,7 @@ function BudgetExpenseForm({ onAdd, lockedAllocation, categories, initial, onCan
       setPaymentStatus("paid"); setPaidAmount(""); setDueDate(""); setIsRefund(false);
       setPaymentMethod(""); setReceiptFile(null); setReceiptPreview("");
       setRefundToMember(false); setRefundMemberName(""); setRefundPaid(false);
+      setPlannedItemName("");
     }
   }
 
@@ -1598,6 +1633,17 @@ function BudgetExpenseForm({ onAdd, lockedAllocation, categories, initial, onCan
           {!lockedAllocation && <option value="">שיוך תקציבי - בחר/י</option>}
           {(lockedAllocation ? [lockedAllocation] : categories || []).map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
+        {plannedItemOptions.length > 0 && (
+          <select
+            value={plannedItemOptions.includes(plannedItemName) ? plannedItemName : ""}
+            onChange={(e) => setPlannedItemName(e.target.value)}
+            className="px-3 py-2 rounded-xl text-sm outline-none"
+            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+          >
+            <option value="">שיוך לפריט מתוכנן (אופציונלי)</option>
+            {plannedItemOptions.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        )}
         <input
           value={description} onChange={(e) => setDescription(e.target.value)}
           placeholder="מהות ההוצאה"
@@ -6084,11 +6130,12 @@ ${sections}
   // tab is opened - fresh every visit rather than caching it forever, since
   // dietary preferences can change as members fill in emergency info.
   useEffect(() => {
-    if (tab === "shopping" && identity) {
+    const onKitchenTeamTab = tab === "dashboard-team" && teamDashboardView === "kitchen";
+    if ((tab === "shopping" || onKitchenTeamTab) && identity) {
       getDietaryPreferenceCounts().then(setDietaryCounts).catch(() => setDietaryCounts(null));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, identity]);
+  }, [tab, teamDashboardView, identity]);
 
   // "New on the board" indicator - per-device (not shared), so it doesn't
   // need a new table: just remembers when this browser last had the board
@@ -7520,11 +7567,13 @@ ${sections}
               );
             })()}
 
-            <div className="flex gap-2 mb-4">
+            <div className="flex gap-2 mb-4 flex-wrap">
               {[
                 { id: "shifts", label: "משמרות" },
-                { id: "budget", label: "תקציב" },
+                { id: "members", label: "חברי צוות" },
+                { id: "budget", label: "תקציב והוצאות" },
                 { id: "tasks", label: "משימות" },
+                ...(viewedTeam === "צוות המטבח" ? [{ id: "kitchen", label: "מטבח" }] : []),
               ].map((v) => (
                 <button
                   key={v.id}
@@ -7567,45 +7616,84 @@ ${sections}
                   )}
 
                   <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>לוח המשמרות של הצוות - מי אמור להיות בכל משמרת</h3>
-                  <div className="space-y-1.5">
-                    {SHIFTS.filter((s) => s.team === viewedTeam).map((s) => {
-                      const { names, spots } = shiftNamesAndSpots(s);
-                      return (
-                        <div key={s.id} className="rounded-xl px-3 py-2 text-xs" style={{ background: COLORS.surface }}>
-                          <div className="flex items-center justify-between">
-                            <span>{s.title} · {formatDate(s.date)}{s.id === TEARDOWN_ID || s.noTime ? "" : ` · ${s.start}–${s.end}`}</span>
-                            <span className="px-2 py-0.5 rounded-full shrink-0" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>{s.noLimit ? "ללא הגבלה" : `${names.length}/${spots}`}</span>
-                          </div>
-                          <div className="mt-1" style={{ color: names.length > 0 ? COLORS.textMuted : COLORS.danger }}>
-                            {names.length > 0 ? names.join(", ") : "אף אחד עדיין לא שובץ"}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <h3 className="text-xs font-bold mt-5 mb-2" style={{ color: COLORS.textMuted }}>חברי הצוות ({teamMembers(viewedTeam).length})</h3>
-                  <div className="grid grid-cols-2 gap-1.5 mb-1">
-                    {teamMembers(viewedTeam).length === 0 ? (
-                      <p className="text-xs col-span-2" style={{ color: COLORS.textMuted }}>עדיין אף אחד לא שיבץ משמרת בצוות הזה.</p>
-                    ) : (
-                      teamMembers(viewedTeam).map((n) => (
-                        <span key={n} className="text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5" style={{ background: COLORS.surface }} dir="ltr">
-                          <span dir="rtl" className="truncate">{n}</span>{memberPhones[n] ? ` · ${memberPhones[n]}` : ""}
-                          {isManualTeamMember(viewedTeam, n) && (
-                            <button onClick={() => removeManualTeamMember(viewedTeam, n)} style={{ color: COLORS.textMuted }} className="shrink-0"><X size={10} /></button>
-                          )}
-                        </span>
-                      ))
-                    )}
-                  </div>
-                  <div className="mt-2">
-                    <div className="text-xs mb-1" style={{ color: COLORS.textMuted }}>הוספת חבר/ה לצוות ללא משמרת</div>
-                    <AdminAssignPicker members={allMembers} onAssign={(name) => addManualTeamMember(viewedTeam, name)} />
-                  </div>
+                  {(() => {
+                    // Same day-card layout as the main "משמרות" tab's יומן
+                    // view (visibleShifts/shiftsView === "calendar" above) -
+                    // filtered to this team, read-only (no join/leave here,
+                    // this is a summary) - and reading straight from the
+                    // same SHIFTS/assignments the whole app shares, so any
+                    // change anywhere shows up here too without anything
+                    // team-specific to keep in sync.
+                    const teamShifts = SHIFTS.filter((s) => s.team === viewedTeam);
+                    const uniqueDates = [...new Set(teamShifts.map((s) => s.date))];
+                    return (
+                      <div className="flex gap-2.5 overflow-x-auto pb-2">
+                        {uniqueDates.map((date) => {
+                          const [dy, dm, dd] = date.split("-").map(Number);
+                          const dow = WEEKDAYS_HE[new Date(dy, dm - 1, dd).getDay()];
+                          return (
+                            <div key={date} className="shrink-0 w-52 rounded-2xl overflow-hidden" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                              <div className="px-3 py-2 flex items-center justify-between" style={{ background: COLORS.accent }}>
+                                <span className="text-xs font-semibold" style={{ color: COLORS.accentLight }}>יום {dow}</span>
+                                <span className="text-base font-black" style={{ fontFamily: FONT_NUM, color: COLORS.bg }}>{dd}.{dm}</span>
+                              </div>
+                              <div className="p-2 space-y-1.5">
+                                {teamShifts.filter((s) => s.date === date).sort((a, b) => (a.start || "").localeCompare(b.start || "")).map((s) => {
+                                  const { names, spots } = shiftNamesAndSpots(s);
+                                  const short = !s.noLimit && names.length < spots;
+                                  return (
+                                    <div key={s.id} className="rounded-xl p-2" style={{ background: short ? DUES_BELOW_BG : COLORS.input, borderRight: `3px solid ${short ? COLORS.danger : COLORS.accent2}` }}>
+                                      {s.id !== TEARDOWN_ID && !s.noTime && (
+                                        <div className="text-[10px] flex items-center gap-1" style={{ color: COLORS.accentDark, fontFamily: FONT_NUM }}>
+                                          <Clock size={9} /> {s.start}–{s.end}
+                                        </div>
+                                      )}
+                                      <div className="text-xs font-bold mt-0.5">{s.title}</div>
+                                      <div className="flex items-center gap-1 mt-1">
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: COLORS.accentLight, color: short ? COLORS.danger : COLORS.accentDark, fontFamily: FONT_NUM }}>
+                                          {s.noLimit ? "ללא הגבלה" : `${names.length}/${spots}`}
+                                        </span>
+                                      </div>
+                                      <div className="mt-1 text-[10px]" style={{ color: names.length > 0 ? COLORS.textMuted : COLORS.danger }}>
+                                        {names.length > 0 ? names.join(", ") : "אף אחד עדיין לא שובץ"}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })()}
+
+            {teamDashboardView === "members" && (
+              <div>
+                <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>חברי הצוות ({teamMembers(viewedTeam).length})</h3>
+                <div className="grid grid-cols-2 gap-1.5 mb-1">
+                  {teamMembers(viewedTeam).length === 0 ? (
+                    <p className="text-xs col-span-2" style={{ color: COLORS.textMuted }}>אף אחד עדיין לא שויך לצוות הזה.</p>
+                  ) : (
+                    teamMembers(viewedTeam).map((n) => (
+                      <span key={n} className="text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5" style={{ background: COLORS.surface }} dir="ltr">
+                        <span dir="rtl" className="truncate">{n}</span>{memberPhones[n] ? ` · ${memberPhones[n]}` : ""}
+                        {isManualTeamMember(viewedTeam, n) && (
+                          <button onClick={() => removeManualTeamMember(viewedTeam, n)} style={{ color: COLORS.textMuted }} className="shrink-0"><X size={10} /></button>
+                        )}
+                      </span>
+                    ))
+                  )}
+                </div>
+                <div className="mt-2">
+                  <div className="text-xs mb-1" style={{ color: COLORS.textMuted }}>הוספת חבר/ה לצוות</div>
+                  <AdminAssignPicker members={allMembers} onAssign={(name) => addManualTeamMember(viewedTeam, name)} />
+                </div>
+              </div>
+            )}
 
             {teamDashboardView === "budget" && (() => {
               const t = teamStats(viewedTeam);
@@ -7631,7 +7719,7 @@ ${sections}
                   )}
 
                   <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>הוספת הוצאה לצוות</h3>
-                  <BudgetExpenseForm onAdd={addBudgetExpense} onError={(msg) => showToast(msg, "error")} lockedAllocation={budgetCategoryForTeam(viewedTeam)} categories={allBudgetCategories} allMembers={allMembers} />
+                  <BudgetExpenseForm onAdd={addBudgetExpense} onError={(msg) => showToast(msg, "error")} lockedAllocation={budgetCategoryForTeam(viewedTeam)} categories={allBudgetCategories} allMembers={allMembers} budgetParams={budgetParams} />
                 </div>
               );
             })()}
@@ -7648,6 +7736,55 @@ ${sections}
                 onRemove={(i) => removeChecklistItem(viewedTeam, i)}
               />
             )}
+
+            {teamDashboardView === "kitchen" && (() => {
+              const isPending = (it) => !(Number(it.qty) > 0 && Number(it.price) > 0);
+              const confirmedItems = shoppingList.filter((it) => !isPending(it));
+              const pendingCount = shoppingList.filter(isPending).length;
+              const totalPrice = confirmedItems.reduce((s, it) => s + (Number(it.price) || 0), 0);
+              const boughtCount = confirmedItems.filter((it) => it.bought).length;
+              return (
+                <div>
+                  {dietaryCounts && (
+                    <div className="grid grid-cols-3 gap-2 mb-4">
+                      {[
+                        { label: "צמחונים בקמפ", value: dietaryCounts.vegetarian },
+                        { label: "טבעונים בקמפ", value: dietaryCounts.vegan },
+                        { label: "עם אלרגיה", value: dietaryCounts.allergies },
+                      ].map((c) => (
+                        <div key={c.label} className="rounded-2xl p-3 text-center" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}` }}>
+                          <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
+                          <div className="text-xs font-bold mt-1" style={{ color: COLORS.accentDark }}>{c.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>
+                    "עם אלרגיה" הוא מספר בלבד - פרטי האלרגיה של כל חבר/ה מוצגים רק למנהלים ולחבר/ת הקמפ עצמו/ה (בכרטיס החירום שלהם), לא כאן, מטעמי פרטיות.
+                  </p>
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    {[
+                      { label: "פריטים ברשימה", value: confirmedItems.length },
+                      { label: "נקנו", value: boughtCount },
+                      { label: "עלות כוללת", value: `₪${totalPrice.toLocaleString()}` },
+                    ].map((c) => (
+                      <div key={c.label} className="rounded-2xl p-3 text-center" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                        <div className="text-lg font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
+                        <div className="text-[10px] mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {pendingCount > 0 && (
+                    <div className="mb-3 rounded-2xl p-3 text-xs" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
+                      {pendingCount} בקשות רכישה ממתינות להשלמת כמות/מחיר
+                    </div>
+                  )}
+                  <button onClick={() => setTab("shopping")} className="text-sm px-4 py-2 rounded-full font-semibold" style={{ background: COLORS.accent, color: COLORS.bg }}>
+                    מעבר לרשימת הקניות המלאה
+                  </button>
+                </div>
+              );
+            })()}
           </div>
           );
         })()}
@@ -8942,16 +9079,16 @@ ${sections}
               {[
                 { label: "תקציב מתוכנן", value: budgetTotals.planned, icon: Wallet },
                 { label: "הכנסות", value: budgetTotals.duesCollected, icon: Ticket },
-                { label: "התחייבויות", value: budgetTotals.committed, icon: Clock },
-                { label: "שולם בפועל", value: budgetTotals.paid, icon: Check },
+                { label: "התחייבויות - נותר לשלם", value: budgetTotals.committed, icon: Clock },
+                { label: "הוצאות - שולם בפועל", value: budgetTotals.paid, icon: Check },
                 { label: "יתרה זמינה", value: budgetTotals.remaining, icon: CreditCard },
               ].map((c) => {
                 // Green = positive, red = negative, brown (the app's normal
                 // neutral surface) = exactly zero - same sign-based scheme
-                // requested for the dues list earlier. "שולם בפועל" is money
-                // going out, so it's always red regardless of sign, not
+                // requested for the dues list earlier. "הוצאות - שולם בפועל" is
+                // money going out, so it's always red regardless of sign, not
                 // judged by the same +/- rule as the others.
-                const isPaidTile = c.label === "שולם בפועל";
+                const isPaidTile = c.label === "הוצאות - שולם בפועל";
                 const tint = isPaidTile ? DUES_BELOW_BG : c.value > 0 ? DUES_ABOVE_BG : c.value < 0 ? DUES_BELOW_BG : COLORS.surface;
                 const danger = isPaidTile || c.value < 0;
                 const Icon = c.icon;
@@ -8972,17 +9109,25 @@ ${sections}
               // budget params get per-row granularity - the scalar cost
               // drivers (water/sanitation/food/ice/electricity/general) are
               // each already a single number per category, nothing to expand.
-              // There's no per-item *actual* spend to show here: real
-              // expenses are only ever recorded against a category
-              // (budgetExpenses.allocation), never against one specific
-              // planned item row, so the "actual" side of a sub-row would be
-              // fabricated - left as "—" instead of a fake number.
+              // A budgetExpense can optionally be tagged to a specific
+              // planned item row (BudgetExpenseForm's "שיוך לפריט מתוכנן",
+              // matched by name since item rows have no stable id) - actual
+              // per row is the sum of expenses tagged to it. An expense
+              // recorded under this category but never tagged to one
+              // specific item isn't reflected at the item level, only in
+              // the category total above it, since there's nothing to
+              // match it to.
               const vat = budgetParams.global.vatIncluded ? 1 : 1.18;
               const itemRowsForCategory = (cat) => {
                 const rows = [...budgetParams.campInfra.items, ...budgetParams.campInfra.loungeItems];
                 return rows
                   .filter((r) => (r.category || "ציוד") === cat && (Number(r.qty) || 0) * (Number(r.price) || 0) > 0)
-                  .map((r) => ({ name: r.name || "(ללא שם)", planned: (Number(r.qty) || 0) * (Number(r.price) || 0) * vat }));
+                  .map((r) => {
+                    const actual = budgetExpenses
+                      .filter((e) => e.allocation === cat && e.plannedItemName === r.name)
+                      .reduce((s, e) => s + expenseAmounts(e).paid, 0);
+                    return { name: r.name || "(ללא שם)", planned: (Number(r.qty) || 0) * (Number(r.price) || 0) * vat, actual };
+                  });
               };
               const rowsForCat = allBudgetCategories
                 .map((cat) => ({ cat, planned: plannedForCategory(cat), paid: categorySpend[cat] || 0, subRows: itemRowsForCategory(cat) }))
@@ -9031,12 +9176,17 @@ ${sections}
                             ];
                             if (open) {
                               subRows.forEach((r, i) => {
+                                const itemGap = r.planned - r.actual;
                                 trs.push(
                                   <tr key={`${cat}-${i}`} style={{ background: COLORS.input }}>
                                     <td className="px-3 py-1.5" style={{ color: COLORS.textMuted, paddingRight: 22 }}>· {r.name}</td>
                                     <td className="px-3 py-1.5" style={{ fontFamily: FONT_NUM, color: COLORS.textMuted }}>₪{Math.round(r.planned).toLocaleString()}</td>
-                                    <td className="px-3 py-1.5" style={{ color: COLORS.textMuted }}>—</td>
-                                    <td className="px-3 py-1.5" />
+                                    <td className="px-3 py-1.5" style={{ fontFamily: FONT_NUM, color: r.actual > 0 ? COLORS.text : COLORS.textMuted }}>
+                                      {r.actual > 0 ? `₪${Math.round(r.actual).toLocaleString()}` : "—"}
+                                    </td>
+                                    <td className="px-3 py-1.5" style={{ fontFamily: FONT_NUM, color: r.actual > 0 ? (itemGap < 0 ? COLORS.danger : COLORS.accent2Dark) : COLORS.textMuted }}>
+                                      {r.actual > 0 ? `₪${Math.round(itemGap).toLocaleString()}` : "—"}
+                                    </td>
                                   </tr>
                                 );
                               });
@@ -9095,6 +9245,7 @@ ${sections}
                       lockedAllocation={isAdmin ? null : budgetCategoryForTeam(myLeadTeam)}
                       categories={allBudgetCategories}
                       allMembers={allMembers}
+                      budgetParams={budgetParams}
                     />
                   </div>
                 )}
@@ -9145,6 +9296,7 @@ ${sections}
                                 categories={allBudgetCategories}
                                 lockedAllocation={isAdmin ? null : budgetCategoryForTeam(myLeadTeam)}
                                 allMembers={allMembers}
+                                budgetParams={budgetParams}
                                 onCancel={() => setEditingExpenseId(null)}
                                 onError={(msg) => showToast(msg, "error")}
                                 onAdd={(patch) => {
@@ -9380,13 +9532,14 @@ ${sections}
                   "nobody marked this" is visible rather than the box just
                   disappearing. */}
               {dietaryCounts && (
-                <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="grid grid-cols-3 gap-2 mb-4">
                   {[
                     { label: "צמחונים בקמפ", value: dietaryCounts.vegetarian },
                     { label: "טבעונים בקמפ", value: dietaryCounts.vegan },
+                    { label: "עם אלרגיה", value: dietaryCounts.allergies },
                   ].map((c) => (
-                    <div key={c.label} className="rounded-2xl p-4 text-center" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}` }}>
-                      <div className="text-3xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
+                    <div key={c.label} className="rounded-2xl p-3 text-center" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}` }}>
+                      <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
                       <div className="text-xs font-bold mt-1" style={{ color: COLORS.accentDark }}>{c.label}</div>
                     </div>
                   ))}
@@ -9606,7 +9759,7 @@ ${sections}
                 const paid = list.reduce((s, p) => s + (Number(p.amount) || 0), 0);
                 const effectiveFee = feeOverrides[m.name] !== undefined ? Number(feeOverrides[m.name]) : campFee;
                 const remaining = effectiveFee - paid;
-                const aboveThreshold = paid > duesThreshold;
+                const aboveThreshold = paid >= duesThreshold;
                 const open = expandedMember === m.name;
                 return (
                   <div key={m.name} className="rounded-xl overflow-hidden" style={{ background: aboveThreshold ? DUES_ABOVE_BG : DUES_BELOW_BG }}>
@@ -9875,7 +10028,7 @@ ${sections}
             {canManageFinances && (() => {
               const open = showBudgetSection === "camp";
               return (
-                <div className="mb-3">
+                <div className="mb-3" id="budget-camp-section">
                   <button onClick={() => setShowBudgetSection(open ? null : "camp")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
                     <span>מחנה - תשתית כללית (כולל הסלון) · ₪{Math.round(engine.campTotal).toLocaleString()}</span>
                     <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
@@ -9930,7 +10083,7 @@ ${sections}
               const open = showBudgetSection === "water";
               const w = budgetParams.water;
               return (
-                <div className="mb-3">
+                <div className="mb-3" id="budget-water-section">
                   <button onClick={() => setShowBudgetSection(open ? null : "water")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
                     <span>מים ומקלחות · ₪{Math.round(engine.waterTotal).toLocaleString()}</span>
                     <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
@@ -9962,7 +10115,7 @@ ${sections}
               const open = showBudgetSection === "sanitation";
               const s = budgetParams.sanitation;
               return (
-                <div className="mb-3">
+                <div className="mb-3" id="budget-sanitation-section">
                   <button onClick={() => setShowBudgetSection(open ? null : "sanitation")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
                     <span>שירותים (תברואה) · ₪{Math.round(engine.sanitationTotal).toLocaleString()}</span>
                     <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
@@ -9992,7 +10145,7 @@ ${sections}
               const open = showBudgetSection === "food";
               const f = budgetParams.food;
               return (
-                <div className="mb-3">
+                <div className="mb-3" id="budget-food-section">
                   <button onClick={() => setShowBudgetSection(open ? null : "food")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
                     <span>אוכל · ₪{Math.round(engine.foodTotal).toLocaleString()}</span>
                     <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
@@ -10021,7 +10174,7 @@ ${sections}
             {canManageFinances && (() => {
               const open = showBudgetSection === "general";
               return (
-                <div className="mb-3">
+                <div className="mb-3" id="budget-general-section">
                   <button onClick={() => setShowBudgetSection(open ? null : "general")} className="w-full flex items-center justify-between text-sm font-bold py-2" style={{ color: COLORS.accentDark }}>
                     <span>כללי - עלויות משותפות · ₪{Math.round(engine.generalShare).toLocaleString()}</span>
                     <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none" }} />
@@ -10117,7 +10270,7 @@ ${sections}
                           )}
                         </div>
                       )}
-                      {canEditBudget && <BudgetExpenseForm onAdd={addBudgetExpense} onError={(msg) => showToast(msg, "error")} lockedAllocation={isAdmin ? null : budgetCategoryForTeam(myLeadTeam)} categories={allBudgetCategories} allMembers={allMembers} />}
+                      {canEditBudget && <BudgetExpenseForm onAdd={addBudgetExpense} onError={(msg) => showToast(msg, "error")} lockedAllocation={isAdmin ? null : budgetCategoryForTeam(myLeadTeam)} categories={allBudgetCategories} allMembers={allMembers} budgetParams={budgetParams} />}
                       <div className="space-y-1.5">
                         {budgetExpenses.map((e) => {
                           const canManageThis = isAdmin || budgetCategoryForTeam(myLeadTeam) === e.allocation;
@@ -10131,6 +10284,7 @@ ${sections}
                                 onCancel={() => setEditingExpenseId(null)}
                                 onError={(msg) => showToast(msg, "error")}
                                 allMembers={allMembers}
+                                budgetParams={budgetParams}
                                 onAdd={(patch) => {
                                   updateBudgetExpense(e.id, patch);
                                   setEditingExpenseId(null);
@@ -10219,6 +10373,14 @@ ${sections}
                       computed={r.computed}
                       published={r.published}
                       onSet={setCategoryBudget}
+                      onNavigate={(cat) => {
+                        setFinancesView("budget");
+                        const section = budgetSectionForCategory(cat);
+                        setShowBudgetSection(section);
+                        setTimeout(() => {
+                          document.getElementById(`budget-${section}-section`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }, 100);
+                      }}
                     />
                   ))}
                 </div>

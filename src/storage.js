@@ -642,7 +642,11 @@ export async function listMembersWithPushEnabled() {
 export async function getDietaryPreferenceCounts() {
   const { data, error } = await supabase.rpc("dietary_preference_counts").single();
   if (error) throw error;
-  return { vegetarian: Number(data?.vegetarian_count) || 0, vegan: Number(data?.vegan_count) || 0 };
+  return {
+    vegetarian: Number(data?.vegetarian_count) || 0,
+    vegan: Number(data?.vegan_count) || 0,
+    allergies: Number(data?.allergy_count) || 0,
+  };
 }
 
 // Admin/owner-only: sends an ad-hoc push notification (e.g. an event
