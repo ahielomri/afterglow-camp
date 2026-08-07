@@ -1108,17 +1108,17 @@ function EditableCategoryList({ categories, onRename, onRemove }) {
   );
 }
 
-// One row per budget category/department. `published` (categoryBudgets[cat])
-// is the number the department actually sees everywhere in the app right
-// now. A category with a live parameter/item-row calculation is NOT
-// editable here - it's only ever updated by explicitly publishing it from
-// the "תקציב" tab (see PublishBudgetRow below), so what's shown here is the
-// published value, not the live one, and might legitimately lag behind it
-// until someone publishes. A category with no calculation at all is a
-// plain manual number, editable right here (click to open a small input).
-function DepartmentBudgetRow({ cat, hasComputed, published, onSet }) {
+// One row per budget category/department, entirely self-contained: a
+// category with a live parameter/item-row calculation shows "מחושב" vs
+// "מפורסם" and its own publish button+confirm (always visible, just
+// disabled/grayed when the two already match - so the row never
+// disappears or silently changes shape). A category with no calculation
+// at all is a plain manual number, editable right here.
+function DepartmentBudgetRow({ cat, hasComputed, computed, published, onSet }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(published || "");
+  const [confirming, setConfirming] = useState(false);
+  const upToDate = hasComputed && Math.round(computed) === Math.round(published);
 
   function commit() {
     setEditing(false);
@@ -1126,72 +1126,58 @@ function DepartmentBudgetRow({ cat, hasComputed, published, onSet }) {
   }
 
   return (
-    <div className="flex items-center justify-between text-sm rounded-xl px-3 py-2.5 gap-2" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-      <span className="font-semibold">{cat}</span>
-      {hasComputed ? (
-        published > 0 ? (
-          <span style={{ color: COLORS.accent2Dark, fontFamily: FONT_NUM }}>תקציב מפורסם: ₪{published.toLocaleString()}</span>
-        ) : (
-          <span style={{ color: COLORS.danger }}>טרם פורסם - יש לפרסם בטאב "תקציב"</span>
-        )
-      ) : editing ? (
-        <div className="flex items-center gap-1.5">
-          <input
-            type="number"
-            autoFocus
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && commit()}
-            onBlur={commit}
-            placeholder="0"
-            className="w-24 px-2 py-1.5 rounded-lg text-sm outline-none text-left"
-            style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}`, fontFamily: FONT_NUM }}
-          />
-          <button onMouseDown={(e) => e.preventDefault()} onClick={commit} style={{ color: COLORS.accent2Dark }}>
-            <Check size={15} />
-          </button>
-        </div>
-      ) : (
-        <button onClick={() => { setValue(published || ""); setEditing(true); }} className="flex items-center gap-1" style={{ color: published > 0 ? COLORS.textMuted : COLORS.danger }}>
-          {published > 0 ? `הוזן ידנית: ₪${published.toLocaleString()}` : "אין נתון - לחיצה להזנה ידנית"}
-          <Pencil size={12} />
-        </button>
-      )}
-    </div>
-  );
-}
-
-// Compares the live-computed value (engine.categoryPlanned) against what's
-// currently published (categoryBudgets) for one category, and lets finance
-// push the live number out to the department - with an explicit confirm,
-// since publishing immediately changes what that team sees everywhere.
-function PublishBudgetRow({ cat, computed, published, onPublish }) {
-  const [confirming, setConfirming] = useState(false);
-  const upToDate = Math.round(computed) === Math.round(published);
-
-  return (
     <div className="rounded-xl px-3 py-2.5 text-sm" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className="font-semibold">{cat}</span>
-        <span style={{ fontFamily: FONT_NUM, color: COLORS.textMuted }}>
-          מחושב כעת: ₪{Math.round(computed).toLocaleString()} · מפורסם למחלקה: ₪{Math.round(published).toLocaleString()}
-        </span>
+        {hasComputed ? (
+          <span style={{ fontFamily: FONT_NUM, color: COLORS.textMuted }}>
+            מחושב: ₪{Math.round(computed).toLocaleString()} · מפורסם: ₪{Math.round(published).toLocaleString()}
+          </span>
+        ) : editing ? (
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              autoFocus
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && commit()}
+              onBlur={commit}
+              placeholder="0"
+              className="w-24 px-2 py-1.5 rounded-lg text-sm outline-none text-left"
+              style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}`, fontFamily: FONT_NUM }}
+            />
+            <button onMouseDown={(e) => e.preventDefault()} onClick={commit} style={{ color: COLORS.accent2Dark }}>
+              <Check size={15} />
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => { setValue(published || ""); setEditing(true); }} className="flex items-center gap-1" style={{ color: published > 0 ? COLORS.textMuted : COLORS.danger }}>
+            {published > 0 ? `הוזן ידנית: ₪${published.toLocaleString()}` : "אין נתון - לחיצה להזנה ידנית"}
+            <Pencil size={12} />
+          </button>
+        )}
       </div>
-      {!upToDate && !confirming && (
+
+      {hasComputed && !confirming && (
         <button
-          onClick={() => setConfirming(true)}
+          onClick={() => !upToDate && setConfirming(true)}
+          disabled={upToDate}
           className="mt-2 text-sm px-3 py-1.5 rounded-full font-semibold"
-          style={{ background: COLORS.accent, color: COLORS.bg }}
+          style={{
+            background: upToDate ? COLORS.divider : COLORS.accent,
+            color: upToDate ? COLORS.textMuted : COLORS.bg,
+            cursor: upToDate ? "default" : "pointer",
+          }}
         >
-          פרסום עדכון למחלקה
+          {upToDate ? "✓ מעודכן" : "פרסום עדכון למחלקה"}
         </button>
       )}
-      {confirming && (
+      {hasComputed && confirming && (
         <div className="mt-2 rounded-lg p-2.5 text-sm" style={{ background: COLORS.input }}>
           <div className="mb-2">בלחיצת שמירה תקציב הצוות יעודכן. להמשיך?</div>
           <div className="flex gap-2">
             <button
-              onClick={() => { onPublish(cat, computed); setConfirming(false); }}
+              onClick={() => { onSet(cat, computed); setConfirming(false); }}
               className="px-4 py-1.5 rounded-full font-semibold"
               style={{ background: COLORS.accent, color: COLORS.bg }}
             >
@@ -1208,6 +1194,53 @@ function PublishBudgetRow({ cat, computed, published, onPublish }) {
         </div>
       )}
     </div>
+  );
+}
+
+// Bulk-publish bar at the top of the מחלקות tab - always visible (grayed
+// out with count 0 when nothing changed) so the control never disappears,
+// matching each row's own always-visible publish button below it.
+function PublishAllBar({ count, onPublishAll }) {
+  const [confirming, setConfirming] = useState(false);
+  const disabled = count === 0;
+
+  if (confirming) {
+    return (
+      <div className="rounded-2xl p-3 mb-4 text-sm" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
+        <div className="mb-2">בלחיצת שמירה תקציב כל המחלקות שהשתנו יעודכן. להמשיך?</div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { onPublishAll(); setConfirming(false); }}
+            className="px-4 py-1.5 rounded-full font-semibold"
+            style={{ background: COLORS.accent, color: COLORS.bg }}
+          >
+            כן, לשייך הכל
+          </button>
+          <button
+            onClick={() => setConfirming(false)}
+            className="px-4 py-1.5 rounded-full font-semibold"
+            style={{ background: COLORS.surface, color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}
+          >
+            לא
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => !disabled && setConfirming(true)}
+      disabled={disabled}
+      className="w-full py-3 rounded-2xl text-sm font-bold mb-4"
+      style={{
+        background: disabled ? COLORS.divider : COLORS.accent,
+        color: disabled ? COLORS.textMuted : COLORS.bg,
+        cursor: disabled ? "default" : "pointer",
+      }}
+    >
+      {disabled ? "אין עדכונים לשייך" : `שייך את כל התקציבים (${count})`}
+    </button>
   );
 }
 
@@ -3025,6 +3058,7 @@ export default function App() {
   const [showQuickAddExpense, setShowQuickAddExpense] = useState(false);
   const [openBvaCategory, setOpenBvaCategory] = useState(null);
   const [financesView, setFinancesView] = useState("dues");
+  const [teamDashboardView, setTeamDashboardView] = useState("shifts");
   const [activityLog, setActivityLog] = useState([]);
   const [loginHistory, setLoginHistory] = useState([]);
   const [showActivityLog, setShowActivityLog] = useState(false);
@@ -3439,6 +3473,33 @@ export default function App() {
     if (uniqueLeads.length > 0) {
       try {
         await sendEventReminderPush("עדכון תקציב", `תקציב "${cat}" עודכן ל-₪${value.toLocaleString()}`, undefined, uniqueLeads);
+      } catch {}
+    }
+  }
+
+  // Publishes every category whose live-computed value differs from what's
+  // currently published, in one shot - the "שייך את כל התקציבים" button.
+  // One shared persist (instead of N separate setCategoryBudget calls) so
+  // it can't race itself, then one push per affected team's leads.
+  async function publishAllCategoryBudgets() {
+    const latest = await getFreshShared("category-budgets", categoryBudgets);
+    const changed = allBudgetCategories.filter((cat) => {
+      const computed = engine.categoryPlanned[cat] || 0;
+      return computed > 0 && Math.round(computed) !== Math.round(Number(latest[cat]) || 0);
+    });
+    if (changed.length === 0) return;
+    const next = { ...latest };
+    changed.forEach((cat) => { next[cat] = Math.round(engine.categoryPlanned[cat]); });
+    await persistCategoryBudgets(next);
+    showToast(`תקציב עודכן ל-${changed.length} מחלקות`, "ok");
+    logActivity("שיוך תקציב לכל המחלקות", changed.join(", "));
+    const leadNames = [...TEAMS, ...extraTeams]
+      .filter((t) => changed.includes(budgetCategoryForTeam(t.name)))
+      .flatMap((t) => teamLeads[t.name] || []);
+    const uniqueLeads = [...new Set(leadNames)];
+    if (uniqueLeads.length > 0) {
+      try {
+        await sendEventReminderPush("עדכון תקציב", "תקציב המחלקה שלך עודכן", undefined, uniqueLeads);
       } catch {}
     }
   }
@@ -5911,8 +5972,8 @@ ${sections}
   // live-computed number would otherwise flicker through every department's
   // screen with every keystroke, including half-typed numbers. A department
   // only sees a new number once someone explicitly publishes it (see the
-  // "פרסום תקציב למחלקות" section in the תקציב tab), which copies the
-  // live computed value into categoryBudgets at that moment.
+  // "מחלקות" tab in כספים), which copies the live computed value into
+  // categoryBudgets at that moment.
   function plannedForCategory(cat) {
     return Number(categoryBudgets[cat]) || 0;
   }
@@ -7229,81 +7290,131 @@ ${sections}
               )}
             </div>
             {(() => {
-              const leads = teamLeadsOf(viewedTeam);
-              if (leads.length === 0) return null;
+              const leads = teamLeadsOf(viewedTeam).map((l) => l.name);
+              const label = leads.length === 0
+                ? "אין מוביל/ה"
+                : leads.length === 1
+                ? leads[0]
+                : leads.slice(0, -1).join(", ") + " ו-" + leads[leads.length - 1];
               return (
                 <div className="text-xs mb-3" style={{ color: COLORS.textMuted }}>
-                  <span>מוביל/ה: <b style={{ color: COLORS.accentDark }}>{leads[0].name}</b></span>
-                  {leads[1] && (
-                    <span> · מוביל/ה משנה: <b style={{ color: COLORS.accentDark }}>{leads[1].name}</b></span>
-                  )}
+                  מוביל/ה: <b style={{ color: COLORS.accentDark }}>{label}</b>
                 </div>
               );
             })()}
-            <div className="grid grid-cols-2 gap-3">
-              {(() => {
-                const t = teamStats(viewedTeam);
-                return [
-                  { label: "משמרות הצוות", value: t.totalShifts },
-                  { label: "מקומות פנויים", value: t.unfilled },
-                  { label: "תקציב הצוות", value: `₪${t.planned.toLocaleString()}` },
-                  { label: "שולם בפועל", value: `₪${t.paid.toLocaleString()}` },
-                ].map((c) => (
-                  <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                    <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
-                    <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
-                  </div>
-                ));
-              })()}
+
+            <div className="flex gap-2 mb-4">
+              {[
+                { id: "shifts", label: "משמרות" },
+                { id: "budget", label: "תקציב" },
+                { id: "tasks", label: "משימות" },
+              ].map((v) => (
+                <button
+                  key={v.id}
+                  onClick={() => setTeamDashboardView(v.id)}
+                  className="px-4 py-2 rounded-full text-sm font-semibold"
+                  style={{
+                    background: teamDashboardView === v.id ? COLORS.accent : COLORS.surface,
+                    color: teamDashboardView === v.id ? COLORS.bg : COLORS.textMuted,
+                    border: `1px solid ${teamDashboardView === v.id ? COLORS.accent : COLORS.divider}`,
+                  }}
+                >
+                  {v.label}
+                </button>
+              ))}
             </div>
 
-            {(overBudgetCategories.includes(budgetCategoryForTeam(viewedTeam)) || nearBudgetCategories.includes(budgetCategoryForTeam(viewedTeam)) || (viewedTeam === CONTENT_TEAM_NAME && pendingContentSuggestions.length > 0)) && (
-              <div className="mt-3 rounded-2xl p-3" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
-                {overBudgetCategories.includes(budgetCategoryForTeam(viewedTeam)) && <div className="text-xs">⚠️ תקציב הצוות חרג מהתכנון</div>}
-                {nearBudgetCategories.includes(budgetCategoryForTeam(viewedTeam)) && <div className="text-xs">🟡 תקציב הצוות מתקרב לתכנון (מעל 85%)</div>}
-                {viewedTeam === CONTENT_TEAM_NAME && pendingContentSuggestions.length > 0 && (
-                  <div className="text-xs">
-                    {pendingContentSuggestions.length} הצעות תוכן ממתינות לשיבוץ -{" "}
-                    <button onClick={() => setTab("content")} className="underline font-bold">מעבר ללוח תוכן</button>
+            {teamDashboardView === "shifts" && (() => {
+              const t = teamStats(viewedTeam);
+              return (
+                <div>
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    {[
+                      { label: "משמרות הצוות", value: t.totalShifts },
+                      { label: "מקומות פנויים", value: t.unfilled },
+                    ].map((c) => (
+                      <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                        <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
+                        <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                      </div>
+                    ))}
                   </div>
-                )}
-              </div>
-            )}
 
-            <h3 className="text-xs font-bold mt-5 mb-2" style={{ color: COLORS.textMuted }}>המשמרות של הצוות</h3>
-            <div className="space-y-1.5">
-              {SHIFTS.filter((s) => s.team === viewedTeam).map((s) => {
-                const { names, spots } = shiftNamesAndSpots(s);
-                return (
-                  <div key={s.id} className="rounded-xl px-3 py-2 flex items-center justify-between text-xs" style={{ background: COLORS.surface }}>
-                    <span>{s.title} · {formatDate(s.date)}{s.id === TEARDOWN_ID || s.noTime ? "" : ` · ${s.start}–${s.end}`}</span>
-                    <span className="px-2 py-0.5 rounded-full" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>{s.noLimit ? "ללא הגבלה" : `${names.length}/${spots}`}</span>
+                  {viewedTeam === CONTENT_TEAM_NAME && pendingContentSuggestions.length > 0 && (
+                    <div className="mb-3 rounded-2xl p-3" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
+                      <div className="text-xs">
+                        {pendingContentSuggestions.length} הצעות תוכן ממתינות לשיבוץ -{" "}
+                        <button onClick={() => setTab("content")} className="underline font-bold">מעבר ללוח תוכן</button>
+                      </div>
+                    </div>
+                  )}
+
+                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>המשמרות של הצוות</h3>
+                  <div className="space-y-1.5">
+                    {SHIFTS.filter((s) => s.team === viewedTeam).map((s) => {
+                      const { names, spots } = shiftNamesAndSpots(s);
+                      return (
+                        <div key={s.id} className="rounded-xl px-3 py-2 flex items-center justify-between text-xs" style={{ background: COLORS.surface }}>
+                          <span>{s.title} · {formatDate(s.date)}{s.id === TEARDOWN_ID || s.noTime ? "" : ` · ${s.start}–${s.end}`}</span>
+                          <span className="px-2 py-0.5 rounded-full" style={{ background: COLORS.accentLight, color: COLORS.accentDark }}>{s.noLimit ? "ללא הגבלה" : `${names.length}/${spots}`}</span>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </div>
 
-            <h3 className="text-xs font-bold mt-5 mb-2" style={{ color: COLORS.textMuted }}>חברי הצוות ({teamMembers(viewedTeam).length})</h3>
-            <div className="grid grid-cols-2 gap-1.5 mb-1">
-              {teamMembers(viewedTeam).length === 0 ? (
-                <p className="text-xs col-span-2" style={{ color: COLORS.textMuted }}>עדיין אף אחד לא שיבץ משמרת בצוות הזה.</p>
-              ) : (
-                teamMembers(viewedTeam).map((n) => (
-                  <span key={n} className="text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5" style={{ background: COLORS.surface }} dir="ltr">
-                    <span dir="rtl" className="truncate">{n}</span>{memberPhones[n] ? ` · ${memberPhones[n]}` : ""}
-                    {isManualTeamMember(viewedTeam, n) && (
-                      <button onClick={() => removeManualTeamMember(viewedTeam, n)} style={{ color: COLORS.textMuted }} className="shrink-0"><X size={10} /></button>
+                  <h3 className="text-xs font-bold mt-5 mb-2" style={{ color: COLORS.textMuted }}>חברי הצוות ({teamMembers(viewedTeam).length})</h3>
+                  <div className="grid grid-cols-2 gap-1.5 mb-1">
+                    {teamMembers(viewedTeam).length === 0 ? (
+                      <p className="text-xs col-span-2" style={{ color: COLORS.textMuted }}>עדיין אף אחד לא שיבץ משמרת בצוות הזה.</p>
+                    ) : (
+                      teamMembers(viewedTeam).map((n) => (
+                        <span key={n} className="text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5" style={{ background: COLORS.surface }} dir="ltr">
+                          <span dir="rtl" className="truncate">{n}</span>{memberPhones[n] ? ` · ${memberPhones[n]}` : ""}
+                          {isManualTeamMember(viewedTeam, n) && (
+                            <button onClick={() => removeManualTeamMember(viewedTeam, n)} style={{ color: COLORS.textMuted }} className="shrink-0"><X size={10} /></button>
+                          )}
+                        </span>
+                      ))
                     )}
-                  </span>
-                ))
-              )}
-            </div>
-            <div className="mt-2">
-              <div className="text-xs mb-1" style={{ color: COLORS.textMuted }}>הוספת חבר/ה לצוות ללא משמרת</div>
-              <AdminAssignPicker members={allMembers} onAssign={(name) => addManualTeamMember(viewedTeam, name)} />
-            </div>
+                  </div>
+                  <div className="mt-2">
+                    <div className="text-xs mb-1" style={{ color: COLORS.textMuted }}>הוספת חבר/ה לצוות ללא משמרת</div>
+                    <AdminAssignPicker members={allMembers} onAssign={(name) => addManualTeamMember(viewedTeam, name)} />
+                  </div>
+                </div>
+              );
+            })()}
 
-            <div className="mt-5 pt-4 border-t" style={{ borderColor: COLORS.divider }}>
+            {teamDashboardView === "budget" && (() => {
+              const t = teamStats(viewedTeam);
+              return (
+                <div>
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    {[
+                      { label: "תקציב הצוות", value: `₪${t.planned.toLocaleString()}` },
+                      { label: "שולם בפועל", value: `₪${t.paid.toLocaleString()}` },
+                    ].map((c) => (
+                      <div key={c.label} className="rounded-2xl p-4" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                        <div className="text-xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
+                        <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>{c.label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {(overBudgetCategories.includes(budgetCategoryForTeam(viewedTeam)) || nearBudgetCategories.includes(budgetCategoryForTeam(viewedTeam))) && (
+                    <div className="mb-3 rounded-2xl p-3" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}55` }}>
+                      {overBudgetCategories.includes(budgetCategoryForTeam(viewedTeam)) && <div className="text-xs">⚠️ תקציב הצוות חרג מהתכנון</div>}
+                      {nearBudgetCategories.includes(budgetCategoryForTeam(viewedTeam)) && <div className="text-xs">🟡 תקציב הצוות מתקרב לתכנון (מעל 85%)</div>}
+                    </div>
+                  )}
+
+                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>הוספת הוצאה לצוות</h3>
+                  <BudgetExpenseForm onAdd={addBudgetExpense} onError={(msg) => showToast(msg, "error")} lockedAllocation={budgetCategoryForTeam(viewedTeam)} categories={allBudgetCategories} allMembers={allMembers} />
+                </div>
+              );
+            })()}
+
+            {teamDashboardView === "tasks" && (
               <TeamChecklist
                 items={checklistItemsFor(viewedTeam)}
                 state={checklistState[viewedTeam] || {}}
@@ -7314,12 +7425,7 @@ ${sections}
                 onEdit={(i, text) => editChecklistItem(viewedTeam, i, text)}
                 onRemove={(i) => removeChecklistItem(viewedTeam, i)}
               />
-            </div>
-
-            <div className="mt-5 pt-4 border-t" style={{ borderColor: COLORS.divider }}>
-              <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>הוספת הוצאה לצוות</h3>
-              <BudgetExpenseForm onAdd={addBudgetExpense} onError={(msg) => showToast(msg, "error")} lockedAllocation={budgetCategoryForTeam(viewedTeam)} categories={allBudgetCategories} allMembers={allMembers} />
-            </div>
+            )}
           </div>
           );
         })()}
@@ -9415,25 +9521,11 @@ ${sections}
               )}
             </div>
 
-            {canEditBudget && (() => {
-              const publishRows = allBudgetCategories
-                .map((cat) => ({ cat, computed: engine.categoryPlanned[cat] || 0, published: Number(categoryBudgets[cat]) || 0 }))
-                .filter((r) => r.computed > 0);
-              if (publishRows.length === 0) return null;
-              return (
-                <div className="mb-6">
-                  <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.accentDark }}>פרסום תקציב למחלקות</h3>
-                  <p className="text-xs mb-3" style={{ color: COLORS.textMuted }}>
-                    השינויים בפרמטרים למטה הם טיוטה - מחלקה רואה מספר חדש רק אחרי שמפרסמים אותו כאן במפורש, כדי שאף אחד לא יראה מספר שעדיין באמצע עריכה. פרסום שולח גם התראה לראשי הצוות הרלוונטי.
-                  </p>
-                  <div className="space-y-1.5">
-                    {publishRows.map((r) => (
-                      <PublishBudgetRow key={r.cat} cat={r.cat} computed={r.computed} published={r.published} onPublish={setCategoryBudget} />
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
+            {canEditBudget && (
+              <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>
+                השינויים למטה הם טיוטה - מחלקה רואה מספר חדש רק אחרי שמפרסמים אותו בטאב "מחלקות".
+              </p>
+            )}
 
             {!canEditBudget && (
               <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>הפרמטרים המלאים ניתנים לעריכה על ידי מנהלים בלבד. זו תצוגת הסיכום.</p>
@@ -9813,19 +9905,28 @@ ${sections}
             </div>
             )}
 
-            {financesView === "departments" && (
+            {financesView === "departments" && (() => {
+              const rows = allBudgetCategories.map((cat) => ({
+                cat,
+                computed: engine.categoryPlanned[cat] || 0,
+                published: Number(categoryBudgets[cat]) || 0,
+              }));
+              const changedCount = rows.filter((r) => r.computed > 0 && Math.round(r.computed) !== Math.round(r.published)).length;
+              return (
               <div>
                 <h3 className="text-base font-bold mb-2" style={{ color: COLORS.accentDark }}>מנוע תקציב מפורט (צוות תקציב)</h3>
                 <p className="text-sm mb-3" style={{ color: COLORS.textMuted }}>
-                  מחלקה עם חישוב מפרמטרים מתעדכנת רק כשמפרסמים אליה עדכון בטאב "תקציב" - לא באופן חי. מחלקה בלי חישוב אפשר לעדכן ישירות כאן - לחיצה על השורה פותחת שדה להזנת סכום.
+                  מחלקה עם חישוב מפרמטרים מתעדכנת רק כשמפרסמים אליה עדכון - לא באופן חי - כדי לא להראות מספר שעדיין באמצע עריכה. אפשר לשייך הכל ביחד למעלה, או כל מחלקה בנפרד בשורה שלה. מחלקה בלי חישוב אפשר לעדכן ישירות בשורה.
                 </p>
+                <PublishAllBar count={changedCount} onPublishAll={publishAllCategoryBudgets} />
                 <div className="space-y-1.5 mb-4">
-                  {allBudgetCategories.map((cat) => (
+                  {rows.map((r) => (
                     <DepartmentBudgetRow
-                      key={cat}
-                      cat={cat}
-                      hasComputed={(engine.categoryPlanned[cat] || 0) > 0}
-                      published={Number(categoryBudgets[cat]) || 0}
+                      key={r.cat}
+                      cat={r.cat}
+                      hasComputed={r.computed > 0}
+                      computed={r.computed}
+                      published={r.published}
                       onSet={setCategoryBudget}
                     />
                   ))}
@@ -9837,7 +9938,8 @@ ${sections}
                 <NewCategoryForm onAdd={addBudgetCategory} />
                 <EditableCategoryList categories={extraBudgetCategories} onRename={renameBudgetCategory} onRemove={removeBudgetCategory} />
               </div>
-            )}
+              );
+            })()}
 
             {financesView === "receipts" && (() => {
               const withReceipts = budgetExpenses.filter((e) => e.receiptUrl);
