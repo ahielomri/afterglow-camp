@@ -597,7 +597,26 @@ function expenseAmounts(e) {
 // Budget expenses <-> CSV (Excel opens CSV natively, so this avoids pulling
 // in a whole spreadsheet-parsing library just for import/export).
 // ---------------------------------------------------------------------------
-const EXPENSE_CSV_HEADERS = ["allocation", "vendor", "description", "amount", "purchaseDate", "paymentStatus", "paidAmount", "dueDate", "paymentMethod", "vatIncluded", "isRefund", "refundToMember", "refundMemberName", "refundPaid", "enteredBy"];
+// Single source for both the export header row (Hebrew, for people reading
+// it) and CSV import column matching (also by the Hebrew label now, so a
+// file exported from here round-trips back in without translating anything).
+const EXPENSE_FIELDS = [
+  { key: "allocation", label: "שיוך תקציבי" },
+  { key: "vendor", label: "ספק" },
+  { key: "description", label: "תיאור" },
+  { key: "amount", label: "סכום" },
+  { key: "purchaseDate", label: "תאריך רכישה" },
+  { key: "paymentStatus", label: "סטטוס תשלום" },
+  { key: "paidAmount", label: "סכום ששולם" },
+  { key: "dueDate", label: "תאריך יעד לתשלום" },
+  { key: "paymentMethod", label: "אמצעי תשלום" },
+  { key: "vatIncluded", label: "כולל מע\"מ" },
+  { key: "isRefund", label: "זיכוי" },
+  { key: "refundToMember", label: "החזר לחבר קמפ" },
+  { key: "refundMemberName", label: "שם מקבל ההחזר" },
+  { key: "refundPaid", label: "ההחזר שולם" },
+  { key: "enteredBy", label: "הוזן ע\"י" },
+];
 
 const PAYMENT_METHODS = [
   { value: "cash", label: "מזומן" },
@@ -620,9 +639,6 @@ function duesMethodLabel(value) {
   return DUES_PAYMENT_METHODS.find((m) => m.value === value)?.label || value || "";
 }
 
-// Threshold requested for the dues list's color coding, independent of each
-// member's actual camp-fee amount (which may be overridden per person).
-const DUES_PAID_THRESHOLD = 800;
 // Literal red/green requested for this indicator - the rest of the app's
 // palette is warm browns/tans, but this specific signal was asked for by color.
 const DUES_BELOW_BG = "#f8d7d3";
@@ -670,12 +686,6 @@ function buildSpreadsheetMLWorkbook(sheets) {
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
 ${sheetsXml}
 </Workbook>`;
-}
-
-function expensesToCsv(list) {
-  const rows = [EXPENSE_CSV_HEADERS.join(",")];
-  list.forEach((e) => rows.push(EXPENSE_CSV_HEADERS.map((h) => csvEscape(e[h])).join(",")));
-  return "\uFEFF" + rows.join("\r\n"); // BOM so Excel renders Hebrew correctly
 }
 
 // Minimal CSV parser - handles quoted fields with embedded commas/newlines,
@@ -3018,6 +3028,7 @@ export default function App() {
   const [teardownTasks, setTeardownTasks] = useState({});
   const [memberPayments, setMemberPayments] = useState({});
   const [campFee, setCampFee] = useState(0);
+  const [duesThreshold, setDuesThreshold] = useState(800);
   const [teamLeads, setTeamLeadsState] = useState({});
   const [memberPhones, setMemberPhones] = useState({});
   const [rideInfo, setRideInfo] = useState({});
@@ -3219,6 +3230,7 @@ export default function App() {
         rawManualTeam, rawLogins, rawExtra, rawRemoved,
         rawAnn, rawPolls, rawBudgetParams, rawBudgetExpenses, rawEquipment, rawExtraCategories, rawRideMatches,
         rawShoppingList, rawShoppingRequests, rawExtraTeams, rawCustomChecklists, rawContentSchedule, rawContentSuggestions,
+        rawDuesThreshold,
       ] = await Promise.all([
         safeGet("shift-assignments", true),
         safeGet("budget-items", true),
@@ -3251,6 +3263,7 @@ export default function App() {
         safeGet("team-checklist-items", true),
         safeGet("content-schedule", true),
         safeGet("content-suggestions", true),
+        safeGet("dues-threshold", true),
       ]);
 
       async function safeCall(fn, fallback, attempt = 0) {
@@ -3283,6 +3296,7 @@ export default function App() {
       setMemberPayments(normalizedPayments);
 
       setCampFee(rawFee ? JSON.parse(rawFee) : 0);
+      setDuesThreshold(rawDuesThreshold ? JSON.parse(rawDuesThreshold) : 800);
 
       if (rawLeads) {
         setTeamLeadsState(normalizeTeamLeads(JSON.parse(rawLeads)));
@@ -3567,6 +3581,8 @@ export default function App() {
       freshExtra, freshRoles, freshAssignments, freshPayments, freshFeeOverrides, freshCampFeeRaw,
       freshPhones, freshEmails, freshManualTeam, freshLeadsRaw, freshEquipment, freshExpenses,
       freshShopping, freshContentSchedule, freshAllocationInfo, freshEmergencyInfo,
+      freshRideInfo, freshDuesThresholdRaw, freshBudgetParams, freshCategoryBudgets, freshChecklistState,
+      freshCustomChecklists,
     ] = await Promise.all([
       getFreshShared("extra-members", extraMembers),
       getAllMemberRoles().catch(() => dbRoles),
@@ -3584,6 +3600,12 @@ export default function App() {
       getFreshShared("content-schedule", contentSchedule),
       listAllocationInfo().catch(() => allocationInfo),
       listEmergencyInfo().catch(() => emergencyInfo),
+      getFreshShared("ride-info", rideInfo),
+      getFreshShared("dues-threshold", duesThreshold),
+      getFreshShared("budget-params", budgetParams),
+      getFreshShared("category-budgets", categoryBudgets),
+      getFreshShared("team-checklists", checklistState),
+      getFreshShared("team-checklist-items", customChecklists),
     ]);
 
     // Same union/de-dup logic as the allMembers useMemo, just fed from the
@@ -3615,17 +3637,20 @@ export default function App() {
       teamLeads: normalizeTeamLeads(freshLeadsRaw),
       shoppingList: freshShopping,
       emergencyInfo: freshEmergencyInfo,
+      rideInfo: freshRideInfo,
+      duesThreshold: Number(freshDuesThresholdRaw) || 0,
+      budgetParams: freshBudgetParams,
+      categoryBudgets: freshCategoryBudgets,
+      checklistState: freshChecklistState,
+      customChecklists: freshCustomChecklists,
     };
   }
 
+  // Matches the live teamMembers() fix - membership is an explicit
+  // admin/lead assignment (manualTeamMembers), not an inference from shift
+  // signup, so the export reflects the exact same roster as the app.
   function freshTeamMembers(data, teamName) {
-    const teamShiftIds = SHIFTS.filter((s) => s.team === teamName).map((s) => s.id);
-    const names = new Set();
-    teamShiftIds.forEach((id) => {
-      (id === TEARDOWN_ID ? data.allMembers.map((m) => m.name) : (data.assignments[id] || [])).forEach((n) => names.add(n));
-    });
-    (data.manualTeamMembers[teamName] || []).forEach((n) => names.add(n));
-    return [...names].filter((n) => !removedMembers.includes(n));
+    return (data.manualTeamMembers[teamName] || []).filter((n) => !removedMembers.includes(n));
   }
   function freshTeamLeadsOf(data, teamName) {
     return (data.teamLeads[teamName] || [])
@@ -3633,14 +3658,37 @@ export default function App() {
       .filter(Boolean);
   }
 
+  // Turns one member's rideInfo (see RideWizard) into a single readable
+  // status string for the export - the live app shows this as several
+  // separate yes/no fields across a wizard, which doesn't fit one cell.
+  function summarizeRideInfo(d) {
+    if (!d) return "";
+    const parts = [];
+    if (d.city) parts.push(d.city);
+    if (d.arrivalDay) parts.push(`מגיע/ה ${formatDate(d.arrivalDay)}`);
+    if (d.hasCar === "yes") {
+      parts.push("עם רכב" + (d.vehicleType ? ` (${d.vehicleType})` : ""));
+      if (d.offerRide === "yes") parts.push(`מציע/ה טרמפ${d.seats ? ` - ${d.seats} מקומות` : ""}`);
+      if (d.hasCargoSpace === "yes") parts.push("יש מקום למטען");
+      if (d.hasTowHitch === "yes" || d.hasTrailer === "yes") parts.push("יש וו גרירה/נגרר");
+    } else if (d.hasCar === "no") {
+      parts.push(d.hasWay === "yes" ? "בלי רכב - יש דרך" : "בלי רכב - מחפש/ת טרמפ");
+    }
+    return parts.join(" · ");
+  }
+
   function buildMembersRows(data) {
     // ת.ז left blank on purpose - the app only ever stores a one-way hash
     // of it (never the number itself), so there's nothing real to put here.
-    const rows = [["טלפון", "ת.ז", "שם", "מייל", "נקנה כרטיס"]];
+    const rows = [["טלפון", "ת.ז", "שם", "מייל", "נקנה כרטיס", "התניידות", "מילא/ה פרטי חירום"]];
     data.allMembers.forEach((m) => {
       const used = data.allocationInfo[m.name]?.used;
       const ticket = used === "yes" ? "כן" : used === "no" ? "לא" : "";
-      rows.push([data.memberPhones[m.name] || "", "", m.name, data.memberEmails[m.name] || "", ticket]);
+      const filledEmergencyInfo = data.emergencyInfo[m.name] ? "כן" : "לא";
+      rows.push([
+        data.memberPhones[m.name] || "", "", m.name, data.memberEmails[m.name] || "", ticket,
+        summarizeRideInfo(data.rideInfo[m.name]), filledEmergencyInfo,
+      ]);
     });
     return rows;
   }
@@ -3655,46 +3703,71 @@ export default function App() {
     return rows;
   }
 
+  // Same grid shape as the live content-schedule screen: days across the
+  // top (one column each), time slots down the first column - instead of
+  // the old flat one-row-per-session list, which didn't read like the
+  // actual schedule at all.
   function buildContentScheduleRows(data) {
-    const rows = [["שעה", "יום", "כותרת", "מנחה/ת", "תיאור"]];
+    const rows = [["שעה", ...data.contentSchedule.columns]];
     data.contentSchedule.rows.forEach((r) => {
-      r.cells.forEach((cell, i) => {
-        if (!cell || !cell.title) return;
-        rows.push([r.label, data.contentSchedule.columns[i] || "", cell.title, cell.facilitator || "", cell.description || ""]);
+      const cells = data.contentSchedule.columns.map((_, i) => {
+        const cell = r.cells[i];
+        if (!cell || !cell.title) return "";
+        return cell.title + (cell.facilitator ? ` (${cell.facilitator})` : "");
       });
+      rows.push([r.label, ...cells]);
     });
     return rows;
   }
 
   function buildFinancesRows(data) {
-    const rows = [["שם", "שולם", "דמי קמפ", "יתרה"]];
+    // One amount+date column pair per payment a member has recorded, up to
+    // however many the member with the most payments has - members with
+    // fewer just get blank cells past their last one.
+    const maxPayments = Math.max(0, ...data.allMembers.map((m) => (Array.isArray(data.memberPayments[m.name]) ? data.memberPayments[m.name].length : 0)));
+    const header = ["שם", "שולם", "דמי קמפ", "יתרה", "עומד בתשלום הנדרש"];
+    for (let i = 1; i <= maxPayments; i++) header.push(`תשלום ${i} - סכום`, `תשלום ${i} - תאריך`);
+    const rows = [header];
     data.allMembers.forEach((m) => {
-      const list = Array.isArray(data.memberPayments[m.name]) ? data.memberPayments[m.name] : [];
+      const list = (Array.isArray(data.memberPayments[m.name]) ? data.memberPayments[m.name] : [])
+        .slice()
+        .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
       const paid = list.reduce((s, p) => s + (Number(p.amount) || 0), 0);
       const fee = data.feeOverrides[m.name] !== undefined ? Number(data.feeOverrides[m.name]) : data.campFee;
-      rows.push([m.name, paid, fee, fee - paid]);
+      const row = [m.name, paid, fee, fee - paid, paid > data.duesThreshold ? "כן" : "לא"];
+      for (let i = 0; i < maxPayments; i++) {
+        const p = list[i];
+        row.push(p ? p.amount : "", p ? (p.date || "") : "");
+      }
+      rows.push(row);
     });
     return rows;
   }
 
   function buildCampEquipmentRows(data) {
-    const rows = [["קטגוריה", "שם פריט", "כמות", "מצב", "מיקום", "הערות"]];
-    data.campEquipment.forEach((e) => rows.push([e.category || "", e.name, e.qty, e.condition || "", e.location || "", e.notes || ""]));
+    const rows = [["קטגוריה", "שם פריט", "כמות", "מצב", "מיקום", "הערות", "מולא ע\"י"]];
+    data.campEquipment.forEach((e) => rows.push([e.category || "", e.name, e.qty, e.condition || "", e.location || "", e.notes || "", e.updatedBy || e.addedBy || ""]));
     return rows;
   }
 
   function buildExpensesRows(data) {
-    const rows = [EXPENSE_CSV_HEADERS];
-    data.budgetExpenses.forEach((e) => rows.push(EXPENSE_CSV_HEADERS.map((h) => e[h])));
+    const rows = [EXPENSE_FIELDS.map((f) => f.label)];
+    data.budgetExpenses.forEach((e) => rows.push(EXPENSE_FIELDS.map((f) => e[f.key])));
     return rows;
   }
 
   function buildTeamsRows(data) {
-    const rows = [["צוות", "מוביל/ה", "מוביל/ה משנה", "חברי הצוות"]];
+    const rows = [["צוות", "מוביל/ה", "מוביל/ה משנה", "חברי הצוות", "משימות", "תקציב", "נותר מתקציב"]];
     allTeams.forEach((t) => {
       const leads = freshTeamLeadsOf(data, t.name);
       const members = freshTeamMembers(data, t.name);
-      rows.push([t.name, leads[0]?.name || "", leads[1]?.name || "", members.join("; ")]);
+      const items = data.customChecklists[t.name] || TEAM_CHECKLISTS[t.name] || [];
+      const state = data.checklistState[t.name] || {};
+      const done = items.filter((_, i) => state[i]).length;
+      const cat = budgetCategoryForTeam(t.name);
+      const planned = Number(data.categoryBudgets[cat]) || 0;
+      const paid = data.budgetExpenses.filter((e) => e.allocation === cat).reduce((s, e) => s + expenseAmounts(e).paid, 0);
+      rows.push([t.name, leads[0]?.name || "", leads[1]?.name || "", members.join("; "), `${done}/${items.length}`, planned, planned - paid]);
     });
     return rows;
   }
@@ -3797,12 +3870,18 @@ export default function App() {
     setExportingKey("all-pdf");
     try {
       const data = await getFreshExportData();
+      // Each list gets its own page (break-before: page) AND its own
+      // anchor - the table of contents right under the title links to
+      // each one, so opening the saved PDF reads as separated sections
+      // you can jump to, not one continuous scroll of every list merged
+      // together.
+      const toc = `<div class="toc"><b>תוכן עניינים</b><ul>${EXPORT_LISTS.map((list) => `<li><a href="#section-${list.key}">${escapeHtml(list.label)}</a></li>`).join("")}</ul></div>`;
       const sections = EXPORT_LISTS.map((list) => {
         const [header, ...body] = list.build(data);
-        return `<h2>${escapeHtml(list.label)}</h2>
+        return `<h2 id="section-${list.key}">${escapeHtml(list.label)}</h2>
 <table>
   <thead><tr>${header.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead>
-  <tbody>${body.map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(c ?? "")}</td>`).join("")}</tr>`).join("")}</tbody>
+  <tbody>${body.map((r) => `<tr>${r.map((c, i) => `<td${i === 0 ? ' class="rowhead"' : ""}>${escapeHtml(c ?? "")}</td>`).join("")}</tr>`).join("")}</tbody>
 </table>`;
       }).join("");
       win.document.write(`<!doctype html>
@@ -3812,12 +3891,17 @@ export default function App() {
   h1 { font-size: 18px; margin: 0 0 16px; }
   h2 { font-size: 14px; margin: 22px 0 8px; border-bottom: 1px solid #ccc; padding-bottom: 4px; break-before: page; }
   h2:first-of-type { break-before: avoid; }
+  .toc { break-after: page; }
+  .toc ul { margin: 8px 0 0; padding-inline-start: 20px; }
+  .toc a { color: #a03d5a; text-decoration: none; font-size: 13px; line-height: 1.9; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 6px; break-inside: avoid; }
-  th, td { border: 1px solid #ddd; padding: 4px 8px; font-size: 11px; text-align: right; vertical-align: top; }
-  th { background: #f4f4f4; }
+  th, td { border: 1px solid #ccc; padding: 4px 8px; font-size: 11px; text-align: right; vertical-align: top; }
+  th { background: #f8d7da; font-weight: bold; }
+  td.rowhead { background: #fdeef0; font-weight: bold; }
 </style>
 </head><body>
 <h1>ייצוא רשימות - Afterglow (${escapeHtml(new Date().toLocaleDateString("he-IL"))})</h1>
+${toc}
 ${sections}
 </body></html>`);
       win.document.close();
@@ -3841,14 +3925,20 @@ ${sections}
     const rows = parseCsv(text.replace(/^\uFEFF/, ""));
     if (rows.length < 2) return showToast("הקובץ ריק", "error");
     const headers = rows[0].map((h) => h.trim());
-    const col = (name) => headers.indexOf(name);
+    // Matches by the current Hebrew header label, falling back to the old
+    // English field key so a file exported before this change still imports.
+    const col = (key) => {
+      const label = EXPENSE_FIELDS.find((f) => f.key === key)?.label;
+      const byLabel = label ? headers.indexOf(label) : -1;
+      return byLabel !== -1 ? byLabel : headers.indexOf(key);
+    };
     const iAlloc = col("allocation"), iVendor = col("vendor"), iDesc = col("description"),
       iAmount = col("amount"), iDate = col("purchaseDate"), iStatus = col("paymentStatus"),
       iPaid = col("paidAmount"), iDue = col("dueDate"), iMethod = col("paymentMethod"),
       iVat = col("vatIncluded"), iRefund = col("isRefund"),
       iRefundToMember = col("refundToMember"), iRefundMemberName = col("refundMemberName"),
       iRefundPaid = col("refundPaid");
-    if (iAmount === -1) return showToast('לא נמצאה עמודת "amount" בקובץ - יש להוריד קובץ לדוגמה מכפתור הייצוא כדי לראות את הפורמט הנכון', "error");
+    if (iAmount === -1) return showToast('לא נמצאה עמודת "סכום" בקובץ - יש להוריד קובץ לדוגמה מכפתור הייצוא כדי לראות את הפורמט הנכון', "error");
     const truthy = (v) => v === "true" || v === "1" || v === "כן";
     const newRows = rows.slice(1)
       .filter((r) => r.some((c) => c.trim() !== ""))
@@ -4600,6 +4690,18 @@ ${sections}
       await window.storage.set("camp-fee", JSON.stringify(val), true);
       showToast("דמי הקמפ עודכנו לכולם", "ok");
       logActivity("עדכון דמי קמפ אחידים", `₪${val}`);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  async function setDuesThresholdValue(amount) {
+    const val = Number(amount) || 0;
+    setDuesThreshold(val);
+    try {
+      await window.storage.set("dues-threshold", JSON.stringify(val), true);
+      showToast("תשלום נדרש עודכן", "ok");
+      logActivity("עדכון תשלום נדרש עד כה", `₪${val}`);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -9294,6 +9396,21 @@ ${sections}
               <span className="text-xs pb-2" style={{ color: COLORS.textMuted }}>חל אוטומטית על כל חברי הקמפ</span>
             </div>
 
+            <div className="rounded-2xl p-4 mb-5 flex items-end gap-2 flex-wrap" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+              <div>
+                <label className="text-xs block mb-1" style={{ color: COLORS.textMuted }}>תשלום נדרש עד כה (₪)</label>
+                <input
+                  type="number"
+                  defaultValue={duesThreshold || ""}
+                  onBlur={(e) => setDuesThresholdValue(e.target.value)}
+                  placeholder="0"
+                  className="px-3 py-2 rounded-xl text-sm outline-none w-40"
+                  style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
+                />
+              </div>
+              <span className="text-xs pb-2" style={{ color: COLORS.textMuted }}>הסכום שקובע צביעה ירוקה/אדומה ברשימה למטה - כמה כל אחד אמור לשלם עד עכשיו (לא בהכרח דמי הקמפ המלאים)</span>
+            </div>
+
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
               {[
                 { label: "חברי קמפ", value: allMembers.length, prefix: "" },
@@ -9322,7 +9439,7 @@ ${sections}
                 const paid = list.reduce((s, p) => s + (Number(p.amount) || 0), 0);
                 const effectiveFee = feeOverrides[m.name] !== undefined ? Number(feeOverrides[m.name]) : campFee;
                 const remaining = effectiveFee - paid;
-                const aboveThreshold = paid > DUES_PAID_THRESHOLD;
+                const aboveThreshold = paid > duesThreshold;
                 const open = expandedMember === m.name;
                 return (
                   <div key={m.name} className="rounded-xl overflow-hidden" style={{ background: aboveThreshold ? DUES_ABOVE_BG : DUES_BELOW_BG }}>
