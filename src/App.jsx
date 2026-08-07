@@ -666,12 +666,28 @@ function escapeXml(value) {
 // network policy blocks. SpreadsheetML is a plain, well-documented XML
 // schema that Excel and Google Sheets both open natively, so it sidesteps
 // the dependency (and its vulnerability) entirely.
+// Every cell gets a border; row 1 (headers) and column A (when it holds a
+// row label) get a light pink fill and bold font - same look as the PDF
+// export, just expressed as SpreadsheetML styles instead of CSS.
+const XLS_BORDER = `<Borders>
+   <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CCCCCC"/>
+   <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CCCCCC"/>
+   <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CCCCCC"/>
+   <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CCCCCC"/>
+  </Borders>`;
+const XLS_STYLES = `<Styles>
+ <Style ss:ID="sDefault">${XLS_BORDER}</Style>
+ <Style ss:ID="sHeader">${XLS_BORDER}<Font ss:Bold="1"/><Interior ss:Color="#F8D7DA" ss:Pattern="Solid"/></Style>
+ <Style ss:ID="sRowHead">${XLS_BORDER}<Font ss:Bold="1"/><Interior ss:Color="#FDEEF0" ss:Pattern="Solid"/></Style>
+</Styles>`;
+
 function buildSpreadsheetMLWorkbook(sheets) {
   const sheetsXml = sheets.map(({ name, rows }) => {
-    const rowsXml = rows.map((row) => {
-      const cellsXml = row.map((cell) => {
+    const rowsXml = rows.map((row, rowIndex) => {
+      const cellsXml = row.map((cell, colIndex) => {
         const isNumber = typeof cell === "number" && Number.isFinite(cell);
-        return `<Cell><Data ss:Type="${isNumber ? "Number" : "String"}">${escapeXml(cell)}</Data></Cell>`;
+        const styleId = rowIndex === 0 ? "sHeader" : colIndex === 0 ? "sRowHead" : "sDefault";
+        return `<Cell ss:StyleID="${styleId}"><Data ss:Type="${isNumber ? "Number" : "String"}">${escapeXml(cell)}</Data></Cell>`;
       }).join("");
       return `<Row>${cellsXml}</Row>`;
     }).join("");
@@ -684,6 +700,7 @@ function buildSpreadsheetMLWorkbook(sheets) {
   return `<?xml version="1.0"?>
 <?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+${XLS_STYLES}
 ${sheetsXml}
 </Workbook>`;
 }
