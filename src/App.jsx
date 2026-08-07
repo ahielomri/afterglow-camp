@@ -1271,17 +1271,18 @@ function PublishAllBar({ count, onPublishAll }) {
   );
 }
 
-function EquipmentForm({ onAdd, lockedCategory, initial, onCancel }) {
+function EquipmentForm({ onAdd, lockedCategory, initial, onCancel, defaultNeedsPurchase }) {
   const [name, setName] = useState(initial?.name || "");
   const [category, setCategory] = useState(initial?.category || lockedCategory || EQUIPMENT_CATEGORIES[0]);
   const [qty, setQty] = useState(initial?.qty ?? "");
   const [condition, setCondition] = useState(initial?.condition || EQUIPMENT_CONDITIONS[0]);
   const [location, setLocation] = useState(initial?.location || "");
   const [notes, setNotes] = useState(initial?.notes || "");
+  const [needsPurchase, setNeedsPurchase] = useState(initial ? !!initial.needsPurchase : !!defaultNeedsPurchase);
 
   function submit() {
     if (!name.trim() || !qty) return;
-    onAdd({ name: name.trim(), category, qty, condition, location, notes });
+    onAdd({ name: name.trim(), category, qty, condition, location, notes, needsPurchase });
     if (!initial) {
       setName(""); setQty(""); setLocation(""); setNotes(""); setCondition(EQUIPMENT_CONDITIONS[0]);
     }
@@ -1329,6 +1330,10 @@ function EquipmentForm({ onAdd, lockedCategory, initial, onCancel }) {
           className="px-3 py-2 rounded-xl text-sm outline-none sm:col-span-2"
           style={{ background: COLORS.input, color: COLORS.text, border: `1px solid ${COLORS.divider}` }}
         />
+        <label className="flex items-center gap-1.5 text-xs sm:col-span-2" style={{ color: COLORS.textMuted }}>
+          <input type="checkbox" checked={needsPurchase} onChange={(e) => setNeedsPurchase(e.target.checked)} />
+          עדיין צריך להשלים/לקנות
+        </label>
       </div>
       <div className="flex items-center gap-2">
         <button
@@ -3087,6 +3092,7 @@ export default function App() {
   const [openBvaCategory, setOpenBvaCategory] = useState(null);
   const [financesView, setFinancesView] = useState("dues");
   const [teamDashboardView, setTeamDashboardView] = useState("shifts");
+  const [equipmentView, setEquipmentView] = useState("existing");
   const [activityLog, setActivityLog] = useState([]);
   const [loginHistory, setLoginHistory] = useState([]);
   const [showActivityLog, setShowActivityLog] = useState(false);
@@ -3762,9 +3768,23 @@ export default function App() {
   }
 
   function buildCampEquipmentRows(data) {
-    const rows = [["קטגוריה", "שם פריט", "כמות", "מצב", "מיקום", "הערות", "מולא ע\"י"]];
-    data.campEquipment.forEach((e) => rows.push([e.category || "", e.name, e.qty, e.condition || "", e.location || "", e.notes || "", e.updatedBy || e.addedBy || ""]));
+    const rows = [["קטגוריה", "שם פריט", "כמות", "מצב", "מיקום", "הערות", "צריך לקנות", "מולא ע\"י"]];
+    data.campEquipment.forEach((e) => rows.push([
+      e.category || "", e.name, e.qty, e.condition || "", e.location || "", e.notes || "",
+      e.needsPurchase ? "כן" : "לא", e.updatedBy || e.addedBy || "",
+    ]));
     return rows;
+  }
+  // Same shape as buildCampEquipmentRows but split by needsPurchase, for the
+  // combined Excel export's two separate equipment sheets - the "צריך
+  // לקנות" column would be redundant once the split itself says so.
+  function buildCampEquipmentSheets(data) {
+    const header = ["קטגוריה", "שם פריט", "כמות", "מצב", "מיקום", "הערות", "מולא ע\"י"];
+    const toRow = (e) => [e.category || "", e.name, e.qty, e.condition || "", e.location || "", e.notes || "", e.updatedBy || e.addedBy || ""];
+    return [
+      { name: "ציוד קמפ - קיים", rows: [header, ...data.campEquipment.filter((e) => !e.needsPurchase).map(toRow)] },
+      { name: "ציוד קמפ - להשלמה", rows: [header, ...data.campEquipment.filter((e) => e.needsPurchase).map(toRow)] },
+    ];
   }
 
   function buildExpensesRows(data) {
@@ -3804,7 +3824,7 @@ export default function App() {
     { key: "shifts", label: "משמרות חברי קמפ", filename: "משמרות-חברי-קמפ", build: buildMemberShiftsRows, icon: CalendarDays },
     { key: "content", label: "לוח תוכן", filename: "לוח-תוכן", build: buildContentScheduleRows, icon: Flame },
     { key: "finances", label: "כספים - דמי קמפ", filename: "כספים-דמי-קמפ", build: buildFinancesRows, icon: CreditCard },
-    { key: "equipment", label: "ציוד קמפ", filename: "ציוד-קמפ", build: buildCampEquipmentRows, icon: Package },
+    { key: "equipment", label: "ציוד קמפ", filename: "ציוד-קמפ", build: buildCampEquipmentRows, buildSheets: buildCampEquipmentSheets, icon: Package },
     { key: "expenses", label: "הוצאות", filename: "הוצאות-קמפ", build: buildExpensesRows, icon: Wallet },
     { key: "teams", label: "צוותים", filename: "צוותים", build: buildTeamsRows, icon: Users },
     { key: "shopping", label: "קניות מטבח", filename: "קניות-מטבח", build: buildKitchenShoppingRows, icon: ShoppingCart },
@@ -3861,7 +3881,11 @@ export default function App() {
     setExportingKey("all-excel");
     try {
       const data = await getFreshExportData();
-      const workbook = buildSpreadsheetMLWorkbook(EXPORT_LISTS.map((list) => ({ name: list.label, rows: list.build(data) })));
+      // A list can define buildSheets to expand into more than one named
+      // sheet (e.g. equipment splits into "קיים"/"להשלמה") instead of the
+      // single flat sheet every other list gets from build().
+      const sheetGroups = EXPORT_LISTS.map((list) => (list.buildSheets ? list.buildSheets(data) : [{ name: list.label, rows: list.build(data) }]));
+      const workbook = buildSpreadsheetMLWorkbook(sheetGroups.flat());
       const blob = new Blob([workbook], { type: "application/vnd.ms-excel" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -3991,6 +4015,78 @@ ${sections}
       await window.storage.set("budget-expenses", JSON.stringify(next), true);
       showToast(`יובאו ${newRows.length} הוצאות`, "ok");
       logActivity("ייבוא הוצאות מקובץ", `${newRows.length} שורות`);
+    } catch {
+      showToast("שמירה נכשלה", "error");
+    }
+  }
+
+  // Guided import: "שלב 1" downloads a blank example template (headers +
+  // one sample row) - not the live data, since import here is add-only
+  // and never touches what's already in the app. Deleting an item only
+  // ever happens by hand in the app itself; a row from the file that
+  // matches an existing item (same category+name) is still added as its
+  // own new row, right under the existing one, flagged "כפול" in its
+  // notes - so a human sees both side by side and decides what to do,
+  // instead of the import silently overwriting or merging anything.
+  function downloadEquipmentImportTemplate() {
+    const rows = [
+      ["קטגוריה", "שם פריט", "כמות", "מצב", "מיקום", "הערות", "צריך לקנות"],
+      ["לדוגמה: ציוד קמפינג משותף", "אוהל צל 6x6", "1", "תקין", "מחסן", "", "לא"],
+    ];
+    downloadCsvFile(rowsToCsv(rows), `תבנית-ייבוא-ציוד-קמפ.csv`);
+    showToast("תבנית לדוגמה הורדה - למלא ולהעלות בחזרה", "ok");
+  }
+
+  async function importCampEquipmentCsv(file) {
+    const text = await file.text();
+    const rows = parseCsv(text.replace(/^﻿/, ""));
+    if (rows.length < 2) return showToast("הקובץ ריק", "error");
+    const headers = rows[0].map((h) => h.trim());
+    const col = (name) => headers.indexOf(name);
+    const iCat = col("קטגוריה"), iName = col("שם פריט"), iQty = col("כמות"), iCond = col("מצב"),
+      iLoc = col("מיקום"), iNotes = col("הערות"), iNeeds = col("צריך לקנות");
+    if (iName === -1) return showToast('לא נמצאה עמודת "שם פריט" בקובץ - יש להוריד קודם את התבנית מכפתור הייבוא', "error");
+    const truthy = (v) => v === "כן" || v === "true" || v === "1";
+    const latest = await getFreshShared("camp-equipment", campEquipment);
+    let duplicates = 0;
+    const newRows = rows.slice(1)
+      .filter((r) => r.some((c) => c.trim() !== "") && r[iName]?.trim())
+      .map((r) => {
+        const category = iCat !== -1 && r[iCat] ? r[iCat] : EQUIPMENT_CATEGORIES[0];
+        const name = r[iName].trim();
+        const isDuplicate = latest.some((e) => e.category === category && e.name === name);
+        if (isDuplicate) duplicates++;
+        const notes = iNotes !== -1 ? r[iNotes] || "" : "";
+        return {
+          id: Date.now().toString() + Math.random().toString(36).slice(2, 7),
+          category, name,
+          qty: iQty !== -1 ? r[iQty] : "",
+          condition: iCond !== -1 && r[iCond] ? r[iCond] : EQUIPMENT_CONDITIONS[0],
+          location: iLoc !== -1 ? r[iLoc] : "",
+          notes: isDuplicate ? `${notes ? notes + " · " : ""}כפול - נוסף מייבוא, יש להשוות מול הפריט הקיים` : notes,
+          needsPurchase: iNeeds !== -1 && truthy(r[iNeeds]),
+          addedBy: identity,
+          addedAt: Date.now(),
+        };
+      });
+    if (newRows.length === 0) return showToast("לא נמצאו שורות תקינות בקובץ", "error");
+
+    // Insert each row directly after its existing match (so a duplicate
+    // sits right below the item it duplicates), then append anything with
+    // no match at the end.
+    const next = [];
+    latest.forEach((e) => {
+      next.push(e);
+      newRows.filter((r) => r.category === e.category && r.name === e.name).forEach((r) => next.push(r));
+    });
+    newRows.filter((r) => !latest.some((e) => e.category === r.category && e.name === r.name)).forEach((r) => next.push(r));
+
+    setCampEquipment(next);
+    try {
+      await window.storage.set("camp-equipment", JSON.stringify(next), true);
+      const summary = `${newRows.length} נוספו` + (duplicates > 0 ? ` (${duplicates} מסומנים ככפולים)` : "");
+      showToast(summary, "ok");
+      logActivity("ייבוא ציוד קמפ מקובץ", summary);
     } catch {
       showToast("שמירה נכשלה", "error");
     }
@@ -9138,19 +9234,70 @@ ${sections}
           </div>
         )}
 
-        {tab === "equipment" && (
+        {tab === "equipment" && (() => {
+          const visibleEquipment = campEquipment.filter((e) => !!e.needsPurchase === (equipmentView === "toBuy"));
+          return (
           <div>
             <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>
               רשימת הציוד ששייך לקמפ - כדי שיהיה מעקב מסודר אחרי מה יש, כמה, ובאיזה מצב.
             </p>
+
+            <div className="flex gap-2 mb-4">
+              {[
+                { id: "existing", label: "קיים" },
+                { id: "toBuy", label: "להשלמה" },
+              ].map((v) => (
+                <button
+                  key={v.id}
+                  onClick={() => setEquipmentView(v.id)}
+                  className="px-4 py-2 rounded-full text-sm font-semibold"
+                  style={{
+                    background: equipmentView === v.id ? COLORS.accent : COLORS.surface,
+                    color: equipmentView === v.id ? COLORS.bg : COLORS.textMuted,
+                    border: `1px solid ${equipmentView === v.id ? COLORS.accent : COLORS.divider}`,
+                  }}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+
+            {isAdmin && (
+              <div className="flex items-center gap-2 flex-wrap mb-4">
+                <button
+                  onClick={downloadEquipmentImportTemplate}
+                  className="text-xs px-3 py-1.5 rounded-full font-semibold"
+                  style={{ background: COLORS.surface, color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}
+                >
+                  ייבוא מאקסל - שלב 1: הורדת תבנית לדוגמה
+                </button>
+                <label
+                  className="text-xs px-3 py-1.5 rounded-full font-semibold cursor-pointer"
+                  style={{ background: COLORS.surface, color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}
+                >
+                  שלב 2: העלאת הקובץ המעודכן
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    hidden
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) importCampEquipmentCsv(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+            )}
+
             {(isAdmin || myLeadTeam) && (
               <div className="mb-4">
-                <EquipmentForm onAdd={addEquipment} lockedCategory={isAdmin ? null : myLeadTeam} />
+                <EquipmentForm onAdd={addEquipment} lockedCategory={isAdmin ? null : myLeadTeam} defaultNeedsPurchase={equipmentView === "toBuy"} />
               </div>
             )}
 
             {EQUIPMENT_CATEGORIES.map((cat) => {
-              const items = campEquipment.filter((e) => e.category === cat);
+              const items = visibleEquipment.filter((e) => e.category === cat);
               if (items.length === 0) return null;
               const totalQty = items.reduce((s, e) => s + (Number(e.qty) || 0), 0);
               return (
@@ -9198,11 +9345,14 @@ ${sections}
                 </div>
               );
             })}
-            {campEquipment.length === 0 && (
-              <p className="text-xs text-center py-10" style={{ color: COLORS.textMuted }}>עדיין לא נוסף ציוד לרשימה.</p>
+            {visibleEquipment.length === 0 && (
+              <p className="text-xs text-center py-10" style={{ color: COLORS.textMuted }}>
+                {equipmentView === "toBuy" ? "אין כרגע ציוד שמסומן כ\"להשלמה\"." : "עדיין לא נוסף ציוד לרשימה."}
+              </p>
             )}
           </div>
-        )}
+          );
+        })()}
 
         {tab === "shopping" && (() => {
           const canManageShopping = isAdmin || teamMembers("צוות המטבח").includes(identity);
