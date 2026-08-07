@@ -649,6 +649,16 @@ export async function getDietaryPreferenceCounts() {
   };
 }
 
+// Admin/kitchen-team only (enforced server-side in the RPC itself) - unlike
+// getDietaryPreferenceCounts above, this returns real names, so it's kept
+// as a separate call the kitchen tab opts into rather than folding it into
+// the aggregate-count one everyone can call.
+export async function getKitchenDietaryDetails() {
+  const { data, error } = await supabase.rpc("kitchen_dietary_details");
+  if (error) throw error;
+  return data || [];
+}
+
 // Admin/owner-only: sends an ad-hoc push notification (e.g. an event
 // reminder) to every subscribed device right now, separate from the
 // automatic push that fires when a new announcement/poll is posted.

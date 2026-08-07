@@ -36,6 +36,7 @@ import {
   touchLastSeen,
   listLastSeen,
   getDietaryPreferenceCounts,
+  getKitchenDietaryDetails,
   insertActivityLog,
   listActivityLog,
   uploadEventPhoto,
@@ -3131,6 +3132,7 @@ export default function App() {
   const [editingShoppingItemId, setEditingShoppingItemId] = useState(null);
   const [shoppingRequests, setShoppingRequests] = useState([]);
   const [dietaryCounts, setDietaryCounts] = useState(null);
+  const [kitchenDietaryDetails, setKitchenDietaryDetails] = useState(null);
   const [editingExpenseId, setEditingExpenseId] = useState(null);
   const [extraBudgetCategories, setExtraBudgetCategories] = useState([]);
   const [showBudgetSection, setShowBudgetSection] = useState(null);
@@ -3803,13 +3805,31 @@ export default function App() {
         .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
       const paid = list.reduce((s, p) => s + (Number(p.amount) || 0), 0);
       const fee = data.feeOverrides[m.name] !== undefined ? Number(data.feeOverrides[m.name]) : data.campFee;
-      const row = [m.name, paid, fee, fee - paid, paid > data.duesThreshold ? "כן" : "לא"];
+      const row = [m.name, paid, fee, fee - paid, paid >= data.duesThreshold ? "כן" : "לא"];
       for (let i = 0; i < maxPayments; i++) {
         const p = list[i];
         row.push(p ? p.amount : "", p ? (p.date || "") : "");
       }
       rows.push(row);
     });
+    return rows;
+  }
+
+  // Same numbers as the live "תקציב מול ביצוע" table (published categoryBudgets
+  // vs. actual budgetExpenses per category) - not the CSV-import EXPENSE_FIELDS
+  // shape, just the category-level summary table itself.
+  function buildBudgetVsActualRows(data) {
+    const rows = [["קטגוריה", "תקציב מתוכנן", 'סה"כ שולם', "הפרש"]];
+    let totalPlanned = 0, totalPaid = 0;
+    allBudgetCategories.forEach((cat) => {
+      const planned = Number(data.categoryBudgets[cat]) || 0;
+      const paid = data.budgetExpenses.filter((e) => e.allocation === cat).reduce((s, e) => s + expenseAmounts(e).paid, 0);
+      if (planned === 0 && paid === 0) return;
+      totalPlanned += planned;
+      totalPaid += paid;
+      rows.push([cat, planned, paid, planned - paid]);
+    });
+    rows.push(['סה"כ', totalPlanned, totalPaid, totalPlanned - totalPaid]);
     return rows;
   }
 
@@ -3870,6 +3890,7 @@ export default function App() {
     { key: "shifts", label: "משמרות חברי קמפ", filename: "משמרות-חברי-קמפ", build: buildMemberShiftsRows, icon: CalendarDays },
     { key: "content", label: "לוח תוכן", filename: "לוח-תוכן", build: buildContentScheduleRows, icon: Flame },
     { key: "finances", label: "כספים - דמי קמפ", filename: "כספים-דמי-קמפ", build: buildFinancesRows, icon: CreditCard },
+    { key: "budgetVsActual", label: "תקציב מול ביצוע", filename: "תקציב-מול-ביצוע", build: buildBudgetVsActualRows, icon: Wallet },
     { key: "equipment", label: "ציוד קמפ", filename: "ציוד-קמפ", build: buildCampEquipmentRows, buildSheets: buildCampEquipmentSheets, icon: Package },
     { key: "expenses", label: "הוצאות", filename: "הוצאות-קמפ", build: buildExpensesRows, icon: Wallet },
     { key: "teams", label: "צוותים", filename: "צוותים", build: buildTeamsRows, icon: Users },
@@ -3995,6 +4016,68 @@ ${sections}
       win.focus();
       setTimeout(() => win.print(), 300);
       logActivity("ייצוא כל הרשימות (PDF)", "");
+    } catch (err) {
+      showToast(`ייצוא ה-PDF נכשל: ${err?.message || "שגיאה לא ידועה"}`, "error");
+    } finally {
+      setExportingKey(null);
+    }
+  }
+
+  // One-list Excel/PDF - same builder + fresh-fetch as the "הכל" bundles
+  // above, just for a single EXPORT_LISTS entry, so a table like "תקציב
+  // מול ביצוע" can have its own export buttons right where it's shown,
+  // not only from the "ייצוא רשימות" tab.
+  async function exportSingleListExcel(listKey) {
+    const list = EXPORT_LISTS.find((l) => l.key === listKey);
+    setExportingKey(`${listKey}-excel`);
+    try {
+      const data = await getFreshExportData();
+      const sheets = list.buildSheets ? list.buildSheets(data) : [{ name: list.label, rows: list.build(data) }];
+      const workbook = buildSpreadsheetMLWorkbook(sheets);
+      const blob = new Blob([workbook], { type: "application/vnd.ms-excel" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${list.filename}-${new Date().toISOString().slice(0, 10)}.xls`;
+      a.click();
+      URL.revokeObjectURL(url);
+      logActivity("ייצוא רשימה (Excel)", list.label);
+    } catch (err) {
+      showToast(`ייצוא ה-Excel נכשל: ${err?.message || "שגיאה לא ידועה"}`, "error");
+    } finally {
+      setExportingKey(null);
+    }
+  }
+
+  async function exportSingleListPdf(listKey) {
+    const list = EXPORT_LISTS.find((l) => l.key === listKey);
+    const win = window.open("", "_blank");
+    if (!win) return showToast("נחסמה פתיחת חלון - יש לאפשר חלונות קופצים לאתר", "error");
+    setExportingKey(`${listKey}-pdf`);
+    try {
+      const data = await getFreshExportData();
+      const [header, ...body] = list.build(data);
+      win.document.write(`<!doctype html>
+<html dir="rtl" lang="he"><head><meta charset="UTF-8"><title>${escapeHtml(list.label)} - Afterglow</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #222; }
+  h1 { font-size: 18px; margin: 0 0 16px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #ccc; padding: 4px 8px; font-size: 11px; text-align: right; vertical-align: top; }
+  th { background: #f8d7da; font-weight: bold; }
+  td:first-child { background: #fdeef0; font-weight: bold; }
+</style>
+</head><body>
+<h1>${escapeHtml(list.label)} - Afterglow (${escapeHtml(new Date().toLocaleDateString("he-IL"))})</h1>
+<table>
+  <thead><tr>${header.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead>
+  <tbody>${body.map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(c ?? "")}</td>`).join("")}</tr>`).join("")}</tbody>
+</table>
+</body></html>`);
+      win.document.close();
+      win.focus();
+      setTimeout(() => win.print(), 300);
+      logActivity("ייצוא רשימה (PDF)", list.label);
     } catch (err) {
       showToast(`ייצוא ה-PDF נכשל: ${err?.message || "שגיאה לא ידועה"}`, "error");
     } finally {
@@ -6134,6 +6217,13 @@ ${sections}
     if ((tab === "shopping" || onKitchenTeamTab) && identity) {
       getDietaryPreferenceCounts().then(setDietaryCounts).catch(() => setDietaryCounts(null));
     }
+    // Names + allergy/dietary detail - only fetched (and only shown) on the
+    // kitchen team's own tab, not the general "קניות מטבח" tab everyone can
+    // see - the RPC itself also only returns rows to admins/kitchen team,
+    // but there's no reason to even ask for it elsewhere.
+    if (onKitchenTeamTab && identity) {
+      getKitchenDietaryDetails().then(setKitchenDietaryDetails).catch(() => setKitchenDietaryDetails(null));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, teamDashboardView, identity]);
 
@@ -7746,11 +7836,10 @@ ${sections}
               return (
                 <div>
                   {dietaryCounts && (
-                    <div className="grid grid-cols-3 gap-2 mb-4">
+                    <div className="grid grid-cols-2 gap-2 mb-4">
                       {[
                         { label: "צמחונים בקמפ", value: dietaryCounts.vegetarian },
                         { label: "טבעונים בקמפ", value: dietaryCounts.vegan },
-                        { label: "עם אלרגיה", value: dietaryCounts.allergies },
                       ].map((c) => (
                         <div key={c.label} className="rounded-2xl p-3 text-center" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}` }}>
                           <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
@@ -7759,9 +7848,24 @@ ${sections}
                       ))}
                     </div>
                   )}
-                  <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>
-                    "עם אלרגיה" הוא מספר בלבד - פרטי האלרגיה של כל חבר/ה מוצגים רק למנהלים ולחבר/ת הקמפ עצמו/ה (בכרטיס החירום שלהם), לא כאן, מטעמי פרטיות.
-                  </p>
+
+                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>העדפות ואלרגיות - לפי שם, לצוות המטבח בלבד</h3>
+                  {kitchenDietaryDetails === null ? (
+                    <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>טוען...</p>
+                  ) : kitchenDietaryDetails.length === 0 ? (
+                    <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>אף אחד עדיין לא דיווח על העדפת אוכל או אלרגיה.</p>
+                  ) : (
+                    <div className="space-y-1.5 mb-4">
+                      {kitchenDietaryDetails.map((d) => (
+                        <div key={d.name} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                          <span className="font-semibold">{d.name}</span>
+                          <span style={{ color: COLORS.textMuted }}>
+                            {[d.dietary, d.allergies ? `אלרגיה: ${d.allergies}` : ""].filter(Boolean).join(" · ")}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="grid grid-cols-3 gap-2 mb-4">
                     {[
                       { label: "פריטים ברשימה", value: confirmedItems.length },
@@ -9137,7 +9241,27 @@ ${sections}
               const gapActualVsIncome = totalPaid - engine.totalIncome;
               return (
                 <div className="mb-6">
-                  <h3 className="text-sm font-bold mb-2" style={{ color: COLORS.textMuted }}>תקציב מול ביצוע</h3>
+                  <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                    <h3 className="text-sm font-bold" style={{ color: COLORS.textMuted }}>תקציב מול ביצוע</h3>
+                    {isAdmin && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => exportSingleListExcel("budgetVsActual")}
+                          className="text-xs px-3 py-1.5 rounded-full font-semibold"
+                          style={{ background: COLORS.surface, color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}
+                        >
+                          ייצוא ל-Excel
+                        </button>
+                        <button
+                          onClick={() => exportSingleListPdf("budgetVsActual")}
+                          className="text-xs px-3 py-1.5 rounded-full font-semibold"
+                          style={{ background: COLORS.surface, color: COLORS.textMuted, border: `1px solid ${COLORS.divider}` }}
+                        >
+                          ייצוא ל-PDF
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   {rowsForCat.length === 0 ? (
                     <div className="text-xs rounded-2xl px-4 py-3" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}`, color: COLORS.textMuted }}>
                       עדיין אין תקציב מתוכנן או הוצאות בפועל להשוואה - מלאו את הפרמטרים למטה כדי לראות טבלה כאן.
