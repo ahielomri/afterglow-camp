@@ -648,9 +648,14 @@ export async function getDietaryPreferenceCounts() {
 // Admin/owner-only: sends an ad-hoc push notification (e.g. an event
 // reminder) to every subscribed device right now, separate from the
 // automatic push that fires when a new announcement/poll is posted.
-export async function sendEventReminderPush(title, message, targetName) {
+export async function sendEventReminderPush(title, message, targetName, targetNames) {
   const { data, error } = await supabase.functions.invoke("send-event-reminder", {
-    body: { title, message, targetName: targetName || undefined },
+    body: {
+      title,
+      message,
+      targetName: targetName || undefined,
+      targetNames: targetNames && targetNames.length > 0 ? targetNames : undefined,
+    },
   });
   if (error) {
     let msg = "send_failed";
