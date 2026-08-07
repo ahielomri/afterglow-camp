@@ -6315,7 +6315,7 @@ ${sections}
   ];
   const navCampTabs = [
     { id: "content", label: "תוכן", icon: Flame },
-    { id: "budget", label: "הוצאות", icon: Wallet },
+    { id: "budget", label: "תקציב מול ביצוע", icon: Wallet },
     ...(canManageFinances ? [{ id: "finances", label: "כספים", icon: CreditCard }] : []),
     { id: "teams", label: "צוותים", icon: Tent },
     { id: "rides", label: "התניידות", icon: Car },
@@ -10224,7 +10224,7 @@ ${sections}
                 </div>
                 <h3 className="text-base font-bold mb-2" style={{ color: COLORS.textMuted }}>פתיחת קטגוריית הוצאה חדשה</h3>
                 <p className="text-sm mb-2" style={{ color: COLORS.textMuted }}>
-                  אם יש הוצאה שלא שייכת לשום צוות קיים - אפשר לפתוח קטגוריה חדשה שתופיע גם בטאב "הוצאות". רק צוות תקציב/מנהלים יכולים לפתוח קטגוריה חדשה.
+                  אם יש הוצאה שלא שייכת לשום צוות קיים - אפשר לפתוח קטגוריה חדשה שתופיע גם בטאב "תקציב מול ביצוע". רק צוות תקציב/מנהלים יכולים לפתוח קטגוריה חדשה.
                 </p>
                 <NewCategoryForm onAdd={addBudgetCategory} />
                 <EditableCategoryList categories={extraBudgetCategories} onRename={renameBudgetCategory} onRemove={removeBudgetCategory} />
@@ -10248,7 +10248,7 @@ ${sections}
               return (
                 <div>
                   {withReceipts.length === 0 ? (
-                    <p className="text-xs" style={{ color: COLORS.textMuted }}>עדיין אין קבלות מצורפות. אפשר לצרף קבלה בעת רישום הוצאה בטאב "הוצאות".</p>
+                    <p className="text-xs" style={{ color: COLORS.textMuted }}>עדיין אין קבלות מצורפות. אפשר לצרף קבלה בעת רישום הוצאה בטאב "תקציב מול ביצוע".</p>
                   ) : (
                     <div className="space-y-5">
                       {orderedCategories.map((cat) => (
