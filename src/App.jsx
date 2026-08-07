@@ -7662,7 +7662,7 @@ ${sections}
                 { id: "members", label: "חברי צוות" },
                 { id: "budget", label: "תקציב והוצאות" },
                 { id: "tasks", label: "משימות" },
-                ...(viewedTeam === "צוות המטבח" ? [{ id: "kitchen", label: "מטבח" }] : []),
+                ...(viewedTeam === "צוות המטבח" ? [{ id: "kitchen", label: "רשימת מצרכים" }] : []),
               ].map((v) => (
                 <button
                   key={v.id}
@@ -7835,32 +7835,18 @@ ${sections}
               return (
                 <div>
                   {dietaryCounts && (
-                    <div className="grid grid-cols-2 gap-2 mb-4">
+                    <div className="grid grid-cols-3 gap-2 mb-4">
                       {[
-                        { label: "צמחונים בקמפ", value: dietaryCounts.vegetarian },
-                        { label: "טבעונים בקמפ", value: dietaryCounts.vegan },
+                        { label: "צמחונים בקמפ", value: dietaryCounts.vegetarian, names: (kitchenDietaryDetails || []).filter((d) => d.dietary === "צמחוני").map((d) => d.name) },
+                        { label: "טבעונים בקמפ", value: dietaryCounts.vegan, names: (kitchenDietaryDetails || []).filter((d) => d.dietary === "טבעוני").map((d) => d.name) },
+                        { label: "עם אלרגיה", value: dietaryCounts.allergies, names: (kitchenDietaryDetails || []).filter((d) => d.allergies).map((d) => `${d.name} (${d.allergies})`) },
                       ].map((c) => (
                         <div key={c.label} className="rounded-2xl p-3 text-center" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}` }}>
                           <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
                           <div className="text-xs font-bold mt-1" style={{ color: COLORS.accentDark }}>{c.label}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>העדפות ואלרגיות - לפי שם, לצוות המטבח בלבד</h3>
-                  {kitchenDietaryDetails === null ? (
-                    <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>טוען...</p>
-                  ) : kitchenDietaryDetails.length === 0 ? (
-                    <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>אף אחד עדיין לא דיווח על העדפת אוכל או אלרגיה.</p>
-                  ) : (
-                    <div className="space-y-1.5 mb-4">
-                      {kitchenDietaryDetails.map((d) => (
-                        <div key={d.name} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                          <span className="font-semibold">{d.name}</span>
-                          <span style={{ color: COLORS.textMuted }}>
-                            {[d.dietary, d.allergies ? `אלרגיה: ${d.allergies}` : ""].filter(Boolean).join(" · ")}
-                          </span>
+                          {c.names.length > 0 && (
+                            <div className="text-[10px] mt-1 leading-tight" style={{ color: COLORS.accentDark, opacity: 0.75 }}>{c.names.join(", ")}</div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -9647,32 +9633,20 @@ ${sections}
           return (
             <div>
               {dietaryCounts && (
-                <div className="grid grid-cols-2 gap-2 mb-4">
+                <div className="grid grid-cols-3 gap-2 mb-4">
                   {[
-                    { label: "צמחונים בקמפ", value: dietaryCounts.vegetarian },
-                    { label: "טבעונים בקמפ", value: dietaryCounts.vegan },
+                    { label: "צמחונים בקמפ", value: dietaryCounts.vegetarian, names: (kitchenDietaryDetails || []).filter((d) => d.dietary === "צמחוני").map((d) => d.name) },
+                    { label: "טבעונים בקמפ", value: dietaryCounts.vegan, names: (kitchenDietaryDetails || []).filter((d) => d.dietary === "טבעוני").map((d) => d.name) },
+                    { label: "עם אלרגיה", value: dietaryCounts.allergies, names: (kitchenDietaryDetails || []).filter((d) => d.allergies).map((d) => `${d.name} (${d.allergies})`) },
                   ].map((c) => (
                     <div key={c.label} className="rounded-2xl p-3 text-center" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}` }}>
                       <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
                       <div className="text-xs font-bold mt-1" style={{ color: COLORS.accentDark }}>{c.label}</div>
+                      {c.names.length > 0 && (
+                        <div className="text-[10px] mt-1 leading-tight" style={{ color: COLORS.accentDark, opacity: 0.75 }}>{c.names.join(", ")}</div>
+                      )}
                     </div>
                   ))}
-                </div>
-              )}
-
-              {kitchenDietaryDetails && kitchenDietaryDetails.length > 0 && (
-                <div className="mb-4">
-                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>העדפות ואלרגיות</h3>
-                  <div className="space-y-1.5">
-                    {kitchenDietaryDetails.map((d) => (
-                      <div key={d.name} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
-                        <span className="font-semibold">{d.name}</span>
-                        <span style={{ color: COLORS.textMuted }}>
-                          {[d.dietary, d.allergies ? `אלרגיה: ${d.allergies}` : ""].filter(Boolean).join(" · ")}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
                 </div>
               )}
 
