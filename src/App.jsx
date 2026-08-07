@@ -6217,11 +6217,10 @@ ${sections}
     if ((tab === "shopping" || onKitchenTeamTab) && identity) {
       getDietaryPreferenceCounts().then(setDietaryCounts).catch(() => setDietaryCounts(null));
     }
-    // Names + allergy/dietary detail - only fetched (and only shown) on the
-    // kitchen team's own tab, not the general "קניות מטבח" tab everyone can
-    // see - the RPC itself also only returns rows to admins/kitchen team,
-    // but there's no reason to even ask for it elsewhere.
-    if (onKitchenTeamTab && identity) {
+    // Names + allergy/dietary detail - shown both on the general "קניות
+    // מטבח" tab (visible to the whole camp) and the kitchen team's own
+    // tab; the RPC itself only requires being a signed-in member.
+    if ((tab === "shopping" || onKitchenTeamTab) && identity) {
       getKitchenDietaryDetails().then(setKitchenDietaryDetails).catch(() => setKitchenDietaryDetails(null));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -9647,26 +9646,33 @@ ${sections}
           const pickableCatalog = SHOPPING_CATALOG.filter((c) => !shoppingList.some((it) => it.name === c.name));
           return (
             <div>
-              {/* Aggregate-only, on purpose: the kitchen needs to know how many
-                  portions to plan for, not who specifically - dietary info itself
-                  stays visible only where it already was (emergency info, gated
-                  to the member themselves/admins). Comes from a count-only RPC
-                  since emergency_info's own RLS wouldn't give a non-admin kitchen
-                  member the full picture. Always shown (even at 0), so a real
-                  "nobody marked this" is visible rather than the box just
-                  disappearing. */}
               {dietaryCounts && (
-                <div className="grid grid-cols-3 gap-2 mb-4">
+                <div className="grid grid-cols-2 gap-2 mb-4">
                   {[
                     { label: "צמחונים בקמפ", value: dietaryCounts.vegetarian },
                     { label: "טבעונים בקמפ", value: dietaryCounts.vegan },
-                    { label: "עם אלרגיה", value: dietaryCounts.allergies },
                   ].map((c) => (
                     <div key={c.label} className="rounded-2xl p-3 text-center" style={{ background: COLORS.accentLight, border: `1px solid ${COLORS.accent}` }}>
                       <div className="text-2xl font-black" style={{ fontFamily: FONT_NUM, color: COLORS.accentDark }}>{c.value}</div>
                       <div className="text-xs font-bold mt-1" style={{ color: COLORS.accentDark }}>{c.label}</div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {kitchenDietaryDetails && kitchenDietaryDetails.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="text-xs font-bold mb-2" style={{ color: COLORS.textMuted }}>העדפות ואלרגיות</h3>
+                  <div className="space-y-1.5">
+                    {kitchenDietaryDetails.map((d) => (
+                      <div key={d.name} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-xs" style={{ background: COLORS.surface, border: `1px solid ${COLORS.divider}` }}>
+                        <span className="font-semibold">{d.name}</span>
+                        <span style={{ color: COLORS.textMuted }}>
+                          {[d.dietary, d.allergies ? `אלרגיה: ${d.allergies}` : ""].filter(Boolean).join(" · ")}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
