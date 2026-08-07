@@ -7953,6 +7953,11 @@ ${sections}
                           שילמת <b style={{ color: COLORS.moneyAccent }}>₪{myPaid.toLocaleString()}</b> מתוך ₪{myFee.toLocaleString()}
                           {myRemaining > 0 && <span> · נותר <b style={{ color: COLORS.danger }}>₪{myRemaining.toLocaleString()}</b></span>}
                         </div>
+                        {duesThreshold > 0 && myPaid < duesThreshold && (
+                          <div className="text-xs mt-1.5" style={{ color: COLORS.textMuted }}>
+                            💛 הסכום הנדרש עד כה הוא ₪{duesThreshold.toLocaleString()}.
+                          </div>
+                        )}
                         {myList.length > 0 && (
                           <div className="mt-2 space-y-1">
                             {myList.map((p) => (
